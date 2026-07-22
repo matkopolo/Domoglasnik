@@ -150,6 +150,7 @@ BOOL_FIELDS.update({"operating_costs_included", "storefront", "shopping_center",
 DATE_FIELDS = {"effective_date", "contract_date", "lease_expiry_date", "lease_termination_date",
                "last_changed_date", "last_effective_date", "rental_start_date", "rental_end_date",
                "closure_or_early_termination_date"}
+NULL_DATE_SENTINELS = {"00.00.0000", "0.0.0000", "00.00.00"}
 NUMERIC_FIELDS = {"contract_price", "vat_rate", "sold_area", "sold_building_part_area", "sold_usable_area",
                   "atrium_area", "room_count", "building_part_area", "usable_area", "contractual_price",
                   "centroid_e", "centroid_n", "parcel_area", "contract_rent", "rented_spaces_area",
@@ -291,6 +292,8 @@ def converted(field: str, value: str):
     if field in BOOL_FIELDS:
         return value in {"1", "true", "TRUE"}
     if field in DATE_FIELDS:
+        if value in NULL_DATE_SENTINELS:
+            return None
         return datetime.strptime(value, "%d.%m.%Y").date()
     if field in NUMERIC_FIELDS:
         return value.replace(",", ".")

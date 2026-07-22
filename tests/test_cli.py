@@ -24,6 +24,7 @@ import httpx
         ("vat_included", "1", True),
         ("vat_included", "0", False),
         ("contract_date", "09.01.2026", date(2026, 1, 9)),
+        ("rental_start_date", "00.00.0000", None),
         ("contract_price", "12,50", "12.50"),
         ("parcel_number", " 10/2 ", "10/2"),
         ("cadastral_municipality_code", "", None),
