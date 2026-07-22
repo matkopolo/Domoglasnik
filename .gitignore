@@ -7,3 +7,5 @@ __pycache__/
 .venv/
 data/raw/*.zip
 data/extracted/
+apps/data-pipeline/data/raw/*.zip
+apps/data-pipeline/data/extracted/

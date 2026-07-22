@@ -37,7 +37,8 @@ def database_connection():
     admin = psycopg.connect(DATABASE_URL, autocommit=True)
     admin.execute(sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(schema)))
     connection = psycopg.connect(DATABASE_URL, options=f"-c search_path={schema}")
-    connection.execute(Path("sql/001_schema.sql").read_text())
+    repository_root = Path(__file__).resolve().parents[3]
+    connection.execute((repository_root / "database/migrations/001_schema.sql").read_text())
     connection.commit()
     try:
         yield connection

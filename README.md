@@ -1,22 +1,23 @@
-# Slovenian real-estate data importer
+# Slovenian real-estate analytics monorepo
 
 This project downloads national yearly ZIP archives from GURS JGP, preserves the raw files, and imports their CSV contents into PostgreSQL. It loads both purchase transactions (BUY/KPP, 2007 onward) and rental transactions (RENT/NP, 2013 onward). Imports are idempotent: reimporting a dataset/year replaces that database snapshot instead of duplicating it.
 
 ## Project structure
 
-- `real_estate_etl/cli.py`: minimal command-line entry point and error reporting
-- `real_estate_etl/api.py`: `JGPClient`, HTTP connection pooling, downloads, tokens, validation, and retries
-- `real_estate_etl/application.py`: CSV mappings, PostgreSQL import logic, bounded pipelines, and command dispatch
-- `sql/`: PostgreSQL schema and incremental migrations; SQL table definitions do not live in Python
-- `tests/`: unit tests and isolated PostgreSQL integration tests
+- `apps/data-pipeline/`: Python downloader, transformer, PostgreSQL loader, and tests
+- `apps/api/`: future Go backend application
+- `apps/web/`: future frontend application
+- `database/migrations/`: shared PostgreSQL schema and incremental migrations
+- `database/documentation/`: shared data-model documentation
+- `infrastructure/docker/`: future service-specific Docker assets
+- `data/raw/`: local downloaded archives, excluded from Git
+- `Makefile`: root commands shared by all developers
 
 ## Start PostgreSQL
 
 ```bash
-docker compose up -d db
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+make setup
+make db-up
 ```
 
 The default connection is `postgresql://real_estate:real_estate@localhost:5432/real_estate`. Copy `.env.example` to `.env` or export `DATABASE_URL` if you change it.
@@ -29,7 +30,8 @@ Install Docker Desktop for Windows and Python 3.9 or newer. Then open PowerShell
 docker compose up -d db
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+pip install -r apps/data-pipeline/requirements-dev.txt
+$env:PYTHONPATH = "apps/data-pipeline"
 python -m real_estate_etl.cli refresh-all-data
 ```
 
@@ -47,9 +49,9 @@ Do not copy `.venv` or a local PostgreSQL volume between computers. Share the so
 ## Load downloaded national samples
 
 ```bash
-python -m real_estate_etl.cli sync-reference-data
-python -m real_estate_etl.cli import data/raw/ETN_SLO_2007_KPP.zip
-python -m real_estate_etl.cli import data/raw/ETN_SLO_2013_NP.zip
+PYTHONPATH=apps/data-pipeline python -m real_estate_etl.cli sync-reference-data
+PYTHONPATH=apps/data-pipeline python -m real_estate_etl.cli import data/raw/ETN_SLO_2007_KPP.zip
+PYTHONPATH=apps/data-pipeline python -m real_estate_etl.cli import data/raw/ETN_SLO_2013_NP.zip
 ```
 
 ## Fetch one national dataset
@@ -57,14 +59,14 @@ python -m real_estate_etl.cli import data/raw/ETN_SLO_2013_NP.zip
 Download national BUY or RENT data for one year:
 
 ```bash
-python -m real_estate_etl.cli fetch-national --type sales --year 2026
-python -m real_estate_etl.cli fetch-national --type rent --year 2026
+PYTHONPATH=apps/data-pipeline python -m real_estate_etl.cli fetch-national --type sales --year 2026
+PYTHONPATH=apps/data-pipeline python -m real_estate_etl.cli fetch-national --type rent --year 2026
 ```
 
 Import a downloaded archive:
 
 ```bash
-python -m real_estate_etl.cli import data/raw/ETN_SLO_2026_KPP_YYYYMMDD.zip
+PYTHONPATH=apps/data-pipeline python -m real_estate_etl.cli import data/raw/ETN_SLO_2026_KPP_YYYYMMDD.zip
 ```
 
 ## Import all national BUY and RENT history
@@ -72,7 +74,7 @@ python -m real_estate_etl.cli import data/raw/ETN_SLO_2026_KPP_YYYYMMDD.zip
 The primary command downloads and imports every national yearly dataset:
 
 ```bash
-python -m real_estate_etl.cli refresh-all-data
+make import-data
 ```
 
 For 2007–2026 this is only 34 archives:
@@ -83,7 +85,7 @@ For 2007–2026 this is only 34 archives:
 The command skips national dataset/year combinations already recorded in `source_files`, so it is safe to stop and restart. To retrieve current source versions again and replace existing snapshots, add `--force`:
 
 ```bash
-python -m real_estate_etl.cli refresh-all-data --force
+PYTHONPATH=apps/data-pipeline python -m real_estate_etl.cli refresh-all-data --force
 ```
 
 To stop at a specific year, use `--end-year`.
@@ -91,7 +93,7 @@ To stop at a specific year, use `--end-year`.
 Downloads use up to six parallel workers by default while database imports remain serial to avoid contention on shared reference and codebook tables. The importer detects the machine's logical CPU-thread count and will not allow a worker count above it. Select a different count with:
 
 ```bash
-python -m real_estate_etl.cli refresh-all-data --workers 8
+make import-data WORKERS=8
 ```
 
 The startup message prints both the selected worker count and the detected logical CPU-thread count. Use fewer workers for a slower connection or to reduce load on the source API.
@@ -99,7 +101,7 @@ The startup message prints both the selected worker count and the detected logic
 For troubleshooting, enable detailed per-table row counts, codebook decisions, archive paths, retries, and final timings:
 
 ```bash
-python -m real_estate_etl.cli refresh-all-data --workers 8 --verbose
+make import-data-verbose WORKERS=8
 ```
 
 Without `--verbose`, the importer prints concise download/completion progress plus warnings and the final summary.
@@ -124,21 +126,21 @@ download_worker_time=..., csv_parsing=..., database=...
 Install development dependencies and run unit tests:
 
 ```bash
-pip install -r requirements-dev.txt
-pytest -q -m "not integration"
+make test-unit
 ```
 
 Run the isolated PostgreSQL integration test against the Docker database:
 
 ```bash
-TEST_DATABASE_URL=postgresql://real_estate:real_estate@localhost:5432/real_estate pytest -q -m integration
+make test
 ```
 
 PowerShell equivalent:
 
 ```powershell
 $env:TEST_DATABASE_URL = "postgresql://real_estate:real_estate@localhost:5432/real_estate"
-pytest -q -m integration
+Set-Location apps/data-pipeline
+..\..\.venv\Scripts\pytest.exe -q -m integration
 ```
 
 The integration tests create uniquely named temporary schemas, test municipality and national BUY snapshots, RENT snapshots, incomplete and duplicate historical records, snapshot replacement, `COPY`, and codebook deduplication, and then remove only those temporary schemas.
