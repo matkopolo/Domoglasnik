@@ -2,6 +2,14 @@
 
 This project downloads national yearly ZIP archives from GURS JGP, preserves the raw files, and imports their CSV contents into PostgreSQL. It loads both purchase transactions (BUY/KPP, 2007 onward) and rental transactions (RENT/NP, 2013 onward). Imports are idempotent: reimporting a dataset/year replaces that database snapshot instead of duplicating it.
 
+## Project structure
+
+- `real_estate_etl/cli.py`: minimal command-line entry point and error reporting
+- `real_estate_etl/api.py`: `JGPClient`, HTTP connection pooling, downloads, tokens, validation, and retries
+- `real_estate_etl/application.py`: CSV mappings, PostgreSQL import logic, bounded pipelines, and command dispatch
+- `sql/`: PostgreSQL schema and incremental migrations; SQL table definitions do not live in Python
+- `tests/`: unit tests and isolated PostgreSQL integration tests
+
 ## Start PostgreSQL
 
 ```bash

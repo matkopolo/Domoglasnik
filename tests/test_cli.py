@@ -5,15 +5,15 @@ import zipfile
 
 import pytest
 
-from real_estate_etl.cli import (
+from real_estate_etl.application import (
     ArchiveResult,
     converted,
-    fetch_zip,
     format_duration,
     prepare_national_archive,
     prepare_archive,
     validate_worker_count,
 )
+from real_estate_etl.api import DatasetUnavailable, JGPClient
 import httpx
 
 
@@ -56,7 +56,7 @@ def test_prepare_archive_reuses_valid_zip(tmp_path: Path):
     with zipfile.ZipFile(archive, "w") as output:
         output.writestr("test.csv", "a\n1\n")
 
-    with patch("real_estate_etl.cli.fetch_zip") as fetch:
+    with patch("real_estate_etl.application.fetch_zip") as fetch:
         result = prepare_archive(1, 2026, tmp_path, force=False)
 
     assert isinstance(result, ArchiveResult)
@@ -67,7 +67,7 @@ def test_prepare_archive_reuses_valid_zip(tmp_path: Path):
 
 def test_prepare_archive_force_downloads(tmp_path: Path):
     downloaded = tmp_path / "new.zip"
-    with patch("real_estate_etl.cli.fetch_zip", return_value=downloaded) as fetch:
+    with patch("real_estate_etl.application.fetch_zip", return_value=downloaded) as fetch:
         result = prepare_archive(1, 2026, tmp_path, force=True)
 
     assert result.path == downloaded
@@ -79,7 +79,7 @@ def test_prepare_national_archive_reuses_valid_zip(tmp_path: Path):
     archive = tmp_path / "ETN_SLO_2020_KPP_test.zip"
     with zipfile.ZipFile(archive, "w") as output:
         output.writestr("test.csv", "a\n1\n")
-    with patch("real_estate_etl.cli.fetch_national_zip") as fetch:
+    with patch("real_estate_etl.application.fetch_national_zip") as fetch:
         result = prepare_national_archive("sales", 2020, tmp_path, force=False)
     assert result.path == archive
     assert result.reused is True
@@ -90,11 +90,12 @@ def test_fetch_retries_transient_connection_errors(tmp_path: Path):
     downloaded = tmp_path / "result.zip"
     request = httpx.Request("GET", "https://example.test/data")
     transient = httpx.ReadError("connection reset", request=request)
+    client = JGPClient(tmp_path)
     with (
-        patch("real_estate_etl.cli.fetch_zip_once", side_effect=[transient, transient, downloaded]) as fetch_once,
-        patch("real_estate_etl.cli.time.sleep") as sleep,
+        patch.object(client, "_fetch_municipality_once", side_effect=[transient, transient, downloaded]) as fetch_once,
+        patch("real_estate_etl.api.time.sleep") as sleep,
     ):
-        result = fetch_zip(3, 2023, tmp_path)
+        result = client.fetch_municipality(3, 2023)
 
     assert result == downloaded
     assert fetch_once.call_count == 3
@@ -102,14 +103,13 @@ def test_fetch_retries_transient_connection_errors(tmp_path: Path):
 
 
 def test_fetch_does_not_retry_unavailable_dataset(tmp_path: Path):
-    from real_estate_etl.cli import DatasetUnavailable
-
+    client = JGPClient(tmp_path)
     with (
-        patch("real_estate_etl.cli.fetch_zip_once", side_effect=DatasetUnavailable("missing")) as fetch_once,
-        patch("real_estate_etl.cli.time.sleep") as sleep,
+        patch.object(client, "_fetch_municipality_once", side_effect=DatasetUnavailable("missing")) as fetch_once,
+        patch("real_estate_etl.api.time.sleep") as sleep,
         pytest.raises(DatasetUnavailable),
     ):
-        fetch_zip(3, 2023, tmp_path)
+        client.fetch_municipality(3, 2023)
 
     fetch_once.assert_called_once()
     sleep.assert_not_called()
