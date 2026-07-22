@@ -96,6 +96,14 @@ python -m real_estate_etl.cli refresh-all-data --workers 8
 
 The startup message prints both the selected worker count and the detected logical CPU-thread count. Use fewer workers for a slower connection or to reduce load on the source API.
 
+For troubleshooting, enable detailed per-table row counts, codebook decisions, archive paths, retries, and final timings:
+
+```bash
+python -m real_estate_etl.cli refresh-all-data --workers 8 --verbose
+```
+
+Without `--verbose`, the importer prints concise download/completion progress plus warnings and the final summary.
+
 The national source is preferred over municipality archives. A comparison of BUY 2007 showed that the national archive contained every unique transaction from all 212 municipality archives plus six additional transactions, while avoiding duplicated cross-municipality rows. The older `fetch`, `refresh`, and `refresh-all-sales` commands remain available only for targeted municipality diagnostics and fallback use.
 
 The download/import pipeline is bounded to twice the worker count, so it does not queue thousands of archives in memory. Each worker keeps a reusable HTTP connection. PostgreSQL imports use `COPY`, and identical codebook CSVs are imported only once by checksum.

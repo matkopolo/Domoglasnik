@@ -208,7 +208,7 @@ def copy_rows(cur, table: str, mapping: dict[str, str], rows, source_file_id: in
     return len(rows)
 
 
-def import_zip(connection, path: Path) -> ImportStats:
+def import_zip(connection, path: Path, verbose: bool = False) -> ImportStats:
     stats = ImportStats()
     hasher = hashlib.sha256()
     with path.open("rb") as source:
@@ -261,14 +261,16 @@ def import_zip(connection, path: Path) -> ImportStats:
                     )
                     if cur.fetchone() is None:
                         stats.codebook_skipped = True
-                        print(f"Skipped unchanged codebook ({len(rows)} rows)")
+                        if verbose:
+                            print(f"Skipped unchanged codebook ({len(rows)} rows)")
                         continue
                     values = [(int(r["ID"]), r["SIFRANT"], int(r["NUMERICNA_VREDNOST"]), r["OPIS"], source_file_id) for r in rows]
                     cur.executemany("""INSERT INTO codebook_values(codebook_id,codebook_name,numeric_value,description,source_file_id)
                                        VALUES (%s,%s,%s,%s,%s) ON CONFLICT(codebook_id,numeric_value) DO UPDATE SET
                                        codebook_name=excluded.codebook_name,description=excluded.description,source_file_id=excluded.source_file_id""", values)
                     stats.codebook_rows += len(rows)
-                    print(f"Imported {len(rows)} rows into codebook_values")
+                    if verbose:
+                        print(f"Imported {len(rows)} rows into codebook_values")
                     continue
                 kind = next((key for key in selected_tables if f"_{key}_" in member), None)
                 if not kind:
@@ -289,7 +291,8 @@ def import_zip(connection, path: Path) -> ImportStats:
                     )
                 copied = copy_rows(cur, table, mapping, rows, source_file_id)
                 stats.rows += copied
-                print(f"Copied {copied} rows into {table}")
+                if verbose:
+                    print(f"Copied {copied} rows into {table}")
     stats.database_seconds = max(0.0, time.monotonic() - database_started - stats.parsing_seconds)
     return stats
 
@@ -336,7 +339,8 @@ def validate_worker_count(workers: int, available_threads: int = AVAILABLE_THREA
 
 
 def refresh_all_sales(
-    connection, output_dir: Path, start_year: int, end_year: int, force: bool, workers: int
+    connection, output_dir: Path, start_year: int, end_year: int, force: bool, workers: int,
+    verbose: bool = False,
 ) -> None:
     started_at = time.monotonic()
     sync_reference_data(connection)
@@ -393,11 +397,15 @@ def refresh_all_sales(
                     download_worker_seconds += archive.download_seconds
                     if archive.reused:
                         print(f"{label}: using existing {archive.path}")
-                    import_stats = import_zip(connection, archive.path)
+                    elif verbose:
+                        print(f"{label}: importing {archive.path}")
+                    import_stats = import_zip(connection, archive.path, verbose=verbose)
                     parsing_seconds += import_stats.parsing_seconds
                     database_seconds += import_stats.database_seconds
                     imported += 1
                     already_imported.add((municipality, year))
+                    if not verbose:
+                        print(f"{label}: imported {import_stats.rows:,} data rows")
                 except DatasetUnavailable as exc:
                     unavailable += 1
                     print(f"{label}: unavailable ({exc})", file=sys.stderr)
@@ -418,7 +426,7 @@ def refresh_all_sales(
 
 
 def refresh_all_national(
-    connection, output_dir: Path, end_year: int, force: bool, workers: int
+    connection, output_dir: Path, end_year: int, force: bool, workers: int, verbose: bool = False
 ) -> None:
     started_at = time.monotonic()
     sync_reference_data(connection)
@@ -475,11 +483,15 @@ def refresh_all_national(
                     download_worker_seconds += archive.download_seconds
                     if archive.reused:
                         print(f"{label}: using existing {archive.path}")
-                    import_stats = import_zip(connection, archive.path)
+                    elif verbose:
+                        print(f"{label}: importing {archive.path}")
+                    import_stats = import_zip(connection, archive.path, verbose=verbose)
                     parsing_seconds += import_stats.parsing_seconds
                     database_seconds += import_stats.database_seconds
                     imported += 1
                     already_imported.add((dataset_type, year))
+                    if not verbose:
+                        print(f"{label}: imported {import_stats.rows:,} data rows")
                 except DatasetUnavailable as exc:
                     unavailable += 1
                     print(f"{label}: unavailable ({exc})", file=sys.stderr)
@@ -515,10 +527,12 @@ def main() -> None:
     fetch_national.add_argument("--output-dir", type=Path, default=Path("data/raw"))
     load = sub.add_parser("import")
     load.add_argument("zip_file", type=Path)
+    load.add_argument("--verbose", action="store_true")
     refresh = sub.add_parser("refresh")
     refresh.add_argument("--municipality", type=int, required=True)
     refresh.add_argument("--year", type=int, required=True)
     refresh.add_argument("--output-dir", type=Path, default=Path("data/raw"))
+    refresh.add_argument("--verbose", action="store_true")
     all_sales = sub.add_parser("refresh-all-sales", help="Download and import all municipality/year sales data")
     all_sales.add_argument("--start-year", type=int, default=2007)
     all_sales.add_argument("--end-year", type=int, default=date.today().year)
@@ -528,6 +542,7 @@ def main() -> None:
         "--workers", type=int, default=DEFAULT_WORKERS, metavar="N",
         help=f"Parallel download workers (default: {DEFAULT_WORKERS}; machine limit: {AVAILABLE_THREADS})",
     )
+    all_sales.add_argument("--verbose", action="store_true", help="Print per-table row counts and codebook details")
     all_national = sub.add_parser(
         "refresh-all-data", help="Download and import all national yearly BUY and RENT archives"
     )
@@ -538,6 +553,7 @@ def main() -> None:
         "--workers", type=int, default=DEFAULT_WORKERS, metavar="N",
         help=f"Parallel download workers (default: {DEFAULT_WORKERS}; machine limit: {AVAILABLE_THREADS})",
     )
+    all_national.add_argument("--verbose", action="store_true", help="Print per-table row counts and codebook details")
     args = parser.parse_args()
 
     if args.command == "fetch":
@@ -562,14 +578,18 @@ def main() -> None:
         if args.command == "sync-reference-data":
             sync_reference_data(connection)
         elif args.command == "import":
-            import_zip(connection, args.zip_file)
+            import_zip(connection, args.zip_file, verbose=args.verbose)
         elif args.command == "refresh":
             sync_reference_data(connection)
-            import_zip(connection, fetch_zip(args.municipality, args.year, args.output_dir))
+            import_zip(connection, fetch_zip(args.municipality, args.year, args.output_dir), verbose=args.verbose)
         elif args.command == "refresh-all-sales":
-            refresh_all_sales(connection, args.output_dir, args.start_year, args.end_year, args.force, args.workers)
+            refresh_all_sales(
+                connection, args.output_dir, args.start_year, args.end_year, args.force, args.workers, args.verbose
+            )
         elif args.command == "refresh-all-data":
-            refresh_all_national(connection, args.output_dir, args.end_year, args.force, args.workers)
+            refresh_all_national(
+                connection, args.output_dir, args.end_year, args.force, args.workers, args.verbose
+            )
 
 
 if __name__ == "__main__":
