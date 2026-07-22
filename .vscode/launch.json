@@ -1,0 +1,23 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python: ETL CLI",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "real_estate_etl.cli",
+      "cwd": "${workspaceFolder}",
+      "args": [
+        "refresh-all-data",
+        "--workers",
+        "6",
+        "--verbose"
+      ],
+      "env": {
+        "DATABASE_URL": "postgresql://real_estate:real_estate@localhost:5432/real_estate"
+      },
+      "console": "integratedTerminal",
+      "justMyCode": true
+    }
+  ]
+}

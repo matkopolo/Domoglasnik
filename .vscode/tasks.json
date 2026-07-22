@@ -1,0 +1,41 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Database: Start and migrate",
+      "type": "shell",
+      "command": "make db-up",
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Database: Stop",
+      "type": "shell",
+      "command": "make db-down",
+      "problemMatcher": []
+    },
+    {
+      "label": "Pipeline: Lint",
+      "type": "shell",
+      "command": "make lint",
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "Pipeline: Test",
+      "type": "shell",
+      "command": "make test",
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Pipeline: Import all data (verbose)",
+      "type": "shell",
+      "command": "make import-data-verbose",
+      "problemMatcher": []
+    }
+  ]
+}

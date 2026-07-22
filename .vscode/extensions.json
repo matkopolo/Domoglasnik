@@ -1,0 +1,14 @@
+{
+  "recommendations": [
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "charliermarsh.ruff",
+    "golang.go",
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "ms-azuretools.vscode-containers",
+    "ms-ossdata.vscode-pgsql",
+    "ms-vscode.makefile-tools",
+    "redhat.vscode-yaml"
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "folders": [
+    {
+      "name": "Real Estate Monorepo",
+      "path": "."
+    }
+  ],
+  "settings": {
+    "window.title": "Real Estate — ${activeEditorShort}"
+  }
+}

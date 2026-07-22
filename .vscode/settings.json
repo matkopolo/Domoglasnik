@@ -1,0 +1,80 @@
+{
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv",
+  "python.testing.pytestEnabled": true,
+  "python.testing.unittestEnabled": false,
+  "python.testing.cwd": "${workspaceFolder}/apps/data-pipeline",
+  "python.testing.pytestArgs": [
+    "tests"
+  ],
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}/apps/data-pipeline"
+  ],
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.codeActionsOnSave": {
+      "source.fixAll.ruff": "explicit",
+      "source.organizeImports.ruff": "explicit"
+    },
+    "editor.formatOnSave": true
+  },
+  "[javascript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+  "[javascriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+  "[go]": {
+    "editor.defaultFormatter": "golang.go",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "explicit"
+    }
+  },
+  "eslint.workingDirectories": [
+    {
+      "mode": "auto"
+    }
+  ],
+  "files.exclude": {
+    "**/.pytest_cache": true,
+    "**/__pycache__": true,
+    "**/*.egg-info": true,
+    "**/node_modules": true
+  },
+  "files.watcherExclude": {
+    "**/.git/objects/**": true,
+    "**/.venv/**": true,
+    "**/data/raw/**": true,
+    "**/node_modules/**": true
+  },
+  "search.exclude": {
+    "**/.venv": true,
+    "**/data/raw": true,
+    "**/node_modules": true
+  },
+  "explorer.fileNesting.enabled": true,
+  "explorer.fileNesting.patterns": {
+    "docker-compose.yml": ".env,.env.example,Dockerfile*",
+    "pyproject.toml": "requirements*.txt,pytest.ini",
+    "package.json": "package-lock.json,yarn.lock,pnpm-lock.yaml,tsconfig*.json,vite.config.*,eslint.config.*,prettier.config.*"
+  },
+  "terminal.integrated.env.osx": {
+    "DATABASE_URL": "postgresql://real_estate:real_estate@localhost:5432/real_estate"
+  },
+  "terminal.integrated.env.linux": {
+    "DATABASE_URL": "postgresql://real_estate:real_estate@localhost:5432/real_estate"
+  },
+  "terminal.integrated.env.windows": {
+    "DATABASE_URL": "postgresql://real_estate:real_estate@localhost:5432/real_estate"
+  }
+}
