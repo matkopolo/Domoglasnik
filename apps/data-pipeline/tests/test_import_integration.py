@@ -11,7 +11,6 @@ from psycopg import sql
 
 from real_estate_etl.application import RENT_TABLES, TABLES, import_zip
 
-
 DATABASE_URL = os.getenv("TEST_DATABASE_URL")
 pytestmark = pytest.mark.integration
 

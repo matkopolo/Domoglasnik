@@ -10,40 +10,21 @@ import sys
 import time
 import zipfile
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
-from dataclasses import dataclass
-from datetime import date
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import psycopg
 from psycopg import sql
 
 from .api import DatasetUnavailable, client_for
-
-API_BASE = "https://ipi.eprostor.gov.si/jgp-service-api"
-DEFAULT_DATABASE_URL = "postgresql://real_estate:real_estate@localhost:5432/real_estate"
-AVAILABLE_THREADS = os.cpu_count() or 1
-DEFAULT_WORKERS = min(6, AVAILABLE_THREADS)
-NATIONAL_PRODUCTS = {
-    "sales": {"product_id": 321, "archive_code": "KPP", "start_year": 2007},
-    "rent": {"product_id": 322, "archive_code": "NP", "start_year": 2013},
-}
-
-
-@dataclass
-class ImportStats:
-    parsing_seconds: float = 0.0
-    database_seconds: float = 0.0
-    rows: int = 0
-    codebook_rows: int = 0
-    codebook_skipped: bool = False
-
-
-@dataclass
-class ArchiveResult:
-    path: Path
-    reused: bool
-    download_seconds: float
+from .models import ArchiveResult, ImportStats
+from .settings import (
+    API_BASE,
+    AVAILABLE_THREADS,
+    DEFAULT_DATABASE_URL,
+    DEFAULT_WORKERS,
+    NATIONAL_DATASETS,
+)
 
 TABLES = {
     "POSLI": ("transactions", {
@@ -309,7 +290,7 @@ def prepare_archive(municipality: int, year: int, output_dir: Path, force: bool)
 
 def prepare_national_archive(dataset_type: str, year: int, output_dir: Path, force: bool) -> ArchiveResult:
     started_at = time.monotonic()
-    code = NATIONAL_PRODUCTS[dataset_type]["archive_code"]
+    code = NATIONAL_DATASETS[dataset_type].archive_code
     local = sorted(output_dir.glob(f"ETN_SLO_{year}_{code}*.zip"), reverse=True)
     archive = next((path for path in local if zipfile.is_zipfile(path)), None)
     if archive is not None and not force:
@@ -440,8 +421,8 @@ def refresh_all_national(
 
     all_combinations = [
         (dataset_type, year)
-        for dataset_type, product in NATIONAL_PRODUCTS.items()
-        for year in range(product["start_year"], end_year + 1)
+        for dataset_type, product in NATIONAL_DATASETS.items()
+        for year in range(product.start_year, end_year + 1)
     ]
     combinations = [item for item in all_combinations if force or item not in already_imported]
     skipped = len(all_combinations) - len(combinations)
@@ -522,7 +503,7 @@ def main() -> None:
     fetch.add_argument("--year", type=int, required=True)
     fetch.add_argument("--output-dir", type=Path, default=Path("data/raw"))
     fetch_national = sub.add_parser("fetch-national", help="Download one national BUY or RENT yearly archive")
-    fetch_national.add_argument("--type", choices=tuple(NATIONAL_PRODUCTS), required=True, dest="dataset_type")
+    fetch_national.add_argument("--type", choices=tuple(NATIONAL_DATASETS), required=True, dest="dataset_type")
     fetch_national.add_argument("--year", type=int, required=True)
     fetch_national.add_argument("--output-dir", type=Path, default=Path("data/raw"))
     load = sub.add_parser("import")
@@ -560,7 +541,7 @@ def main() -> None:
         fetch_zip(args.municipality, args.year, args.output_dir)
         return
     if args.command == "fetch-national":
-        start_year = NATIONAL_PRODUCTS[args.dataset_type]["start_year"]
+        start_year = NATIONAL_DATASETS[args.dataset_type].start_year
         if args.year < start_year:
             parser.error(f"{args.dataset_type} national data starts in {start_year}")
         fetch_national_zip(args.dataset_type, args.year, args.output_dir)
@@ -568,7 +549,7 @@ def main() -> None:
     if args.command in {"refresh-all-sales", "refresh-all-data"}:
         if args.command == "refresh-all-sales" and args.start_year > args.end_year:
             parser.error("--start-year must not be later than --end-year")
-        if args.command == "refresh-all-data" and args.end_year < NATIONAL_PRODUCTS["sales"]["start_year"]:
+        if args.command == "refresh-all-data" and args.end_year < NATIONAL_DATASETS["sales"].start_year:
             parser.error("--end-year must be 2007 or later")
         try:
             validate_worker_count(args.workers)
@@ -597,4 +578,4 @@ if __name__ == "__main__":
         main()
     except Exception as exc:
         print(f"error: {exc}", file=sys.stderr)
-        raise SystemExit(1)
+        raise SystemExit(1) from None

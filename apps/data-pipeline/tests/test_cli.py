@@ -1,20 +1,20 @@
+import zipfile
 from datetime import date
 from pathlib import Path
-from unittest.mock import patch
-import zipfile
+from unittest.mock import Mock, patch
 
+import httpx
 import pytest
 
+from real_estate_etl.api import DatasetUnavailable, JGPClient
 from real_estate_etl.application import (
     ArchiveResult,
     converted,
     format_duration,
-    prepare_national_archive,
     prepare_archive,
+    prepare_national_archive,
     validate_worker_count,
 )
-from real_estate_etl.api import DatasetUnavailable, JGPClient
-import httpx
 
 
 @pytest.mark.parametrize(
@@ -90,10 +90,10 @@ def test_fetch_retries_transient_connection_errors(tmp_path: Path):
     downloaded = tmp_path / "result.zip"
     request = httpx.Request("GET", "https://example.test/data")
     transient = httpx.ReadError("connection reset", request=request)
-    client = JGPClient(tmp_path)
+    sleep = Mock()
+    client = JGPClient(tmp_path, sleep=sleep)
     with (
         patch.object(client, "_fetch_municipality_once", side_effect=[transient, transient, downloaded]) as fetch_once,
-        patch("real_estate_etl.api.time.sleep") as sleep,
     ):
         result = client.fetch_municipality(3, 2023)
 
@@ -103,10 +103,10 @@ def test_fetch_retries_transient_connection_errors(tmp_path: Path):
 
 
 def test_fetch_does_not_retry_unavailable_dataset(tmp_path: Path):
-    client = JGPClient(tmp_path)
+    sleep = Mock()
+    client = JGPClient(tmp_path, sleep=sleep)
     with (
         patch.object(client, "_fetch_municipality_once", side_effect=DatasetUnavailable("missing")) as fetch_once,
-        patch("real_estate_etl.api.time.sleep") as sleep,
         pytest.raises(DatasetUnavailable),
     ):
         client.fetch_municipality(3, 2023)

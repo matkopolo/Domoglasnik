@@ -10,13 +10,10 @@ import zipfile
 from pathlib import Path
 
 import httpx
+from tenacity import Retrying, retry_if_exception, stop_after_attempt, wait_exponential
 
-API_BASE = "https://ipi.eprostor.gov.si/jgp-service-api"
-MAX_DOWNLOAD_ATTEMPTS = 5
-NATIONAL_PRODUCTS = {
-    "sales": {"product_id": 321, "archive_code": "KPP", "start_year": 2007},
-    "rent": {"product_id": 322, "archive_code": "NP", "start_year": 2013},
-}
+from .settings import API_BASE, MAX_DOWNLOAD_ATTEMPTS, NATIONAL_DATASETS
+
 _CLIENTS_LOCAL = threading.local()
 
 
@@ -27,9 +24,10 @@ class DatasetUnavailable(Exception):
 class JGPClient:
     """Reusable HTTP client with per-thread connection pools and retries."""
 
-    def __init__(self, output_dir: Path, max_attempts: int = MAX_DOWNLOAD_ATTEMPTS):
+    def __init__(self, output_dir: Path, max_attempts: int = MAX_DOWNLOAD_ATTEMPTS, sleep=time.sleep):
         self.output_dir = output_dir
         self.max_attempts = max_attempts
+        self._sleep = sleep
         self._local = threading.local()
 
     def _http(self) -> httpx.Client:
@@ -74,21 +72,22 @@ class JGPClient:
         return False
 
     def _with_retries(self, operation, label: str) -> Path:
-        for attempt in range(1, self.max_attempts + 1):
-            try:
-                return operation()
-            except DatasetUnavailable:
-                raise
-            except Exception as exc:
-                if not self._retryable(exc) or attempt == self.max_attempts:
-                    raise
-                delay = min(2 ** (attempt - 1), 16)
-                print(
-                    f"Transient {label} error; retry {attempt}/{self.max_attempts - 1} in {delay}s: {exc}",
-                    file=sys.stderr,
-                )
-                time.sleep(delay)
-        raise AssertionError("unreachable")
+        def before_sleep(state):
+            print(
+                f"Transient {label} error; retry {state.attempt_number}/{self.max_attempts - 1} "
+                f"in {state.next_action.sleep:g}s: {state.outcome.exception()}",
+                file=sys.stderr,
+            )
+
+        retryer = Retrying(
+            stop=stop_after_attempt(self.max_attempts),
+            wait=wait_exponential(multiplier=1, min=1, max=16),
+            retry=retry_if_exception(self._retryable),
+            before_sleep=before_sleep,
+            reraise=True,
+            sleep=self._sleep,
+        )
+        return retryer(operation)
 
     def fetch_municipality(self, municipality: int, year: int) -> Path:
         return self._with_retries(
@@ -115,9 +114,9 @@ class JGPClient:
         )
 
     def _fetch_national_once(self, dataset_type: str, year: int) -> Path:
-        product = NATIONAL_PRODUCTS[dataset_type]
+        product = NATIONAL_DATASETS[dataset_type]
         query = urllib.parse.urlencode({"filterParam": "DRZAVA", "filterValue": 1, "filterYear": year})
-        base = f"{API_BASE}/display-views/groups/127/composite-products/{product['product_id']}"
+        base = f"{API_BASE}/display-views/groups/127/composite-products/{product.product_id}"
         result = self.get_json(f"{base}/result?{query}")
         if result.get("statusText") != "OK" or not result.get("file"):
             raise DatasetUnavailable(f"National {dataset_type} dataset is not ready: {result}")

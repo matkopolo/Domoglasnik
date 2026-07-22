@@ -13,6 +13,27 @@ This project downloads national yearly ZIP archives from GURS JGP, preserves the
 - `data/raw/`: local downloaded archives, excluded from Git
 - `Makefile`: root commands shared by all developers
 
+Inside the data pipeline:
+
+- `api.py`: `JGPClient`, pooled HTTP connections, atomic ZIP downloads, and retry policy
+- `settings.py`: immutable API/product metadata and machine defaults
+- `models.py`: typed results passed between download, parsing, and loading stages
+- `application.py`: declarative CSV-to-column mappings, PostgreSQL `COPY`, bounded orchestration, and command handlers
+- `cli.py`: minimal executable entry point
+- `pyproject.toml`: installable package metadata, console command, dependencies, and Ruff rules
+
+The PostgreSQL tables remain in `database/migrations`, not Python. CSV mappings are intentionally kept as one declarative registry rather than one file per table: they are source-to-destination translation rules, and keeping BUY and RENT mappings together makes schema drift comparisons and validation easier. If the number of source products grows substantially, that registry can be moved intact into `mappings.py` without changing the importer.
+
+## Library choices
+
+- **[HTTPX](https://www.python-httpx.org/)** provides connection pooling, streaming downloads, and explicit timeout/status handling.
+- **[Tenacity](https://tenacity.readthedocs.io/en/stable/)** provides bounded exponential retry behavior for transient transport and server failures.
+- **psycopg 3** streams rows through PostgreSQL `COPY`; SQLAlchemy and pandas are intentionally not used because they would add memory and abstraction overhead to the bulk-loading path.
+- **pytest** covers conversion, retry, resume, historical edge cases, and isolated PostgreSQL integration.
+- **[Ruff](https://docs.astral.sh/ruff/)** enforces imports, correctness rules, modernization, and style locally and in GitHub Actions.
+
+The package installs a `real-estate-etl` executable, so developers do not need to manage `PYTHONPATH` manually.
+
 ## Start PostgreSQL
 
 ```bash
@@ -30,9 +51,8 @@ Install Docker Desktop for Windows and Python 3.9 or newer. Then open PowerShell
 docker compose up -d db
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r apps/data-pipeline/requirements-dev.txt
-$env:PYTHONPATH = "apps/data-pipeline"
-python -m real_estate_etl.cli refresh-all-data
+pip install -e "apps/data-pipeline[dev]"
+.\.venv\Scripts\real-estate-etl.exe refresh-all-data
 ```
 
 If PowerShell blocks virtual-environment activation, enable it for only the current PowerShell process:
@@ -49,9 +69,9 @@ Do not copy `.venv` or a local PostgreSQL volume between computers. Share the so
 ## Load downloaded national samples
 
 ```bash
-PYTHONPATH=apps/data-pipeline python -m real_estate_etl.cli sync-reference-data
-PYTHONPATH=apps/data-pipeline python -m real_estate_etl.cli import data/raw/ETN_SLO_2007_KPP.zip
-PYTHONPATH=apps/data-pipeline python -m real_estate_etl.cli import data/raw/ETN_SLO_2013_NP.zip
+.venv/bin/real-estate-etl sync-reference-data
+.venv/bin/real-estate-etl import data/raw/ETN_SLO_2007_KPP.zip
+.venv/bin/real-estate-etl import data/raw/ETN_SLO_2013_NP.zip
 ```
 
 ## Fetch one national dataset
@@ -59,14 +79,14 @@ PYTHONPATH=apps/data-pipeline python -m real_estate_etl.cli import data/raw/ETN_
 Download national BUY or RENT data for one year:
 
 ```bash
-PYTHONPATH=apps/data-pipeline python -m real_estate_etl.cli fetch-national --type sales --year 2026
-PYTHONPATH=apps/data-pipeline python -m real_estate_etl.cli fetch-national --type rent --year 2026
+.venv/bin/real-estate-etl fetch-national --type sales --year 2026
+.venv/bin/real-estate-etl fetch-national --type rent --year 2026
 ```
 
 Import a downloaded archive:
 
 ```bash
-PYTHONPATH=apps/data-pipeline python -m real_estate_etl.cli import data/raw/ETN_SLO_2026_KPP_YYYYMMDD.zip
+.venv/bin/real-estate-etl import data/raw/ETN_SLO_2026_KPP_YYYYMMDD.zip
 ```
 
 ## Import all national BUY and RENT history
@@ -85,7 +105,7 @@ For 2007–2026 this is only 34 archives:
 The command skips national dataset/year combinations already recorded in `source_files`, so it is safe to stop and restart. To retrieve current source versions again and replace existing snapshots, add `--force`:
 
 ```bash
-PYTHONPATH=apps/data-pipeline python -m real_estate_etl.cli refresh-all-data --force
+.venv/bin/real-estate-etl refresh-all-data --force
 ```
 
 To stop at a specific year, use `--end-year`.
@@ -127,6 +147,12 @@ Install development dependencies and run unit tests:
 
 ```bash
 make test-unit
+```
+
+Run lint checks:
+
+```bash
+make lint
 ```
 
 Run the isolated PostgreSQL integration test against the Docker database:

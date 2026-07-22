@@ -5,6 +5,7 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .venv/
+*.egg-info/
 data/raw/*.zip
 data/extracted/
 apps/data-pipeline/data/raw/*.zip

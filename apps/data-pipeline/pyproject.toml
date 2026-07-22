@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "real-estate-data-pipeline"
+version = "0.1.0"
+description = "National Slovenian real-estate BUY and RENT ingestion pipeline"
+requires-python = ">=3.9"
+dependencies = [
+    "httpx>=0.27,<1",
+    "psycopg[binary]==3.2.9",
+    "tenacity>=8,<10",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8,<10",
+    "ruff>=0.9,<1",
+]
+
+[project.scripts]
+real-estate-etl = "real_estate_etl.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["real_estate_etl*"]
+
+[tool.ruff]
+target-version = "py39"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]
