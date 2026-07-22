@@ -34,7 +34,9 @@ The PostgreSQL tables remain in `database/migrations`, not Python. CSV mappings 
 
 The package installs a `real-estate-etl` executable, so developers do not need to manage `PYTHONPATH` manually.
 
-## Start PostgreSQL
+The complete column-level reference is in [database/documentation/data-dictionary.md](database/documentation/data-dictionary.md). It documents source CSV names, English meanings, PostgreSQL types, units, nullability, codebooks, coordinates, relationships, and analysis cautions.
+
+## Start PostgreSQL with PostGIS
 
 ```bash
 make setup
@@ -43,12 +45,36 @@ make db-up
 
 The default connection is `postgresql://real_estate:real_estate@localhost:5432/real_estate`. Copy `.env.example` to `.env` or export `DATABASE_URL` if you change it.
 
+The database image is built from the official multi-architecture PostgreSQL 16 image with its matching PostGIS package, so it runs natively on Intel/AMD64 and Apple Silicon/ARM64 machines. `make db-up` builds and starts or upgrades the container, waits until it is healthy, and applies the idempotent spatial migration. The named Docker volume is preserved when the container image changes, so existing imported data does not need to be downloaded again.
+
+The `building_parts`, `land_parcels`, and `rental_building_parts` tables expose a generated `location geometry(Point,3794)` column backed by a GiST spatial index. It is automatically derived from the original `centroid_e` and `centroid_n` values; the importer does not need to populate it.
+
+To apply only the spatial migration to an already-running PostGIS container:
+
+```bash
+make db-migrate
+```
+
+Return longitude and latitude for a web map with:
+
+```sql
+SELECT
+    id,
+    ST_X(ST_Transform(location, 4326)) AS longitude,
+    ST_Y(ST_Transform(location, 4326)) AS latitude
+FROM building_parts
+WHERE location IS NOT NULL;
+```
+
+The point is the source property's centroid, not necessarily an entrance or postal-address coordinate. A transaction can also reference multiple property rows and therefore multiple map points.
+
 ## Windows setup
 
 Install Docker Desktop for Windows and Python 3.9 or newer. Then open PowerShell in the project folder and run:
 
 ```powershell
-docker compose up -d db
+docker compose up -d --wait db
+docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/007_postgis.sql
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -e "apps/data-pipeline[dev]"

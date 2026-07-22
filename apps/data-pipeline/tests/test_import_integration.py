@@ -35,9 +35,10 @@ def database_connection():
     schema = f"test_etl_{uuid.uuid4().hex}"
     admin = psycopg.connect(DATABASE_URL, autocommit=True)
     admin.execute(sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(schema)))
-    connection = psycopg.connect(DATABASE_URL, options=f"-c search_path={schema}")
+    connection = psycopg.connect(DATABASE_URL, options=f"-c search_path={schema},public")
     repository_root = Path(__file__).resolve().parents[3]
     connection.execute((repository_root / "database/migrations/001_schema.sql").read_text())
+    connection.execute((repository_root / "database/migrations/007_postgis.sql").read_text())
     connection.commit()
     try:
         yield connection
@@ -87,7 +88,7 @@ def create_national_sales_archive(path: Path):
     transaction = complete_row("POSLI", {"ID_POSLA": "700", "LETO": "2010"})
     building = complete_row("DELISTAVB", {
         "ID_POSLA": "700", "SIFRA_KO": "3986", "IME_KO": "HISTORICAL", "OBCINA": "TEST TOWN",
-        "STEVILKA_STAVBE": "8", "LETO": "2010",
+        "STEVILKA_STAVBE": "8", "E_CENTROID": "461000", "N_CENTROID": "102000", "LETO": "2010",
     })
     land = complete_row("ZEMLJISCA", {
         "ID_POSLA": "700", "OBCINA": "TEST TOWN", "PARCELNA_STEVILKA": "1/1", "LETO": "2010",
@@ -168,5 +169,14 @@ def test_national_sales_and_rent_snapshots(database_connection, tmp_path):
     assert connection.execute(
         "SELECT dataset_type,dataset_scope FROM source_files WHERE dataset_year=2010"
     ).fetchone() == ("sales", "national")
+    assert connection.execute(
+        "SELECT ST_SRID(location) FROM building_parts WHERE transaction_id=700"
+    ).fetchone()[0] == 3794
+    longitude, latitude = connection.execute(
+        "SELECT ST_X(ST_Transform(location,4326)), ST_Y(ST_Transform(location,4326)) "
+        "FROM building_parts WHERE transaction_id=700"
+    ).fetchone()
+    assert 13.0 < longitude < 17.0
+    assert 45.0 < latitude < 47.0
     assert connection.execute("SELECT contract_rent FROM rental_transactions WHERE transaction_id=800").fetchone()[0] == 500
     assert connection.execute("SELECT municipality_name FROM rental_building_parts").fetchone()[0] == "TEST TOWN"

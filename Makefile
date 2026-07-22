@@ -5,7 +5,7 @@ PIPELINE_DIR := apps/data-pipeline
 DATABASE_URL ?= postgresql://real_estate:real_estate@localhost:5432/real_estate
 WORKERS ?= 6
 
-.PHONY: setup db-up db-down db-status lint test test-unit import-data import-data-verbose
+.PHONY: setup db-up db-migrate db-down db-status lint test test-unit import-data import-data-verbose
 
 setup:
 	python3 -m venv .venv
@@ -13,7 +13,11 @@ setup:
 	.venv/bin/pip install -e "$(PIPELINE_DIR)[dev]"
 
 db-up:
-	docker compose up -d db
+	docker compose up -d --wait db
+	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/007_postgis.sql
+
+db-migrate:
+	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/007_postgis.sql
 
 db-down:
 	docker compose down
