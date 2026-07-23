@@ -12,3 +12,8 @@ data/raw/*.zip
 data/extracted/
 apps/data-pipeline/data/raw/*.zip
 apps/data-pipeline/data/extracted/
+node_modules/
+.next/
+.open-next/
+.wrangler/
+coverage/

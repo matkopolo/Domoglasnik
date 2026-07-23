@@ -42,6 +42,34 @@
       "problemMatcher": []
     },
     {
+      "label": "Web: Start",
+      "type": "shell",
+      "command": "make web-up",
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Web: Test",
+      "type": "shell",
+      "command": "make web-test",
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "Web: Lint",
+      "type": "shell",
+      "command": "make web-lint",
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "Web: Logs",
+      "type": "shell",
+      "command": "make web-logs",
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
       "label": "Pipeline: Lint",
       "type": "shell",
       "command": "make lint",

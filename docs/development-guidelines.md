@@ -74,6 +74,21 @@ and downloaded ZIP files out of Git. Commit migrations and OpenAPI changes
 with the code that consumes them. Prefer focused commits with imperative
 messages.
 
+## TypeScript frontend
+
+- Keep pages and layouts in `apps/web/app`, feature components in
+  `components/dashboard`, shared primitives in `components/ui`, and API/domain
+  types in `lib`.
+- Use strict TypeScript, accessible native controls, visible focus states, and
+  responsive layouts that keep the map and primary evidence ahead of filters
+  on mobile.
+- Treat sample size, outlier exclusions, source state, loading, and offline
+  fallback as part of the visualization—not incidental metadata.
+- Keep charts and analytical map layers code-native. Do not require a
+  commercial map token for the baseline dashboard.
+- Every change must pass ESLint, Vitest, the Next.js production build, and
+  `npm audit`.
+
 ## Why the test layouts differ
 
 Go discovers package tests from adjacent `*_test.go` files, so moving Go tests

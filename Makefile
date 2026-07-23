@@ -8,8 +8,12 @@ GO_IMAGE ?= golang:1.26.5-bookworm
 API_DIR := apps/api
 API_TEST_DATABASE_URL ?= postgresql://real_estate:real_estate@host.docker.internal:5432/real_estate
 GO_RUN := docker run --rm -v "$(CURDIR)/$(API_DIR):/src" -v real_estate_go_mod_cache:/go/pkg/mod -v real_estate_go_build_cache:/root/.cache/go-build -w /src $(GO_IMAGE)
+WEB_DIR := apps/web
+NODE_IMAGE ?= node:22-bookworm-slim
+WEB_NODE_MODULES := real_estate_web_node_modules_debian
+NODE_RUN := docker run --rm -v "$(CURDIR)/$(WEB_DIR):/app" -v $(WEB_NODE_MODULES):/app/node_modules -w /app $(NODE_IMAGE)
 
-.PHONY: setup db-up db-migrate db-down db-status analytics-refresh models-refresh api-up api-down api-logs api-fmt api-vet api-test api-build lint pipeline-lint test pipeline-test test-unit import-data import-data-verbose
+.PHONY: setup db-up db-migrate db-down db-status analytics-refresh models-refresh api-up api-down api-logs api-fmt api-vet api-test api-build web-setup web-up web-down web-logs web-lint web-test web-build lint pipeline-lint test pipeline-test test-unit import-data import-data-verbose
 
 setup:
 	python3 -m venv .venv
@@ -85,12 +89,33 @@ api-test:
 api-build:
 	docker compose build api
 
-lint: pipeline-lint api-vet
+web-setup:
+	$(NODE_RUN) npm ci
+
+web-up: api-up
+	docker compose up -d --build --wait web
+
+web-down:
+	docker compose stop web
+
+web-logs:
+	docker compose logs -f web
+
+web-lint:
+	$(NODE_RUN) sh -lc "npm ci --prefer-offline >/dev/null && npm run lint"
+
+web-test:
+	$(NODE_RUN) sh -lc "npm ci --prefer-offline >/dev/null && npm test"
+
+web-build:
+	docker compose build web
+
+lint: pipeline-lint api-vet web-lint
 
 pipeline-lint:
 	cd $(PIPELINE_DIR) && ../../.venv/bin/ruff check .
 
-test: pipeline-test api-test
+test: pipeline-test api-test web-test
 
 pipeline-test:
 	cd $(PIPELINE_DIR) && TEST_DATABASE_URL=$(DATABASE_URL) ../../$(PYTEST) -q

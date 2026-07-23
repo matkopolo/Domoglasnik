@@ -6,7 +6,7 @@ This project downloads national yearly ZIP archives from GURS JGP, preserves the
 
 - `apps/data-pipeline/`: Python downloader, transformer, PostgreSQL loader, and tests
 - `apps/api/`: Go analytics API, OpenAPI contract, tests, and architecture plan
-- `apps/web/`: future frontend application
+- `apps/web/`: Next.js real-estate market dashboard and map
 - `database/migrations/`: shared PostgreSQL schema and incremental migrations
 - `database/documentation/`: shared data-model documentation
 - `docs/development-guidelines.md`: Go/Python conventions and test-layout policy
@@ -32,7 +32,7 @@ Shared configuration in `.vscode/` provides:
 - tasks for starting/stopping the database, linting, testing, and running the verbose import;
 - a **Python: ETL CLI** debugger configuration that can be edited to target another CLI command.
 
-Run a task with **Terminal → Run Task**, run tests from VS Code's Testing panel, or press **F5** and select the ETL configuration to debug the pipeline. Go and React launch configurations should be added when those applications have executable entry points, so the workspace does not contain speculative commands that fail today.
+Run a task with **Terminal → Run Task**, run tests from VS Code's Testing panel, or press **F5** to debug the Go API or Python pipeline. The task list also starts, tests, lints, and tails logs for the web dashboard.
 
 Inside the data pipeline:
 
@@ -151,7 +151,25 @@ make api-test
 make api-build
 ```
 
-Root `make lint` and `make test` run checks for both the Python pipeline and Go API.
+Root `make lint` and `make test` run checks for the Python pipeline, Go API,
+and TypeScript frontend.
+
+## Start the web dashboard
+
+The Stage 3 frontend is a responsive Next.js dashboard with a map-first
+Slovenian market overview, sale/rental switching, geographic and property
+filters, quality-aware summary metrics, time series, and distributions:
+
+```bash
+make web-up
+open http://localhost:3000
+```
+
+The browser calls the Go API at `http://localhost:8080`. When an API is not
+reachable—such as the standalone hosted design preview—the interface clearly
+labels and uses representative demo data. Configure a deployed API with
+`NEXT_PUBLIC_API_URL`. Frontend implementation and testing details are in
+[apps/web/README.md](apps/web/README.md).
 
 ## Windows setup
 
