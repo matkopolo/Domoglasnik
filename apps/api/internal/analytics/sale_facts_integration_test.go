@@ -52,19 +52,28 @@ func TestSaleFactsIntegration(t *testing.T) {
 	}
 	_, err = tx.Exec(ctx, `
 		INSERT INTO transactions(transaction_id,contract_date,contract_price,dataset_year,source_file_id)
-		VALUES (900000000001,DATE '2024-05-10',300000,2024,$1);
+		VALUES (900000000001,DATE '2024-05-10',300000,2024,$1)`, sourceFileID)
+	if err != nil {
+		t.Fatalf("insert transaction fixture: %v", err)
+	}
+	_, err = tx.Exec(ctx, `
 		INSERT INTO building_parts(
 			transaction_id,building_part_type,sold_area,centroid_e,centroid_n,
 			dataset_year,source_file_id,source_row_number
 		) VALUES
 			(900000000001,1,120,460000,100000,2024,$1,2),
-			(900000000001,4,20,460005,100005,2024,$1,3);
+			(900000000001,4,20,460005,100005,2024,$1,3)`, sourceFileID)
+	if err != nil {
+		t.Fatalf("insert building-parts fixture: %v", err)
+	}
+	_, err = tx.Exec(ctx, `
 		INSERT INTO land_parcels(
 			transaction_id,land_type,parcel_area,centroid_e,centroid_n,
 			dataset_year,source_file_id,source_row_number
-		) VALUES (900000000001,5,500,460000,100000,2024,$1,4)`, sourceFileID)
+		) VALUES (900000000001,5,500,460000,100000,2024,$1,4)`,
+		sourceFileID)
 	if err != nil {
-		t.Fatalf("insert transaction fixture: %v", err)
+		t.Fatalf("insert land-parcel fixture: %v", err)
 	}
 	if _, err := tx.Exec(ctx, "SELECT analytics.refresh_sale_facts()"); err != nil {
 		t.Fatalf("refresh facts: %v", err)

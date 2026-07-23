@@ -82,6 +82,22 @@ func TestIdentityRepositoryIntegrationAndLeastPrivilege(t *testing.T) {
 		`UPDATE transactions SET notes=notes WHERE false`); err == nil {
 		t.Fatal("API role unexpectedly has UPDATE permission on source transactions")
 	}
+	anomalyTransactionID := -time.Now().UnixNano()
+	_, err = owner.Exec(ctx, `
+		INSERT INTO analytics.anomaly_signals(
+			transaction_kind,transaction_id,hard_rule_score,robust_cohort_score,
+			duplicate_score,spatial_score,review_score,signal_version
+		) VALUES ('sale',$1,0,0,0,0,0,'integration-test')`,
+		anomalyTransactionID)
+	if err != nil {
+		t.Fatalf("insert anomaly permission fixture: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = owner.Exec(context.Background(), `
+			DELETE FROM analytics.anomaly_signals
+			WHERE transaction_kind='sale' AND transaction_id=$1`,
+			anomalyTransactionID)
+	})
 	tx, err := apiPool.Begin(ctx)
 	if err != nil {
 		t.Fatalf("begin review permission check: %v", err)
@@ -89,11 +105,9 @@ func TestIdentityRepositoryIntegrationAndLeastPrivilege(t *testing.T) {
 	defer func() { _ = tx.Rollback(ctx) }()
 	command, err := tx.Exec(ctx, `
 		UPDATE analytics.anomaly_signals
-		SET review_status=review_status
-		WHERE (transaction_kind,transaction_id)=(
-		  SELECT transaction_kind,transaction_id
-		  FROM analytics.anomaly_signals LIMIT 1
-		)`)
+		SET review_status='confirmed_valid'
+		WHERE transaction_kind='sale' AND transaction_id=$1`,
+		anomalyTransactionID)
 	if err != nil || command.RowsAffected() != 1 {
 		t.Fatalf("API role anomaly review permission rows=%d error=%v",
 			command.RowsAffected(), err)

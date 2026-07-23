@@ -58,13 +58,17 @@ func TestRentalFactsIntegration(t *testing.T) {
 		) VALUES (
 			900000000002,1,DATE '2024-05-01',600,false,DATE '2024-06-01',
 			'1','12',false,2024,$1
-		);
+		)`, sourceFileID)
+	if err != nil {
+		t.Fatalf("insert rental transaction fixture: %v", err)
+	}
+	_, err = tx.Exec(ctx, `
 		INSERT INTO rental_building_parts(
 			transaction_id,rented_spaces_type,rented_spaces_area,
 			centroid_e,centroid_n,dataset_year,source_file_id,source_row_number
 		) VALUES (900000000002,2,50,460000,100000,2024,$1,2)`, sourceFileID)
 	if err != nil {
-		t.Fatalf("insert rental fixture: %v", err)
+		t.Fatalf("insert rental building-part fixture: %v", err)
 	}
 	if _, err := tx.Exec(ctx, "SELECT analytics.refresh_rental_facts()"); err != nil {
 		t.Fatalf("refresh rental facts: %v", err)

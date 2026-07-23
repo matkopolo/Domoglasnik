@@ -45,7 +45,7 @@ DECLARE
 BEGIN
     INSERT INTO analytics.refresh_runs(process,status)
     VALUES ('sale_facts','running') RETURNING id INTO refresh_run_id;
-    TRUNCATE analytics.sale_facts;
+    TRUNCATE analytics.sale_facts CASCADE;
 
     INSERT INTO analytics.sale_facts (
         transaction_id,contract_date,dataset_year,property_group,
