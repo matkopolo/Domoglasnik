@@ -7,9 +7,9 @@ import httpx
 import pytest
 
 from real_estate_etl.api import DatasetUnavailable, JGPClient
-from real_estate_etl.application import (
-    ArchiveResult,
-    converted,
+from real_estate_etl.importer import converted
+from real_estate_etl.models import ArchiveResult
+from real_estate_etl.pipeline import (
     format_duration,
     prepare_archive,
     prepare_national_archive,
@@ -56,7 +56,7 @@ def test_prepare_archive_reuses_valid_zip(tmp_path: Path):
     with zipfile.ZipFile(archive, "w") as output:
         output.writestr("test.csv", "a\n1\n")
 
-    with patch("real_estate_etl.application.fetch_zip") as fetch:
+    with patch("real_estate_etl.pipeline.fetch_zip") as fetch:
         result = prepare_archive(1, 2026, tmp_path, force=False)
 
     assert isinstance(result, ArchiveResult)
@@ -67,7 +67,7 @@ def test_prepare_archive_reuses_valid_zip(tmp_path: Path):
 
 def test_prepare_archive_force_downloads(tmp_path: Path):
     downloaded = tmp_path / "new.zip"
-    with patch("real_estate_etl.application.fetch_zip", return_value=downloaded) as fetch:
+    with patch("real_estate_etl.pipeline.fetch_zip", return_value=downloaded) as fetch:
         result = prepare_archive(1, 2026, tmp_path, force=True)
 
     assert result.path == downloaded
@@ -79,7 +79,7 @@ def test_prepare_national_archive_reuses_valid_zip(tmp_path: Path):
     archive = tmp_path / "ETN_SLO_2020_KPP_test.zip"
     with zipfile.ZipFile(archive, "w") as output:
         output.writestr("test.csv", "a\n1\n")
-    with patch("real_estate_etl.application.fetch_national_zip") as fetch:
+    with patch("real_estate_etl.pipeline.fetch_national_zip") as fetch:
         result = prepare_national_archive("sales", 2020, tmp_path, force=False)
     assert result.path == archive
     assert result.reused is True

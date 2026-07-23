@@ -5,10 +5,11 @@ This project downloads national yearly ZIP archives from GURS JGP, preserves the
 ## Project structure
 
 - `apps/data-pipeline/`: Python downloader, transformer, PostgreSQL loader, and tests
-- `apps/api/`: future Go backend application
+- `apps/api/`: Go analytics API, OpenAPI contract, tests, and architecture plan
 - `apps/web/`: future frontend application
 - `database/migrations/`: shared PostgreSQL schema and incremental migrations
 - `database/documentation/`: shared data-model documentation
+- `docs/development-guidelines.md`: Go/Python conventions and test-layout policy
 - `infrastructure/docker/`: future service-specific Docker assets
 - `data/raw/`: local downloaded archives, excluded from Git
 - `Makefile`: root commands shared by all developers
@@ -36,10 +37,14 @@ Run a task with **Terminal → Run Task**, run tests from VS Code's Testing pane
 Inside the data pipeline:
 
 - `api.py`: `JGPClient`, pooled HTTP connections, atomic ZIP downloads, and retry policy
+- `importer.py`: declarative CSV mappings, conversion, and transactional PostgreSQL `COPY`
+- `pipeline.py`: reference synchronization and bounded concurrent download orchestration
+- `geography.py`: official GURS RPE boundary ingestion
+- `modeling.py`: offline hedonic and Isolation Forest refreshes
 - `settings.py`: immutable API/product metadata and machine defaults
 - `models.py`: typed results passed between download, parsing, and loading stages
-- `application.py`: declarative CSV-to-column mappings, PostgreSQL `COPY`, bounded orchestration, and command handlers
-- `cli.py`: minimal executable entry point
+- `cli.py`: argument parsing and command dispatch
+- `application.py`: compatibility imports for older callers; new code uses the focused modules above
 - `pyproject.toml`: installable package metadata, console command, dependencies, and Ruff rules
 
 The PostgreSQL tables remain in `database/migrations`, not Python. CSV mappings are intentionally kept as one declarative registry rather than one file per table: they are source-to-destination translation rules, and keeping BUY and RENT mappings together makes schema drift comparisons and validation easier. If the number of source products grows substantially, that registry can be moved intact into `mappings.py` without changing the importer.
@@ -54,7 +59,17 @@ The PostgreSQL tables remain in `database/migrations`, not Python. CSV mappings 
 
 The package installs a `real-estate-etl` executable, so developers do not need to manage `PYTHONPATH` manually.
 
+Repository-wide Go/Python conventions and the reason Go tests remain adjacent
+to packages while Python tests live in a separate tree are documented in
+[docs/development-guidelines.md](docs/development-guidelines.md).
+
 The complete column-level reference is in [database/documentation/data-dictionary.md](database/documentation/data-dictionary.md). It documents source CSV names, English meanings, PostgreSQL types, units, nullability, codebooks, coordinates, relationships, and analysis cautions.
+
+The backend direction and statistical safeguards are preserved in
+[apps/api/docs/backend-api-plan.md](apps/api/docs/backend-api-plan.md). The Go
+service now provides geographic boundaries, package-aware sale facts,
+overview/time-series statistics, auditable robust outliers, and bounded map
+clusters/points over tested analytical tables.
 
 ## Start PostgreSQL with PostGIS
 
@@ -88,17 +103,85 @@ WHERE location IS NOT NULL;
 
 The point is the source property's centroid, not necessarily an entrance or postal-address coordinate. A transaction can also reference multiple property rows and therefore multiple map points.
 
+### Development memory budget
+
+PostgreSQL/PostGIS remains the source of truth and analytical engine; the dataset is never copied wholesale into Go memory. Docker Compose applies protective development ceilings of 4 GB for PostgreSQL and 512 MB for the Go API. These are maximums, not reserved memory: with the current dataset the containers normally use far less.
+
+Allocate 6–8 GB to Docker Desktop so PostgreSQL, the API, image builds, and operating-system cache have room to coexist. The API must use bounded SQL queries, pagination, map bounding boxes, and precomputed database aggregates. Any future application cache is limited to small reference or aggregate results and must be justified by measurements.
+
+## Start the Go analytics API
+
+The API uses the existing PostgreSQL/PostGIS database and keeps derived API data in the separate `analytics` schema. It does not need or maintain a duplicate database.
+
+```bash
+make api-up
+curl http://localhost:8080/health/ready
+curl http://localhost:8080/api/v1/meta
+```
+
+Refresh the official GURS RPE statistical-region, municipality, city-district, local-community, and settlement hierarchy with:
+
+```bash
+.venv/bin/real-estate-etl sync-geographies
+```
+
+After importing or replacing sale or rental archives, rebuild the persisted
+analytical facts and versioned sale/rental outlier evaluations:
+
+```bash
+make analytics-refresh
+make models-refresh WORKERS=6
+```
+
+`analytics-refresh` rebuilds deterministic facts, robust outliers, anomaly
+signals, and repeat-sales indices. `models-refresh` separately cross-fits the
+heavier hedonic and Isolation Forest models and refreshes predictions,
+model-based anomaly scores, and hedonic indices.
+
+The initial analytical refresh takes several minutes; indexed API queries then
+complete in milliseconds. The API role cannot mutate imported transactions or
+run refreshes. It has narrowly scoped writes only for users, sessions,
+preferences, and authenticated anomaly review decisions.
+
+The full local contract and developer instructions are in [apps/api/README.md](apps/api/README.md). The API can be built and tested through Docker even when Go is not installed on the host:
+
+```bash
+make api-vet
+make api-test
+make api-build
+```
+
+Root `make lint` and `make test` run checks for both the Python pipeline and Go API.
+
 ## Windows setup
 
 Install Docker Desktop for Windows and Python 3.9 or newer. Then open PowerShell in the project folder and run:
 
 ```powershell
 docker compose up -d --wait db
-docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/007_postgis.sql
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -e "apps/data-pipeline[dev]"
+pip install -e "apps/data-pipeline[dev,ml]"
 .\.venv\Scripts\real-estate-etl.exe refresh-all-data
+```
+
+On a new Docker volume PostgreSQL applies every migration automatically. To
+upgrade an existing Windows database without GNU Make, run:
+
+```powershell
+Get-ChildItem database/migrations/0*.sql |
+  Where-Object { [int]$_.BaseName.Substring(0, 3) -ge 7 } |
+  Sort-Object Name |
+  ForEach-Object {
+    docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f "/docker-entrypoint-initdb.d/$($_.Name)"
+  }
+docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -c "SELECT analytics.refresh_sale_facts();"
+docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -c "SELECT analytics.refresh_sale_outliers();"
+docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -c "SELECT analytics.refresh_rental_facts();"
+docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -c "SELECT analytics.refresh_rental_outliers();"
+docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -c "SELECT analytics.refresh_anomaly_signals();"
+docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -c "SELECT analytics.refresh_repeat_sales_indices();"
+.\.venv\Scripts\real-estate-etl.exe refresh-models --workers 6
 ```
 
 If PowerShell blocks virtual-environment activation, enable it for only the current PowerShell process:
@@ -228,6 +311,9 @@ The integration tests create uniquely named temporary schemas, test municipality
 - `codebook_values`: source lookup values (`sifranti`)
 - `codebook_imports`: checksums of codebook versions already loaded
 - `source_files`: archive checksum and import provenance
+- `analytics.geographic_units`: official PostGIS boundaries and hierarchy
+- `analytics.sale_facts`: one package-aware, spatially assigned row per sale
+- `analytics.sale_outlier_evaluations`: versioned IQR/MAD cohort decisions
 
 Building, parcel, and rented-space tables preserve every CSV source row, including historical unregistered records without complete cadastral identifiers or cadastral municipality codes. Reimporting a national dataset/year replaces its prior database snapshot before loading the new archive.
 

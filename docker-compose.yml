@@ -10,6 +10,7 @@ services:
       POSTGRES_PASSWORD: real_estate
     ports:
       - "5432:5432"
+    mem_limit: 4g
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/migrations:/docker-entrypoint-initdb.d:ro
@@ -18,6 +19,32 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    image: real-estate-api:development
+    environment:
+      API_ENV: development
+      API_BUILD: local
+      API_ADDRESS: ":8080"
+      API_ALLOWED_ORIGINS: "http://localhost:5173,http://localhost:3000"
+      DATABASE_URL: postgresql://real_estate_api:real_estate_api@db:5432/real_estate
+      DATABASE_MAX_CONNECTIONS: 10
+      LOG_LEVEL: info
+    ports:
+      - "8080:8080"
+    mem_limit: 512m
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://localhost:8080/health/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
 
 volumes:
   postgres_data:

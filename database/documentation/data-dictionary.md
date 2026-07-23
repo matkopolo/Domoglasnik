@@ -269,6 +269,67 @@ Tracks unique codebook file versions so identical codebooks are not repeatedly u
 
 ## Coordinate usage
 
+## Analytical property classification
+
+`analytics.building_part_type_groups` maps the 15 GURS `Vrsta dela
+stavbe` codes to stable API groups. `analytics.classify_sale_package(...)`
+classifies all components belonging to one transaction, rather than treating
+each row as a separate sale.
+
+One primary use wins when its auxiliary components are land, a garage, or a
+parking space. For example, a house plus its garden parcel and garage remains
+`house`; an apartment plus parking remains `apartment`. Packages containing
+different primary uses, such as a house and an apartment, are `mixed`.
+Land-only and garage-only packages remain `land` and `garage`; unrecognized
+or empty packages are `unknown`.
+
+## `analytics.sale_facts`
+
+One persisted analytical row per sale transaction, rebuilt with
+`SELECT analytics.refresh_sale_facts()`. PostgreSQL/PostGIS performs the
+aggregation and spatial assignment; the API does not load the source dataset
+into memory.
+
+The table records package component counts, stable property group, comparable
+area, analytical price, price/m², quality reasons, representative point, and
+current statistical-region, municipality, district, community, and settlement
+IDs. `price_derivation` is `component_prices` only when every component has a
+positive attributed price, `single_primary_transaction_price` when one primary
+property safely uses the transaction total, and `unavailable` otherwise.
+
+`analytics.sale_outlier_evaluations` stores the versioned IQR/MAD decision,
+cohort level and size, robust bounds, modified z-score, and reasons for every
+sale fact. Cohorts prefer the same building, property group, 20 m² area band,
+and contract year (minimum 5), then municipality/year (minimum 15), then
+statistical region/year (minimum 30). Conservative dispersion floors prevent
+rounded or repeated source values from creating near-zero bounds.
+
+`representative_eligible` excludes only deterministic data-quality failures and
+detected statistical outliers from cleaned means/trends. Nothing is deleted;
+raw values and evaluations remain queryable. Implausibly tiny/large areas are
+classified as data-quality issues before market-outlier evaluation.
+
+## `analytics.rental_facts`
+
+One row per rental agreement, refreshed with
+`analytics.refresh_rental_facts()`. Rent amounts are monthly. Heterogeneous
+packages such as an apartment plus garage are retained as `mixed` but excluded
+when their total rent cannot be safely separated. Homogeneous packages may use
+the transaction total; complete component rents take precedence.
+
+`monthly_rent_reported` preserves the attributed source amount.
+`monthly_rent_ex_vat` removes a known GURS VAT code when VAT is included, and
+`monthly_rent_per_sqm` divides that normalized amount by rented area. The fact
+also records fixed/indefinite term, duration in months, operating-cost
+inclusion, market/non-market type, building identity, point, geographic IDs,
+derivation, and all quality reasons.
+
+Representative rental facts require a market transaction, homogeneous known
+property group, valid date, area, monthly rent, VAT interpretation, and
+duration. Apartment rules follow the published GURS methodology: 10–300 m²,
+EUR 10–10,000 monthly rent, and EUR 1–50/m². Other property groups use
+documented conservative plausibility bounds pending group-specific calibration.
+
 Centroids are projected points, not longitude/latitude. Convert the generated PostGIS point from EPSG:3794 to WGS84/EPSG:4326 with:
 
 ```sql
@@ -290,3 +351,85 @@ Use `ST_X(ST_Transform(location, 4326))` for longitude and `ST_Y(...)` for latit
 4. Fractional shares are source text and can contain values such as `NP`; they require domain-aware parsing before numeric analysis.
 5. Centroids are approximate location points and should not be treated as legal parcel/building geometry.
 6. Missing historical identifiers are retained intentionally; do not remove rows solely because cadastral fields are null.
+
+## API analytics schema
+
+The Go API reads quality-controlled, derived data from the `analytics` schema. Source imports remain in `public`; the API must not mutate them.
+
+### `analytics.geographic_units`
+
+Stores current GURS RPE boundary units used by national, statistical-region,
+municipality, city-district, local-community, and settlement analytics.
+`real-estate-etl sync-geographies` imports and updates these boundaries.
+
+| Column | Type | Meaning |
+|---|---|---|
+| `id` | `bigint` | Internal generated geographic-unit identifier used by API routes and hierarchy joins. |
+| `level` | `text` | Controlled hierarchy level: country, statistical region, municipality, city district, local community, or settlement. |
+| `source_collection` | `text` | GURS RPE OGC collection identifier. |
+| `gurs_eid` | `text` | Stable source EID; unique within its collection. |
+| `code` | `integer` | Source unit code where available. |
+| `composite_code` | `integer` | Source composite code including parent context where available. |
+| `name` | `text` | Official source name. Names are not unique identifiers. |
+| `parent_id` | `bigint` | Optional FK to the direct parent geographic unit. |
+| `parent_gurs_eid` | `text` | Parent municipality EID supplied by GURS for sub-municipal units. |
+| `source_updated_at` | `timestamptz` | GURS source modification timestamp. |
+| `source_properties` | `jsonb` | Preserved source attributes not promoted to typed columns. |
+| `geometry_wgs84` | `geometry(MultiPolygon,4326)` | Source/web-map boundary in longitude/latitude. |
+| `geometry_d96tm` | `geometry(MultiPolygon,3794)` | Generated boundary used for joins with property centroids. |
+| `imported_at` | `timestamptz` | Time this database version was imported. |
+
+Both geometry columns have GiST indexes. Level, parent, and normalized-name lookups have B-tree indexes.
+
+### `analytics.refresh_runs`
+
+Audit trail for future boundary and analytical refresh processes.
+
+| Column | Type | Meaning |
+|---|---|---|
+| `id` | `bigint` | Internal generated run identifier. |
+| `process` | `text` | Refresh process name. |
+| `status` | `text` | `running`, `succeeded`, or `failed`. |
+| `source_version` | `text` | Optional source release/checksum/version. |
+| `started_at` | `timestamptz` | Refresh start time. |
+| `finished_at` | `timestamptz` | Completion time; null only while running. |
+| `details` | `jsonb` | Counts, timing, diagnostics, or failure metadata. |
+
+### `analytics.rental_outlier_evaluations`
+
+Auditable robust evaluations of rental price per m². Comparable cohorts use
+property group, 20 m² area bands, contract year, and municipality (minimum 15)
+with statistical-region fallback (minimum 30). `rental-outlier-v1` combines IQR
+and approximate MAD rules. Flagged rows remain in source and fact tables;
+`analytics.rental_facts.representative_eligible` controls cleaned aggregates.
+
+### `analytics.anomaly_signals`
+
+One non-destructive signal record per sale or rental fact. It stores named
+flags plus normalized hard-rule, robust-cohort, model-residual, Isolation
+Forest, duplicate, spatial, and combined review scores. Model fields remain
+null until `real-estate-etl refresh-models` runs. Human review status, notes,
+reviewer, and time are preserved when signals are refreshed.
+
+### Model and index tables
+
+- `analytics.model_runs`: immutable model version, feature schema, random seed,
+  training window/sample, and out-of-fold metrics.
+- `analytics.valuation_predictions`: observed and predicted amount per m²,
+  empirical lower/upper range, and residual for every model-eligible fact.
+- `analytics.repeat_sale_pairs`: consecutive representative sales of the same
+  cadastral building part, at least 180 days apart.
+- `analytics.market_indices`: national repeat-sales and constant-quality
+  hedonic series with method version, sample, base period, and model run.
+
+### Identity and preferences
+
+- `app_users`: normalized email, bcrypt password hash, display name, and
+  lifecycle timestamps.
+- `auth_sessions`: SHA-256 hashes of random opaque bearer tokens; raw tokens
+  are never stored.
+- `user_preferences`: one bounded JSON object per user.
+
+The `real_estate_api` role remains unable to modify imported transactions or
+analytical values. It has narrowly scoped writes for identity, sessions,
+preferences, and anomaly review metadata only.

@@ -5,6 +5,8 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .venv/
+apps/api/coverage.out
+apps/api/api
 *.egg-info/
 data/raw/*.zip
 data/extracted/

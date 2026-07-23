@@ -1,0 +1,38 @@
+package httpapi
+
+import (
+	"errors"
+	"net/http"
+	"strconv"
+
+	"github.com/matkopolo/NepremicninskiAgent/apps/api/internal/analytics"
+)
+
+func (s *server) buildingStatistics(w http.ResponseWriter, r *http.Request) {
+	code64, err := strconv.ParseInt(r.PathValue("cadastralCode"), 10, 32)
+	if err != nil || code64 <= 0 {
+		writeError(w, r, http.StatusBadRequest, "invalid_cadastral_code",
+			"cadastral code must be a positive integer")
+		return
+	}
+	number := r.PathValue("buildingNumber")
+	if number == "" || len(number) > 100 {
+		writeError(w, r, http.StatusBadRequest, "invalid_building_number",
+			"building number is required")
+		return
+	}
+	result, err := s.buildings.BuildingStatistics(
+		r.Context(), int32(code64), number)
+	if errors.Is(err, analytics.ErrBuildingNotFound) {
+		writeError(w, r, http.StatusNotFound, "building_not_found",
+			"building was not found")
+		return
+	}
+	if err != nil {
+		s.logger.Error("building statistics", "error", err)
+		writeError(w, r, http.StatusInternalServerError, "query_failed",
+			"could not load building statistics")
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}

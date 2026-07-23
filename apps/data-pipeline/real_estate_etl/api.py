@@ -46,6 +46,9 @@ class JGPClient:
         response.raise_for_status()
         return response.json()
 
+    def get_json_retried(self, url: str, label: str = "API request"):
+        return self._with_retries(lambda: self.get_json(url), label)
+
     def _download(self, url: str, target: Path) -> Path:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         temporary = target.with_suffix(target.suffix + ".part")
@@ -71,7 +74,7 @@ class JGPClient:
             return status in {408, 425, 429} or status >= 500
         return False
 
-    def _with_retries(self, operation, label: str) -> Path:
+    def _with_retries(self, operation, label: str):
         def before_sleep(state):
             print(
                 f"Transient {label} error; retry {state.attempt_number}/{self.max_attempts - 1} "

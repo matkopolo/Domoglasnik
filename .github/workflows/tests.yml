@@ -34,9 +34,26 @@ jobs:
           cache-dependency-path: |
             apps/data-pipeline/pyproject.toml
             apps/data-pipeline/requirements*.txt
-      - run: pip install -e ".[dev]"
+      - run: pip install -e ".[dev,ml]"
         working-directory: apps/data-pipeline
       - run: ruff check .
         working-directory: apps/data-pipeline
       - run: pytest -q
         working-directory: apps/data-pipeline
+      - name: Apply database migrations
+        run: |
+          for migration in database/migrations/*.sql; do
+            psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f "$migration"
+          done
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.26.5"
+          cache-dependency-path: apps/api/go.sum
+      - run: gofmt -w . && git diff --exit-code
+        working-directory: apps/api
+      - run: go vet ./...
+        working-directory: apps/api
+      - run: go build ./...
+        working-directory: apps/api
+      - run: go test -race ./...
+        working-directory: apps/api

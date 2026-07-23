@@ -15,6 +15,33 @@
       "problemMatcher": []
     },
     {
+      "label": "Analytics: Refresh sale facts and outliers",
+      "type": "shell",
+      "command": "make analytics-refresh",
+      "problemMatcher": []
+    },
+    {
+      "label": "API: Start",
+      "type": "shell",
+      "command": "make api-up",
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "API: Test",
+      "type": "shell",
+      "command": "make api-test",
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "API: Logs",
+      "type": "shell",
+      "command": "make api-logs",
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
       "label": "Pipeline: Lint",
       "type": "shell",
       "command": "make lint",

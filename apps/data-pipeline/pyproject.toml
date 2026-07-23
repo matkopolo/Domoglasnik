@@ -18,6 +18,10 @@ dev = [
     "pytest>=8,<10",
     "ruff>=0.9,<1",
 ]
+ml = [
+    "numpy>=1.26,<3",
+    "scikit-learn>=1.5,<1.7",
+]
 
 [project.scripts]
 real-estate-etl = "real_estate_etl.cli:main"

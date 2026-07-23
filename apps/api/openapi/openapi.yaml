@@ -1,0 +1,1458 @@
+openapi: 3.1.0
+info:
+  title: Slovenian Real Estate Analytics API
+  version: 0.1.0
+  description: Read-only analytics API backed by GURS transaction data and PostGIS.
+servers:
+  - url: http://localhost:8080
+paths:
+  /health/live:
+    get:
+      operationId: getLiveness
+      tags: [Operations]
+      responses:
+        "200":
+          description: Process is alive.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+  /health/ready:
+    get:
+      operationId: getReadiness
+      tags: [Operations]
+      responses:
+        "200":
+          description: API and database are ready.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Readiness"
+        "503":
+          $ref: "#/components/responses/Error"
+  /api/v1/health:
+    get:
+      operationId: getAPIHealth
+      tags: [Operations]
+      responses:
+        "200":
+          description: API and database are ready.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Readiness"
+        "503":
+          $ref: "#/components/responses/Error"
+  /api/v1/meta:
+    get:
+      operationId: getMetadata
+      tags: [Metadata]
+      responses:
+        "200":
+          description: Supported API dimensions and classifications.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Metadata"
+  /api/v1/geographies:
+    get:
+      operationId: listGeographies
+      tags: [Geographies]
+      parameters:
+        - $ref: "#/components/parameters/GeographyLevel"
+        - name: parentId
+          in: query
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+      responses:
+        "200":
+          description: Geographic units matching the filters.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeographyList"
+        "400":
+          $ref: "#/components/responses/Error"
+  /api/v1/geographies/{id}/children:
+    get:
+      operationId: listGeographyChildren
+      tags: [Geographies]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+      responses:
+        "200":
+          description: Direct children of the geographic unit.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeographyList"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /api/v1/geographies/{id}:
+    get:
+      operationId: getGeography
+      tags: [Geographies]
+      parameters:
+        - $ref: "#/components/parameters/GeographyId"
+      responses:
+        "200":
+          description: Geographic-unit metadata and WGS84 bounds.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Geography"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /api/v1/geographies/{id}/boundary:
+    get:
+      operationId: getGeographyBoundary
+      tags: [Geographies]
+      parameters:
+        - $ref: "#/components/parameters/GeographyId"
+        - name: detail
+          in: query
+          description: Topology-preserving simplification appropriate for the map zoom level.
+          schema:
+            type: string
+            enum: [low, medium, full]
+            default: medium
+      responses:
+        "200":
+          description: Geographic boundary as a WGS84 GeoJSON Feature.
+          content:
+            application/geo+json:
+              schema:
+                $ref: "#/components/schemas/GeoJSONFeature"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /api/v1/statistics/overview:
+    get:
+      operationId: getSaleStatisticsOverview
+      tags: [Statistics]
+      parameters:
+        - $ref: "#/components/parameters/FromDate"
+        - $ref: "#/components/parameters/ToDate"
+        - $ref: "#/components/parameters/PropertyGroup"
+        - $ref: "#/components/parameters/StatisticsGeographyId"
+      responses:
+        "200":
+          description: Sale statistics over the selected population.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatisticsOverview"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /api/v1/statistics/timeseries:
+    get:
+      operationId: getSaleStatisticsTimeSeries
+      tags: [Statistics]
+      parameters:
+        - $ref: "#/components/parameters/FromDate"
+        - $ref: "#/components/parameters/ToDate"
+        - $ref: "#/components/parameters/PropertyGroup"
+        - $ref: "#/components/parameters/StatisticsGeographyId"
+        - name: interval
+          in: query
+          schema:
+            type: string
+            enum: [month, quarter, year]
+            default: year
+      responses:
+        "200":
+          description: Periodic sale statistics over the selected population.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatisticsTimeSeries"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /api/v1/statistics/outliers:
+    get:
+      operationId: listSaleStatisticalOutliers
+      tags: [Statistics]
+      parameters:
+        - $ref: "#/components/parameters/FromDate"
+        - $ref: "#/components/parameters/ToDate"
+        - $ref: "#/components/parameters/PropertyGroup"
+        - $ref: "#/components/parameters/StatisticsGeographyId"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        "200":
+          description: Auditable statistical market outliers; source observations remain stored.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OutlierList"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /api/v1/rentals/statistics/overview:
+    get:
+      operationId: getRentalStatisticsOverview
+      tags: [Rental Statistics]
+      parameters:
+        - $ref: "#/components/parameters/FromDate"
+        - $ref: "#/components/parameters/ToDate"
+        - $ref: "#/components/parameters/PropertyGroup"
+        - $ref: "#/components/parameters/StatisticsGeographyId"
+      responses:
+        "200":
+          description: Cleaned and raw monthly-rent statistics.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RentalStatisticsOverview"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /api/v1/rentals/statistics/timeseries:
+    get:
+      operationId: getRentalStatisticsTimeSeries
+      tags: [Rental Statistics]
+      parameters:
+        - $ref: "#/components/parameters/FromDate"
+        - $ref: "#/components/parameters/ToDate"
+        - $ref: "#/components/parameters/PropertyGroup"
+        - $ref: "#/components/parameters/StatisticsGeographyId"
+        - name: interval
+          in: query
+          schema:
+            type: string
+            enum: [month, quarter, year]
+            default: year
+      responses:
+        "200":
+          description: Rental trends with same-period prior-year comparisons.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RentalStatisticsTimeSeries"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /api/v1/rentals/statistics/outliers:
+    get:
+      operationId: listRentalStatisticalOutliers
+      tags: [Rental Statistics]
+      parameters:
+        - $ref: "#/components/parameters/FromDate"
+        - $ref: "#/components/parameters/ToDate"
+        - $ref: "#/components/parameters/PropertyGroup"
+        - $ref: "#/components/parameters/StatisticsGeographyId"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        "200":
+          description: Auditable rental-price outliers; source observations remain stored.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RentalOutlierList"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /api/v1/rentals/map/clusters:
+    get:
+      operationId: getRentalMapClusters
+      tags: [Rental Map]
+      parameters:
+        - $ref: "#/components/parameters/BoundingBox"
+        - $ref: "#/components/parameters/FromDate"
+        - $ref: "#/components/parameters/ToDate"
+        - $ref: "#/components/parameters/PropertyGroup"
+        - $ref: "#/components/parameters/StatisticsGeographyId"
+        - name: zoom
+          in: query
+          schema: {type: integer, minimum: 0, maximum: 22, default: 8}
+      responses:
+        "200":
+          description: Zoom-dependent rental clusters in the required bounding box.
+          content:
+            application/geo+json:
+              schema:
+                $ref: "#/components/schemas/GeoJSONFeatureCollection"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /api/v1/rentals/map/properties:
+    get:
+      operationId: getRentalMapProperties
+      tags: [Rental Map]
+      parameters:
+        - $ref: "#/components/parameters/BoundingBox"
+        - $ref: "#/components/parameters/FromDate"
+        - $ref: "#/components/parameters/ToDate"
+        - $ref: "#/components/parameters/PropertyGroup"
+        - $ref: "#/components/parameters/StatisticsGeographyId"
+        - name: limit
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 500, default: 250}
+      responses:
+        "200":
+          description: Capped individual rental points in the required bounding box.
+          content:
+            application/geo+json:
+              schema:
+                $ref: "#/components/schemas/GeoJSONFeatureCollection"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /api/v1/sales/transactions/{id}:
+    get:
+      operationId: getSaleTransaction
+      tags: [Transactions]
+      parameters:
+        - $ref: "#/components/parameters/TransactionId"
+      responses:
+        "200":
+          description: Sale package, component properties, geography, and quality evidence.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SaleTransactionDetail"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /api/v1/rentals/transactions/{id}:
+    get:
+      operationId: getRentalTransaction
+      tags: [Transactions]
+      parameters:
+        - $ref: "#/components/parameters/TransactionId"
+      responses:
+        "200":
+          description: Rental package, component spaces, geography, and quality evidence.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RentalTransactionDetail"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /api/v1/statistics/distribution:
+    get:
+      operationId: getSaleDistribution
+      tags: [Statistics]
+      parameters:
+        - $ref: "#/components/parameters/FromDate"
+        - $ref: "#/components/parameters/ToDate"
+        - $ref: "#/components/parameters/PropertyGroup"
+        - $ref: "#/components/parameters/StatisticsGeographyId"
+        - name: metric
+          in: query
+          schema: {type: string, enum: [price, pricePerSqm], default: pricePerSqm}
+        - $ref: "#/components/parameters/HistogramBins"
+      responses:
+        "200":
+          description: Representative sale percentiles and p01-p99 histogram.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Distribution"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /api/v1/rentals/statistics/distribution:
+    get:
+      operationId: getRentalDistribution
+      tags: [Rental Statistics]
+      parameters:
+        - $ref: "#/components/parameters/FromDate"
+        - $ref: "#/components/parameters/ToDate"
+        - $ref: "#/components/parameters/PropertyGroup"
+        - $ref: "#/components/parameters/StatisticsGeographyId"
+        - name: metric
+          in: query
+          schema: {type: string, enum: [monthlyRent, rentPerSqm], default: rentPerSqm}
+        - $ref: "#/components/parameters/HistogramBins"
+      responses:
+        "200":
+          description: Representative rental percentiles and p01-p99 histogram.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Distribution"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /api/v1/buildings/{cadastralCode}/{buildingNumber}/statistics:
+    get:
+      operationId: getBuildingStatistics
+      tags: [Buildings]
+      parameters:
+        - name: cadastralCode
+          in: path
+          required: true
+          schema: {type: integer, minimum: 1}
+        - name: buildingNumber
+          in: path
+          required: true
+          schema: {type: string, maxLength: 100}
+      responses:
+        "200":
+          description: Sale and rental history for one cadastral building identity.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BuildingStatistics"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /api/v1/map/clusters:
+    get:
+      operationId: getSaleMapClusters
+      tags: [Map]
+      parameters:
+        - $ref: "#/components/parameters/BoundingBox"
+        - $ref: "#/components/parameters/FromDate"
+        - $ref: "#/components/parameters/ToDate"
+        - $ref: "#/components/parameters/PropertyGroup"
+        - $ref: "#/components/parameters/StatisticsGeographyId"
+        - name: zoom
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 22
+            default: 8
+      responses:
+        "200":
+          description: Zoom-dependent sale clusters inside the required bounding box.
+          content:
+            application/geo+json:
+              schema:
+                $ref: "#/components/schemas/GeoJSONFeatureCollection"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /api/v1/map/properties:
+    get:
+      operationId: getSaleMapProperties
+      tags: [Map]
+      parameters:
+        - $ref: "#/components/parameters/BoundingBox"
+        - $ref: "#/components/parameters/FromDate"
+        - $ref: "#/components/parameters/ToDate"
+        - $ref: "#/components/parameters/PropertyGroup"
+        - $ref: "#/components/parameters/StatisticsGeographyId"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 250
+      responses:
+        "200":
+          description: Capped individual sale points inside the required bounding box.
+          content:
+            application/geo+json:
+              schema:
+                $ref: "#/components/schemas/GeoJSONFeatureCollection"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /api/v1/anomalies:
+    get:
+      operationId: listAnomalySignals
+      tags: [Anomalies]
+      parameters:
+        - name: transactionKind
+          in: query
+          schema: {type: string, enum: [sale, rent]}
+        - name: flag
+          in: query
+          schema: {type: string}
+        - name: reviewStatus
+          in: query
+          schema:
+            $ref: "#/components/schemas/ReviewStatus"
+        - name: minimumScore
+          in: query
+          schema: {type: number, minimum: 0, maximum: 1}
+        - name: limit
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 100, default: 50}
+        - name: offset
+          in: query
+          schema: {type: integer, minimum: 0, default: 0}
+      responses:
+        "200":
+          description: Ranked, non-destructive anomaly review queue.
+          content:
+            application/json:
+              schema: {type: object, additionalProperties: true}
+        "400":
+          $ref: "#/components/responses/Error"
+  /api/v1/anomalies/summary:
+    get:
+      operationId: getAnomalySummary
+      tags: [Anomalies]
+      parameters:
+        - name: transactionKind
+          in: query
+          schema: {type: string, enum: [sale, rent]}
+      responses:
+        "200":
+          description: Counts by anomaly and review state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnomalySummary"
+        "400":
+          $ref: "#/components/responses/Error"
+  /api/v1/anomalies/{kind}/{id}/review:
+    patch:
+      operationId: reviewAnomaly
+      tags: [Anomalies]
+      security: [{BearerAuth: []}]
+      parameters:
+        - name: kind
+          in: path
+          required: true
+          schema: {type: string, enum: [sale, rent]}
+        - $ref: "#/components/parameters/TransactionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  $ref: "#/components/schemas/ReviewStatus"
+                notes: {type: [string, "null"], maxLength: 2000}
+      responses:
+        "204": {description: Review saved.}
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /api/v1/auth/register:
+    post:
+      operationId: registerUser
+      tags: [Identity]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegistrationRequest"
+      responses:
+        "201":
+          description: Account and opaque bearer session created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSession"
+        "400":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+  /api/v1/auth/login:
+    post:
+      operationId: loginUser
+      tags: [Identity]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Opaque bearer session.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSession"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+  /api/v1/auth/logout:
+    post:
+      operationId: logoutUser
+      tags: [Identity]
+      security: [{BearerAuth: []}]
+      responses:
+        "204": {description: Current session revoked.}
+        "401":
+          $ref: "#/components/responses/Error"
+  /api/v1/users/me:
+    get:
+      operationId: getCurrentUser
+      tags: [Identity]
+      security: [{BearerAuth: []}]
+      responses:
+        "200":
+          description: Current user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Error"
+  /api/v1/users/me/preferences:
+    get:
+      operationId: getPreferences
+      tags: [Preferences]
+      security: [{BearerAuth: []}]
+      responses:
+        "200":
+          description: Saved preference object.
+          content:
+            application/json:
+              schema: {type: object, additionalProperties: true}
+        "401":
+          $ref: "#/components/responses/Error"
+    put:
+      operationId: savePreferences
+      tags: [Preferences]
+      security: [{BearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object, additionalProperties: true}
+      responses:
+        "200":
+          description: Saved preference object.
+          content:
+            application/json:
+              schema: {type: object, additionalProperties: true}
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+  /api/v1/indices:
+    get:
+      operationId: listMarketIndices
+      tags: [Models]
+      parameters:
+        - name: transactionKind
+          in: query
+          schema: {type: string, enum: [sale, rent]}
+        - name: method
+          in: query
+          schema: {type: string, enum: [repeat_sales, hedonic]}
+        - name: propertyGroup
+          in: query
+          schema:
+            $ref: "#/components/schemas/PropertyGroup"
+      responses:
+        "200":
+          description: National repeat-sales and constant-quality hedonic indices.
+          content:
+            application/json:
+              schema: {type: object, additionalProperties: true}
+        "400":
+          $ref: "#/components/responses/Error"
+  /api/v1/valuations/{kind}/{id}:
+    get:
+      operationId: getTransactionValuation
+      tags: [Models]
+      parameters:
+        - name: kind
+          in: path
+          required: true
+          schema: {type: string, enum: [sale, rent]}
+        - $ref: "#/components/parameters/TransactionId"
+      responses:
+        "200":
+          description: Cross-fitted hedonic estimate and empirical range for an eligible transaction.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValuationPrediction"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque
+  parameters:
+    HistogramBins:
+      name: bins
+      in: query
+      schema: {type: integer, minimum: 5, maximum: 100, default: 20}
+    TransactionId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+        not:
+          const: 0
+    GeographyId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+    GeographyLevel:
+      name: level
+      in: query
+      schema:
+        $ref: "#/components/schemas/GeographyLevel"
+    FromDate:
+      name: from
+      in: query
+      description: Inclusive contract-date lower bound.
+      schema:
+        type: string
+        format: date
+    ToDate:
+      name: to
+      in: query
+      description: Inclusive contract-date upper bound.
+      schema:
+        type: string
+        format: date
+    PropertyGroup:
+      name: propertyGroup
+      in: query
+      schema:
+        $ref: "#/components/schemas/PropertyGroup"
+    StatisticsGeographyId:
+      name: geographyId
+      in: query
+      description: Official geographic unit at any supported hierarchy level.
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+    BoundingBox:
+      name: bbox
+      in: query
+      required: true
+      description: WGS84 west,south,east,north coordinates.
+      schema:
+        type: string
+        pattern: '^-?[0-9.]+,-?[0-9.]+,-?[0-9.]+,-?[0-9.]+$'
+  responses:
+    Error:
+      description: API error.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+  schemas:
+    Status:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          const: ok
+    Readiness:
+      type: object
+      required: [status, application, build, environment]
+      properties:
+        status:
+          type: string
+          const: ok
+        application:
+          type: string
+        build:
+          type: string
+        environment:
+          type: string
+    Metadata:
+      type: object
+      required: [apiVersion, transactionKinds, intervals, geographyLevels, propertyGroups]
+      properties:
+        apiVersion:
+          type: string
+        transactionKinds:
+          type: array
+          items:
+            type: string
+            enum: [sale, rent]
+        intervals:
+          type: array
+          items:
+            type: string
+            enum: [month, quarter, year]
+        geographyLevels:
+          type: array
+          items:
+            $ref: "#/components/schemas/GeographyLevel"
+        propertyGroups:
+          type: array
+          items:
+            type: string
+            enum: [apartment, house, land, commercial, garage, room, mixed, unknown]
+    GeographyLevel:
+      type: string
+      enum: [country, statistical_region, municipality, city_district, local_community, settlement]
+    PropertyGroup:
+      type: string
+      enum: [apartment, house, land, commercial, garage, room, mixed, unknown]
+    Geography:
+      type: object
+      required: [id, level, name, gursEid]
+      properties:
+        id:
+          type: integer
+          format: int64
+        level:
+          $ref: "#/components/schemas/GeographyLevel"
+        code:
+          type: integer
+        compositeCode:
+          type: integer
+        name:
+          type: string
+        parentId:
+          type: integer
+          format: int64
+        gursEid:
+          type: string
+        bounds:
+          type: array
+          minItems: 4
+          maxItems: 4
+          items:
+            type: number
+          description: WGS84 bounding box ordered west, south, east, north.
+    GeographyList:
+      type: object
+      required: [items, count]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Geography"
+        count:
+          type: integer
+          minimum: 0
+    GeoJSONFeature:
+      type: object
+      required: [type, id, properties, geometry]
+      properties:
+        type:
+          type: string
+          const: Feature
+        id:
+          type: integer
+          format: int64
+        properties:
+          $ref: "#/components/schemas/Geography"
+        geometry:
+          type: object
+          required: [type, coordinates]
+          properties:
+            type:
+              type: string
+              enum: [Polygon, MultiPolygon]
+            coordinates: {}
+    StatisticsOverview:
+      type: object
+      required:
+        - transactionCount
+        - eligibleCount
+        - includedSampleSize
+        - excludedOutlierCount
+        - priceSampleSize
+        - pricePerSqmSampleSize
+      properties:
+        transactionCount:
+          type: integer
+          format: int64
+        eligibleCount:
+          type: integer
+          format: int64
+        includedSampleSize:
+          type: integer
+          format: int64
+        excludedOutlierCount:
+          type: integer
+          format: int64
+        priceSampleSize:
+          type: integer
+          format: int64
+        pricePerSqmSampleSize:
+          type: integer
+          format: int64
+        medianPrice:
+          type: [number, "null"]
+        cleanedAveragePrice:
+          type: [number, "null"]
+        rawAveragePrice:
+          type: [number, "null"]
+        medianPricePerSqm:
+          type: [number, "null"]
+        cleanedAveragePricePerSqm:
+          type: [number, "null"]
+        rawAveragePricePerSqm:
+          type: [number, "null"]
+        medianArea:
+          type: [number, "null"]
+    StatisticsTimeSeriesPoint:
+      allOf:
+        - $ref: "#/components/schemas/StatisticsOverview"
+        - type: object
+          required: [period, incomplete]
+          properties:
+            period:
+              type: string
+              format: date
+            incomplete:
+              type: boolean
+    StatisticsTimeSeries:
+      type: object
+      required: [interval, items, count]
+      properties:
+        interval:
+          type: string
+          enum: [month, quarter, year]
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/StatisticsTimeSeriesPoint"
+        count:
+          type: integer
+          minimum: 0
+    RentalStatisticsOverview:
+      type: object
+      required:
+        - transactionCount
+        - eligibleCount
+        - includedSampleSize
+        - excludedOutlierCount
+        - monthlyRentSampleSize
+        - rentPerSqmSampleSize
+      properties:
+        transactionCount: {type: integer, format: int64}
+        eligibleCount: {type: integer, format: int64}
+        includedSampleSize: {type: integer, format: int64}
+        excludedOutlierCount: {type: integer, format: int64}
+        monthlyRentSampleSize: {type: integer, format: int64}
+        rentPerSqmSampleSize: {type: integer, format: int64}
+        medianMonthlyRent: {type: [number, "null"]}
+        cleanedAverageMonthlyRent: {type: [number, "null"]}
+        rawAverageMonthlyRent: {type: [number, "null"]}
+        medianMonthlyRentPerSqm: {type: [number, "null"]}
+        cleanedAverageMonthlyRentPerSqm: {type: [number, "null"]}
+        rawAverageMonthlyRentPerSqm: {type: [number, "null"]}
+        medianArea: {type: [number, "null"]}
+    RentalStatisticsTimeSeriesPoint:
+      type: object
+      required:
+        - period
+        - incomplete
+        - transactionCount
+        - includedSampleSize
+        - weakComparisonSample
+      properties:
+        period: {type: string, format: date}
+        incomplete: {type: boolean}
+        transactionCount: {type: integer, format: int64}
+        includedSampleSize: {type: integer, format: int64}
+        medianMonthlyRent: {type: [number, "null"]}
+        medianMonthlyRentPerSqm: {type: [number, "null"]}
+        previousYearSampleSize: {type: [integer, "null"], format: int64}
+        previousYearMedianMonthlyRent: {type: [number, "null"]}
+        previousYearMedianMonthlyRentPerSqm: {type: [number, "null"]}
+        monthlyRentYoYPercent: {type: [number, "null"]}
+        rentPerSqmYoYPercent: {type: [number, "null"]}
+        weakComparisonSample: {type: boolean}
+    RentalStatisticsTimeSeries:
+      type: object
+      required: [interval, items, count]
+      properties:
+        interval:
+          type: string
+          enum: [month, quarter, year]
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/RentalStatisticsTimeSeriesPoint"
+        count: {type: integer, minimum: 0}
+    RentalOutlier:
+      type: object
+      required:
+        - transactionId
+        - propertyGroup
+        - cohortLevel
+        - cohortSize
+        - cohortMedian
+        - lowerBound
+        - upperBound
+        - ruleVersion
+      properties:
+        transactionId: {type: integer, format: int64}
+        contractDate: {type: [string, "null"], format: date}
+        propertyGroup:
+          $ref: "#/components/schemas/PropertyGroup"
+        area: {type: [number, "null"]}
+        monthlyRent: {type: [number, "null"]}
+        monthlyRentPerSqm: {type: [number, "null"]}
+        cohortLevel: {type: string}
+        cohortSize: {type: integer}
+        cohortMedian: {type: number}
+        lowerBound: {type: number}
+        upperBound: {type: number}
+        modifiedZScore: {type: [number, "null"]}
+        ruleVersion: {type: string}
+    RentalOutlierList:
+      type: object
+      required: [items, count, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/RentalOutlier"
+        count: {type: integer}
+        total: {type: integer, format: int64}
+        limit: {type: integer}
+        offset: {type: integer}
+    QualityDecision:
+      type: object
+      required: [isQualityEligible, isRepresentative, reasons]
+      properties:
+        isQualityEligible: {type: boolean}
+        isRepresentative: {type: boolean}
+        reasons:
+          type: array
+          items: {type: string}
+    OutlierEvidence:
+      type: [object, "null"]
+      properties:
+        status: {type: string}
+        method: {type: [string, "null"]}
+        cohortLevel: {type: [string, "null"]}
+        cohortSize: {type: [integer, "null"]}
+        cohortMedian: {type: [number, "null"]}
+        lowerBound: {type: [number, "null"]}
+        upperBound: {type: [number, "null"]}
+        modifiedZScore: {type: [number, "null"]}
+        ruleVersion: {type: string}
+    TransactionGeography:
+      type: object
+      required: [id, level, name]
+      properties:
+        id: {type: integer, format: int64}
+        level:
+          $ref: "#/components/schemas/GeographyLevel"
+        name: {type: string}
+    SaleTransactionDetail:
+      type: object
+      required:
+        - transactionId
+        - datasetYear
+        - propertyGroup
+        - priceDerivation
+        - quality
+        - geographies
+        - buildingParts
+        - landParcels
+      properties:
+        transactionId: {type: integer, format: int64}
+        contractDate: {type: [string, "null"], format: date}
+        datasetYear: {type: integer}
+        propertyGroup:
+          $ref: "#/components/schemas/PropertyGroup"
+        area: {type: [number, "null"]}
+        price: {type: [number, "null"]}
+        pricePerSqm: {type: [number, "null"]}
+        priceDerivation: {type: string}
+        longitude: {type: [number, "null"]}
+        latitude: {type: [number, "null"]}
+        quality:
+          $ref: "#/components/schemas/QualityDecision"
+        outlier:
+          $ref: "#/components/schemas/OutlierEvidence"
+        geographies:
+          type: array
+          items:
+            $ref: "#/components/schemas/TransactionGeography"
+        buildingParts:
+          type: array
+          items: {type: object, additionalProperties: true}
+        landParcels:
+          type: array
+          items: {type: object, additionalProperties: true}
+    RentalTransactionDetail:
+      type: object
+      required:
+        - transactionId
+        - datasetYear
+        - propertyGroup
+        - rentDerivation
+        - rentalTerm
+        - isMarketRent
+        - quality
+        - geographies
+        - spaces
+      properties:
+        transactionId: {type: integer, format: int64}
+        contractDate: {type: [string, "null"], format: date}
+        rentalStartDate: {type: [string, "null"], format: date}
+        rentalEndDate: {type: [string, "null"], format: date}
+        datasetYear: {type: integer}
+        propertyGroup:
+          $ref: "#/components/schemas/PropertyGroup"
+        area: {type: [number, "null"]}
+        monthlyRentReported: {type: [number, "null"]}
+        monthlyRentExVat: {type: [number, "null"]}
+        monthlyRentPerSqm: {type: [number, "null"]}
+        rentDerivation: {type: string}
+        rentalTerm: {type: string}
+        durationMonths: {type: [integer, "null"]}
+        operatingCostsIncluded: {type: [boolean, "null"]}
+        isMarketRent: {type: boolean}
+        longitude: {type: [number, "null"]}
+        latitude: {type: [number, "null"]}
+        quality:
+          $ref: "#/components/schemas/QualityDecision"
+        outlier:
+          $ref: "#/components/schemas/OutlierEvidence"
+        geographies:
+          type: array
+          items:
+            $ref: "#/components/schemas/TransactionGeography"
+        spaces:
+          type: array
+          items: {type: object, additionalProperties: true}
+    Outlier:
+      type: object
+      required:
+        - transactionId
+        - propertyGroup
+        - cohortLevel
+        - cohortSize
+        - cohortMedian
+        - lowerBound
+        - upperBound
+        - ruleVersion
+      properties:
+        transactionId:
+          type: integer
+          format: int64
+        contractDate:
+          type: [string, "null"]
+          format: date
+        propertyGroup:
+          $ref: "#/components/schemas/PropertyGroup"
+        area:
+          type: [number, "null"]
+        price:
+          type: [number, "null"]
+        pricePerSqm:
+          type: [number, "null"]
+        cadastralMunicipalityCode:
+          type: integer
+        buildingNumber:
+          type: string
+        buildingPartNumber:
+          type: string
+        cohortLevel:
+          type: string
+          enum: [building, municipality_year, statistical_region_year]
+        cohortSize:
+          type: integer
+        cohortMedian:
+          type: number
+        lowerBound:
+          type: number
+        upperBound:
+          type: number
+        modifiedZScore:
+          type: [number, "null"]
+        ruleVersion:
+          type: string
+    OutlierList:
+      type: object
+      required: [items, count, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Outlier"
+        count:
+          type: integer
+        total:
+          type: integer
+          format: int64
+        limit:
+          type: integer
+        offset:
+          type: integer
+    GeoJSONFeatureCollection:
+      type: object
+      required: [type, features, count]
+      properties:
+        type:
+          type: string
+          const: FeatureCollection
+        features:
+          type: array
+          items:
+            type: object
+            required: [type, geometry, properties]
+            properties:
+              type:
+                type: string
+                const: Feature
+              id:
+                type: integer
+                format: int64
+              geometry:
+                type: object
+                required: [type, coordinates]
+                properties:
+                  type:
+                    type: string
+                    const: Point
+                  coordinates:
+                    type: array
+                    minItems: 2
+                    maxItems: 2
+                    items:
+                      type: number
+              properties:
+                type: object
+                additionalProperties: true
+        count:
+          type: integer
+          minimum: 0
+    Distribution:
+      type: object
+      required: [metric, sampleSize, belowBoundCount, aboveBoundCount, buckets]
+      properties:
+        metric: {type: string}
+        sampleSize: {type: integer, format: int64}
+        percentiles:
+          type: [object, "null"]
+          properties:
+            p05: {type: number}
+            p10: {type: number}
+            p25: {type: number}
+            p50: {type: number}
+            p75: {type: number}
+            p90: {type: number}
+            p95: {type: number}
+        histogramLowerBound: {type: [number, "null"]}
+        histogramUpperBound: {type: [number, "null"]}
+        belowBoundCount: {type: integer, format: int64}
+        aboveBoundCount: {type: integer, format: int64}
+        buckets:
+          type: array
+          items:
+            type: object
+            required: [index, from, to, count]
+            properties:
+              index: {type: integer}
+              from: {type: number}
+              to: {type: number}
+              count: {type: integer, format: int64}
+    BuildingStatistics:
+      type: object
+      required:
+        - cadastralMunicipalityCode
+        - buildingNumber
+        - knownBuildingPartCount
+        - sales
+        - rentals
+        - saleHistory
+        - rentalHistory
+      properties:
+        cadastralMunicipalityCode: {type: integer}
+        buildingNumber: {type: string}
+        constructionYear: {type: [integer, "null"]}
+        knownBuildingPartCount: {type: integer, format: int64}
+        longitude: {type: [number, "null"]}
+        latitude: {type: [number, "null"]}
+        sales:
+          $ref: "#/components/schemas/BuildingMarketSummary"
+        rentals:
+          $ref: "#/components/schemas/BuildingMarketSummary"
+        saleHistory:
+          type: array
+          items:
+            $ref: "#/components/schemas/BuildingYearPoint"
+        rentalHistory:
+          type: array
+          items:
+            $ref: "#/components/schemas/BuildingYearPoint"
+    BuildingMarketSummary:
+      type: object
+      required: [transactionCount, representativeCount]
+      properties:
+        transactionCount: {type: integer, format: int64}
+        representativeCount: {type: integer, format: int64}
+        medianAmount: {type: [number, "null"]}
+        medianAmountPerSqm: {type: [number, "null"]}
+        firstContractDate: {type: [string, "null"], format: date}
+        lastContractDate: {type: [string, "null"], format: date}
+    BuildingYearPoint:
+      type: object
+      required: [year, transactionCount, representativeCount]
+      properties:
+        year: {type: integer}
+        transactionCount: {type: integer, format: int64}
+        representativeCount: {type: integer, format: int64}
+        medianAmountPerSqm: {type: [number, "null"]}
+    ReviewStatus:
+      type: string
+      enum: [unreviewed, confirmed_valid, confirmed_error, needs_follow_up, ignored]
+    AnomalySummary:
+      type: object
+      required: [total, flagged, unreviewed, highPriority]
+      properties:
+        total: {type: integer, format: int64}
+        flagged: {type: integer, format: int64}
+        unreviewed: {type: integer, format: int64}
+        highPriority: {type: integer, format: int64}
+    RegistrationRequest:
+      type: object
+      required: [email, password, displayName]
+      properties:
+        email: {type: string, format: email}
+        password: {type: string, minLength: 12, maxLength: 72}
+        displayName: {type: string, minLength: 1, maxLength: 100}
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: {type: string, format: email}
+        password: {type: string}
+    User:
+      type: object
+      required: [id, email, displayName, createdAt]
+      properties:
+        id: {type: string, format: uuid}
+        email: {type: string, format: email}
+        displayName: {type: string}
+        createdAt: {type: string, format: date-time}
+    AuthSession:
+      type: object
+      required: [token, expiresAt, user]
+      properties:
+        token: {type: string}
+        expiresAt: {type: string, format: date-time}
+        user:
+          $ref: "#/components/schemas/User"
+    ValuationPrediction:
+      type: object
+      required:
+        - transactionKind
+        - transactionId
+        - propertyGroup
+        - area
+        - actualAmountPerSqm
+        - predictedAmountPerSqm
+        - lowerAmountPerSqm
+        - upperAmountPerSqm
+        - predictedTotal
+        - lowerTotal
+        - upperTotal
+        - modelVersion
+        - modelType
+        - trainingRows
+        - metrics
+        - reliability
+        - warnings
+      properties:
+        transactionKind: {type: string, enum: [sale, rent]}
+        transactionId: {type: integer, format: int64}
+        propertyGroup:
+          $ref: "#/components/schemas/PropertyGroup"
+        area: {type: number}
+        actualAmountPerSqm: {type: number}
+        predictedAmountPerSqm: {type: number}
+        lowerAmountPerSqm: {type: number}
+        upperAmountPerSqm: {type: number}
+        predictedTotal: {type: number}
+        lowerTotal: {type: number}
+        upperTotal: {type: number}
+        logResidual: {type: number}
+        modelVersion: {type: string}
+        modelType: {type: string}
+        trainingRows: {type: integer}
+        metrics: {type: object, additionalProperties: true}
+        reliability: {type: string, enum: [moderate, low, very_low]}
+        warnings:
+          type: array
+          items: {type: string}
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            requestId:
+              type: string

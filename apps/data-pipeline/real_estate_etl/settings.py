@@ -6,6 +6,7 @@ import os
 from dataclasses import dataclass
 
 API_BASE = "https://ipi.eprostor.gov.si/jgp-service-api"
+RPE_OGC_BASE = "https://ipi.eprostor.gov.si/wfs-si-gurs-rpe/ogc/features"
 DEFAULT_DATABASE_URL = "postgresql://real_estate:real_estate@localhost:5432/real_estate"
 AVAILABLE_THREADS = os.cpu_count() or 1
 DEFAULT_WORKERS = min(6, AVAILABLE_THREADS)
