@@ -18,20 +18,110 @@ type Cluster struct {
 }
 
 type PropertyPoint struct {
-	TransactionID    int64    `json:"transactionId"`
-	Longitude        float64  `json:"longitude"`
-	Latitude         float64  `json:"latitude"`
-	ContractDate     *string  `json:"contractDate"`
-	PropertyGroup    string   `json:"propertyGroup"`
-	Area             *float64 `json:"area"`
-	Price            *float64 `json:"price"`
-	PricePerSQM      *float64 `json:"pricePerSqm"`
-	IsRepresentative bool     `json:"isRepresentative"`
+	TransactionID             int64    `json:"transactionId"`
+	CadastralMunicipalityCode *int32   `json:"cadastralMunicipalityCode"`
+	BuildingNumber            *string  `json:"buildingNumber"`
+	Longitude                 float64  `json:"longitude"`
+	Latitude                  float64  `json:"latitude"`
+	ContractDate              *string  `json:"contractDate"`
+	PropertyGroup             string   `json:"propertyGroup"`
+	Area                      *float64 `json:"area"`
+	Price                     *float64 `json:"price"`
+	PricePerSQM               *float64 `json:"pricePerSqm"`
+	IsRepresentative          bool     `json:"isRepresentative"`
+}
+
+type GeographySummary struct {
+	GeographyID         int64     `json:"geographyId"`
+	Level               string    `json:"level"`
+	Name                string    `json:"name"`
+	Longitude           float64   `json:"longitude"`
+	Latitude            float64   `json:"latitude"`
+	Bounds              []float64 `json:"bounds"`
+	TransactionCount    int64     `json:"transactionCount"`
+	RepresentativeCount int64     `json:"representativeCount"`
+	MedianAmountPerSQM  *float64  `json:"medianAmountPerSqm"`
 }
 
 type MapStore interface {
 	Clusters(context.Context, StatisticsFilter, Bounds, float64) ([]Cluster, error)
 	PropertyPoints(context.Context, StatisticsFilter, Bounds, int) ([]PropertyPoint, error)
+	GeographySummaries(context.Context, StatisticsFilter, Bounds, string, string) ([]GeographySummary, error)
+}
+
+var geographyFactColumns = map[string]string{
+	"statistical_region": "statistical_region_id",
+	"municipality":       "municipality_id",
+	"city_district":      "city_district_id",
+	"local_community":    "local_community_id",
+	"settlement":         "settlement_id",
+}
+
+func (r *StatisticsRepository) GeographySummaries(
+	ctx context.Context,
+	filter StatisticsFilter,
+	bounds Bounds,
+	level string,
+	kind string,
+) ([]GeographySummary, error) {
+	table, metric := "analytics.sale_facts", "price_per_sqm"
+	if kind == "rent" {
+		table, metric = "analytics.rental_facts", "monthly_rent_per_sqm"
+	}
+	join := "TRUE"
+	if level != "country" {
+		column, ok := geographyFactColumns[level]
+		if !ok {
+			return nil, fmt.Errorf("unsupported map geography level %q", level)
+		}
+		join = "fact." + column + "=unit.id"
+	}
+	geographyClause, geographyID, err := r.geographyClause(ctx, filter.GeographyID)
+	if err != nil {
+		return nil, err
+	}
+	query := fmt.Sprintf(`
+		SELECT unit.id,unit.level,unit.name,
+		  ST_X(ST_PointOnSurface(unit.geometry_wgs84)),
+		  ST_Y(ST_PointOnSurface(unit.geometry_wgs84)),
+		  ARRAY[ST_XMin(extent),ST_YMin(extent),ST_XMax(extent),ST_YMax(extent)]::float8[],
+		  count(*)::bigint,
+		  count(*) FILTER (WHERE fact.representative_eligible)::bigint,
+		  percentile_cont(.5) WITHIN GROUP (ORDER BY fact.%s)
+		    FILTER (WHERE fact.representative_eligible)::float8
+		FROM analytics.geographic_units unit
+		JOIN %s fact ON %s
+		CROSS JOIN LATERAL ST_Envelope(unit.geometry_wgs84) extent
+		WHERE unit.level=$9
+		  AND unit.geometry_wgs84 && ST_MakeEnvelope($5,$6,$7,$8,4326)
+		  AND ($1::date IS NULL OR fact.contract_date >= $1)
+		  AND ($2::date IS NULL OR fact.contract_date <= $2)
+		  AND ($3 = '' OR fact.property_group=$3)
+		  AND %s
+		GROUP BY unit.id,unit.level,unit.name,unit.geometry_wgs84,extent
+		ORDER BY count(*) DESC`, metric, table, join, geographyClause)
+	rows, err := r.pool.Query(ctx, query,
+		filter.FromDate, filter.ToDate, filter.PropertyGroup, geographyID,
+		bounds.West, bounds.South, bounds.East, bounds.North, level,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("%s geography summaries: %w", kind, err)
+	}
+	defer rows.Close()
+	items := make([]GeographySummary, 0)
+	for rows.Next() {
+		var item GeographySummary
+		if err := rows.Scan(
+			&item.GeographyID, &item.Level, &item.Name,
+			&item.Longitude, &item.Latitude, &item.Bounds,
+			&item.TransactionCount, &item.RepresentativeCount,
+			&item.MedianAmountPerSQM,
+		); err != nil {
+			return nil, fmt.Errorf("scan geography summary: %w", err)
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
 }
 
 func (r *StatisticsRepository) Clusters(
@@ -101,7 +191,8 @@ func (r *StatisticsRepository) PropertyPoints(
 		return nil, err
 	}
 	query := fmt.Sprintf(`
-		SELECT transaction_id,ST_X(ST_Transform(location,4326)),
+		SELECT transaction_id,cadastral_municipality_code,building_number,
+		       ST_X(ST_Transform(location,4326)),
 		       ST_Y(ST_Transform(location,4326)),contract_date::text,
 		       property_group,area::float8,price::float8,price_per_sqm::float8,
 		       representative_eligible
@@ -126,7 +217,8 @@ func (r *StatisticsRepository) PropertyPoints(
 	for rows.Next() {
 		var item PropertyPoint
 		if err := rows.Scan(
-			&item.TransactionID, &item.Longitude, &item.Latitude, &item.ContractDate,
+			&item.TransactionID, &item.CadastralMunicipalityCode,
+			&item.BuildingNumber, &item.Longitude, &item.Latitude, &item.ContractDate,
 			&item.PropertyGroup, &item.Area, &item.Price, &item.PricePerSQM,
 			&item.IsRepresentative,
 		); err != nil {

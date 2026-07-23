@@ -158,9 +158,11 @@ application-specific npm commands remain isolated in `apps/web`.
 
 ## Start the web dashboard
 
-The Stage 3 frontend is a responsive Next.js dashboard with a map-first
-Slovenian market overview, sale/rental switching, geographic and property
-filters, quality-aware summary metrics, time series, and distributions:
+The Stage 3 frontend, **Analitika nepremičnin**, is a responsive Next.js
+dashboard with a real interactive MapLibre street/satellite map,
+geography-aware Slovenia/region/municipality/local-area summaries, exact GURS
+region boundaries, sale/rental switching, geographic and property filters,
+quality-aware summary metrics, time series, and distributions:
 
 ```bash
 make web-up
@@ -172,6 +174,10 @@ reachable—such as the standalone hosted design preview—the interface clearly
 labels and uses representative demo data. Configure a deployed API with
 `NEXT_PUBLIC_API_URL`. Frontend implementation and testing details are in
 [apps/web/README.md](apps/web/README.md).
+
+The checked-in MapLibre basemaps use public development tile services and need
+no local secret or API key. They are suitable for this repository's current
+local-use stage; choose a licensed tile service before public production use.
 
 ## Windows setup
 

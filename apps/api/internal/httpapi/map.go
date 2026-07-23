@@ -92,6 +92,64 @@ func (s *server) mapProperties(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *server) mapGeographies(w http.ResponseWriter, r *http.Request) {
+	s.geographyMap(w, r, "sale")
+}
+
+func (s *server) rentalMapGeographies(w http.ResponseWriter, r *http.Request) {
+	s.geographyMap(w, r, "rent")
+}
+
+func (s *server) geographyMap(w http.ResponseWriter, r *http.Request, kind string) {
+	filter, ok := statisticsFilter(w, r)
+	if !ok {
+		return
+	}
+	bounds, ok := mapBounds(w, r)
+	if !ok {
+		return
+	}
+	level := r.URL.Query().Get("level")
+	if level == "" || !validGeographyLevel(level) {
+		writeError(w, r, http.StatusBadRequest, "invalid_level", "unsupported geography level")
+		return
+	}
+	items, err := s.maps.GeographySummaries(r.Context(), filter, bounds, level, kind)
+	if errors.Is(err, analytics.ErrGeographyNotFound) {
+		writeError(w, r, http.StatusNotFound, "geography_not_found", "geography was not found")
+		return
+	}
+	if err != nil {
+		s.logger.Error("map geography summaries", "error", err, "level", level, "kind", kind)
+		writeError(w, r, http.StatusInternalServerError, "query_failed", "could not load map geography summaries")
+		return
+	}
+	features := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		properties := map[string]any{
+			"geographyId": item.GeographyID, "level": item.Level, "name": item.Name,
+			"bounds": item.Bounds, "transactionCount": item.TransactionCount,
+			"representativeCount": item.RepresentativeCount,
+		}
+		if kind == "sale" {
+			properties["medianPricePerSqm"] = item.MedianAmountPerSQM
+		} else {
+			properties["medianMonthlyRentPerSqm"] = item.MedianAmountPerSQM
+		}
+		features = append(features, map[string]any{
+			"type": "Feature", "id": item.GeographyID,
+			"geometry": map[string]any{
+				"type": "Point", "coordinates": []float64{item.Longitude, item.Latitude},
+			},
+			"properties": properties,
+		})
+	}
+	writeGeoJSON(w, http.StatusOK, map[string]any{
+		"type": "FeatureCollection", "features": features,
+		"count": len(features), "level": level,
+	})
+}
+
 func mapBounds(w http.ResponseWriter, r *http.Request) (analytics.Bounds, bool) {
 	parts := strings.Split(r.URL.Query().Get("bbox"), ",")
 	if len(parts) != 4 {

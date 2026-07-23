@@ -89,6 +89,21 @@ func (store fakeBuildings) BuildingStatistics(context.Context, int32, string) (a
 	}, store.err
 }
 
+func (store fakeBuildings) SearchBuildings(
+	context.Context, string, int,
+) ([]analytics.BuildingSearchResult, error) {
+	street, houseNumber := "LACKOVA CESTA", "13"
+	return []analytics.BuildingSearchResult{{
+		CadastralMunicipalityCode: 678,
+		BuildingNumber:            "2952",
+		Street:                    &street,
+		HouseNumber:               &houseNumber,
+		Longitude:                 15.61,
+		Latitude:                  46.53,
+		SaleCount:                 2,
+	}}, store.err
+}
+
 func (store fakeDistributions) SaleDistribution(
 	context.Context,
 	analytics.StatisticsFilter,
@@ -135,6 +150,20 @@ func (fakeMaps) PropertyPoints(
 		Longitude:     15.6,
 		Latitude:      46.5,
 		PropertyGroup: "apartment",
+	}}, nil
+}
+
+func (fakeMaps) GeographySummaries(
+	context.Context,
+	analytics.StatisticsFilter,
+	analytics.Bounds,
+	string,
+	string,
+) ([]analytics.GeographySummary, error) {
+	return []analytics.GeographySummary{{
+		GeographyID: 1, Level: "country", Name: "Slovenija",
+		Longitude: 14.8, Latitude: 46.1, Bounds: []float64{13.3, 45.4, 16.7, 46.9},
+		TransactionCount: 10,
 	}}, nil
 }
 

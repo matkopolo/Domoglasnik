@@ -197,3 +197,34 @@ func TestStatisticsRepositoryIntegration(t *testing.T) {
 		t.Fatalf("missing geography error=%v", err)
 	}
 }
+
+func TestGeographySummariesIntegration(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is not set")
+	}
+	pool, err := pgxpool.New(context.Background(), databaseURL)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer pool.Close()
+	repository := NewStatisticsRepository(pool)
+	items, err := repository.GeographySummaries(
+		context.Background(),
+		StatisticsFilter{PropertyGroup: "apartment"},
+		Bounds{West: 13.3, South: 45.4, East: 16.7, North: 46.9},
+		"statistical_region",
+		"sale",
+	)
+	if err != nil {
+		t.Fatalf("GeographySummaries(): %v", err)
+	}
+	if len(items) != 12 {
+		t.Fatalf("GeographySummaries() count=%d want=12", len(items))
+	}
+	for _, item := range items {
+		if item.Name == "" || item.TransactionCount == 0 || len(item.Bounds) != 4 {
+			t.Fatalf("invalid geography summary: %+v", item)
+		}
+	}
+}

@@ -62,12 +62,14 @@ The development container has a 512 MB ceiling. It does not load transactions or
 - `GET /api/v1/rentals/statistics/timeseries`: rental trends with same-period year-over-year changes.
 - `GET /api/v1/rentals/statistics/outliers`: paginated, auditable rental outliers.
 - `GET /api/v1/rentals/map/clusters`: bounded GeoJSON rental clusters.
+- `GET /api/v1/rentals/map/geographies`: named rental summaries by administrative level.
 - `GET /api/v1/rentals/map/properties`: at most 500 individual rental points.
 - `GET /api/v1/sales/transactions/{id}`: sale package, component properties, geography, and quality/outlier evidence.
 - `GET /api/v1/rentals/transactions/{id}`: rental package, component spaces, geography, and quality/outlier evidence.
 - `GET /api/v1/statistics/distribution`: sale percentiles and chart-ready histogram.
 - `GET /api/v1/rentals/statistics/distribution`: rental percentiles and chart-ready histogram.
 - `GET /api/v1/buildings/{cadastralCode}/{buildingNumber}/statistics`: combined building sale/rental history.
+- `GET /api/v1/buildings/search?q=...`: address/cadastral building search for map navigation.
 - `GET /api/v1/anomalies` and `/summary`: ranked multi-signal review queue.
 - `PATCH /api/v1/anomalies/{kind}/{id}/review`: authenticated human review decision.
 - `POST /api/v1/auth/register`, `/login`, and `/logout`: opaque bearer sessions.
@@ -76,6 +78,7 @@ The development container has a 512 MB ceiling. It does not load transactions or
 - `GET /api/v1/indices`: national repeat-sales and constant-quality hedonic indices.
 - `GET /api/v1/valuations/{kind}/{id}`: model estimate, empirical range, diagnostics, and reliability warning.
 - `GET /api/v1/map/clusters`: zoom-dependent GeoJSON clusters inside a required WGS84 bbox.
+- `GET /api/v1/map/geographies`: named sale summaries for country, region, municipality, city district, local community, or settlement.
 - `GET /api/v1/map/properties`: at most 500 individual GeoJSON sale points inside a required bbox.
 
 Statistics accept inclusive `from`/`to` contract dates, `propertyGroup`, and

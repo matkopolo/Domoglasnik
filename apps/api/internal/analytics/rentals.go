@@ -56,15 +56,17 @@ type RentalOutlierRecord struct {
 }
 
 type RentalPropertyPoint struct {
-	TransactionID     int64    `json:"transactionId"`
-	Longitude         float64  `json:"longitude"`
-	Latitude          float64  `json:"latitude"`
-	ContractDate      *string  `json:"contractDate"`
-	PropertyGroup     string   `json:"propertyGroup"`
-	Area              *float64 `json:"area"`
-	MonthlyRent       *float64 `json:"monthlyRent"`
-	MonthlyRentPerSQM *float64 `json:"monthlyRentPerSqm"`
-	IsRepresentative  bool     `json:"isRepresentative"`
+	TransactionID             int64    `json:"transactionId"`
+	CadastralMunicipalityCode *int32   `json:"cadastralMunicipalityCode"`
+	BuildingNumber            *string  `json:"buildingNumber"`
+	Longitude                 float64  `json:"longitude"`
+	Latitude                  float64  `json:"latitude"`
+	ContractDate              *string  `json:"contractDate"`
+	PropertyGroup             string   `json:"propertyGroup"`
+	Area                      *float64 `json:"area"`
+	MonthlyRent               *float64 `json:"monthlyRent"`
+	MonthlyRentPerSQM         *float64 `json:"monthlyRentPerSqm"`
+	IsRepresentative          bool     `json:"isRepresentative"`
 }
 
 type RentalStatisticsStore interface {
@@ -126,7 +128,8 @@ func (r *StatisticsRepository) RentalPropertyPoints(
 		return nil, err
 	}
 	query := fmt.Sprintf(`
-		SELECT transaction_id,ST_X(ST_Transform(location,4326)),
+		SELECT transaction_id,cadastral_municipality_code,building_number,
+		  ST_X(ST_Transform(location,4326)),
 		  ST_Y(ST_Transform(location,4326)),contract_date::text,property_group,
 		  area::float8,monthly_rent_ex_vat::float8,
 		  monthly_rent_per_sqm::float8,representative_eligible
@@ -147,7 +150,8 @@ func (r *StatisticsRepository) RentalPropertyPoints(
 	items := make([]RentalPropertyPoint, 0)
 	for rows.Next() {
 		var item RentalPropertyPoint
-		if err := rows.Scan(&item.TransactionID, &item.Longitude, &item.Latitude,
+		if err := rows.Scan(&item.TransactionID, &item.CadastralMunicipalityCode,
+			&item.BuildingNumber, &item.Longitude, &item.Latitude,
 			&item.ContractDate, &item.PropertyGroup, &item.Area, &item.MonthlyRent,
 			&item.MonthlyRentPerSQM, &item.IsRepresentative); err != nil {
 			return nil, fmt.Errorf("scan rental map point: %w", err)

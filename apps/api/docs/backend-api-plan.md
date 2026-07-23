@@ -253,6 +253,48 @@ GET /api/v1/rentals/transactions/{transactionId}
 
 A detail response returns the transaction and all associated property rows, coordinates, source provenance, and relevant data-quality information.
 
+## Future integration: AI comparator
+
+Add a conversational **AI comparator** that turns a request such as “I can buy
+land near Ruše where I can build a house and a building permit is already
+issued” into an explicit, reviewable comparison specification.
+
+The language model should extract intent and explain results. Deterministic Go
+services and versioned PostgreSQL/PostGIS queries should perform valuation and
+comparable selection:
+
+1. Extract location, property category, area, intended use, date, and special
+   attributes from natural language.
+2. Geocode or let the user confirm the exact location on the map.
+3. Confirm structured attributes, especially `land_use=buildable`,
+   `building_permit=valid`, permit scope/date, utility connections, access,
+   parcel area, and ownership share.
+4. Select progressively wider cohorts: nearby parcels, settlement,
+   municipality, statistical region, then a modelled regional baseline.
+5. Compare against ordinary buildable land and, when enough verified examples
+   exist, land with a comparable valid building permit.
+6. Return expected price/range, absolute and percentage premium or discount,
+   sample size, distance/time range, confidence, assumptions, exclusions, and
+   the comparable transactions used.
+
+A building permit must not be inferred from a seller description or high sale
+price. ETN data does not prove that a permit existed or remained valid at the
+transaction date. Permit status requires an authoritative future integration
+or explicitly labelled user evidence. Preserve its source, verification date,
+and confidence. Distinguish non-buildable land, ordinary buildable land,
+verified permitted land, and uncertain permit/project status.
+
+Proposed API:
+
+```http
+POST /api/v1/comparator/interpret
+POST /api/v1/comparator/analyses
+GET  /api/v1/comparator/analyses/{id}
+```
+
+Interpretation is returned for user confirmation before analysis. Results must
+not present a single model estimate as a guaranteed market value.
+
 ## Go implementation direction
 
 ```text

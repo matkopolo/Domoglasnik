@@ -4,9 +4,31 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/matkopolo/NepremicninskiAgent/apps/api/internal/analytics"
 )
+
+func (s *server) searchBuildings(w http.ResponseWriter, r *http.Request) {
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	if len([]rune(query)) < 3 || len(query) > 120 {
+		writeError(w, r, http.StatusBadRequest, "invalid_search",
+			"q must contain between 3 and 120 characters")
+		return
+	}
+	limit, ok := boundedInteger(w, r, "limit", 10, 1, 20)
+	if !ok {
+		return
+	}
+	items, err := s.buildings.SearchBuildings(r.Context(), query, limit)
+	if err != nil {
+		s.logger.Error("search buildings", "error", err)
+		writeError(w, r, http.StatusInternalServerError, "query_failed",
+			"could not search buildings")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items, "count": len(items)})
+}
 
 func (s *server) buildingStatistics(w http.ResponseWriter, r *http.Request) {
 	code64, err := strconv.ParseInt(r.PathValue("cadastralCode"), 10, 32)

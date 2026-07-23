@@ -345,6 +345,31 @@ paths:
           $ref: "#/components/responses/Error"
         "404":
           $ref: "#/components/responses/Error"
+  /api/v1/rentals/map/geographies:
+    get:
+      operationId: getRentalMapGeographies
+      tags: [Rental Map]
+      parameters:
+        - $ref: "#/components/parameters/BoundingBox"
+        - $ref: "#/components/parameters/FromDate"
+        - $ref: "#/components/parameters/ToDate"
+        - $ref: "#/components/parameters/PropertyGroup"
+        - $ref: "#/components/parameters/StatisticsGeographyId"
+        - name: level
+          in: query
+          required: true
+          schema: {type: string, enum: [country, statistical_region, municipality, city_district, local_community, settlement]}
+      responses:
+        "200":
+          description: Rental summaries grouped by named geography.
+          content:
+            application/geo+json:
+              schema:
+                $ref: "#/components/schemas/GeoJSONFeatureCollection"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
   /api/v1/sales/transactions/{id}:
     get:
       operationId: getSaleTransaction
@@ -427,6 +452,33 @@ paths:
           $ref: "#/components/responses/Error"
         "404":
           $ref: "#/components/responses/Error"
+  /api/v1/buildings/search:
+    get:
+      operationId: searchBuildings
+      tags: [Buildings]
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: {type: string, minLength: 3, maxLength: 120}
+        - name: limit
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 20, default: 10}
+      responses:
+        "200":
+          description: Buildings matching an address or cadastral identity.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, count]
+                properties:
+                  items:
+                    type: array
+                    items: {type: object, additionalProperties: true}
+                  count: {type: integer}
+        "400":
+          $ref: "#/components/responses/Error"
   /api/v1/buildings/{cadastralCode}/{buildingNumber}/statistics:
     get:
       operationId: getBuildingStatistics
@@ -499,6 +551,31 @@ paths:
       responses:
         "200":
           description: Capped individual sale points inside the required bounding box.
+          content:
+            application/geo+json:
+              schema:
+                $ref: "#/components/schemas/GeoJSONFeatureCollection"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /api/v1/map/geographies:
+    get:
+      operationId: getSaleMapGeographies
+      tags: [Map]
+      parameters:
+        - $ref: "#/components/parameters/BoundingBox"
+        - $ref: "#/components/parameters/FromDate"
+        - $ref: "#/components/parameters/ToDate"
+        - $ref: "#/components/parameters/PropertyGroup"
+        - $ref: "#/components/parameters/StatisticsGeographyId"
+        - name: level
+          in: query
+          required: true
+          schema: {type: string, enum: [country, statistical_region, municipality, city_district, local_community, settlement]}
+      responses:
+        "200":
+          description: Sale summaries grouped by named geography.
           content:
             application/geo+json:
               schema:
@@ -1323,6 +1400,7 @@ components:
         - rentals
         - saleHistory
         - rentalHistory
+        - saleTransactions
       properties:
         cadastralMunicipalityCode: {type: integer}
         buildingNumber: {type: string}
@@ -1342,6 +1420,19 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/BuildingYearPoint"
+        saleTransactions:
+          type: array
+          items:
+            type: object
+            required: [transactionId, propertyGroup]
+            properties:
+              transactionId: {type: integer, format: int64}
+              contractDate: {type: [string, "null"], format: date}
+              propertyGroup:
+                $ref: "#/components/schemas/PropertyGroup"
+              area: {type: [number, "null"]}
+              amount: {type: [number, "null"]}
+              amountPerSqm: {type: [number, "null"]}
     BuildingMarketSummary:
       type: object
       required: [transactionCount, representativeCount]

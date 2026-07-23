@@ -26,6 +26,27 @@ type BuildingYearPoint struct {
 	MedianAmountPerSQM  *float64 `json:"medianAmountPerSqm"`
 }
 
+type BuildingTransaction struct {
+	TransactionID int64    `json:"transactionId"`
+	ContractDate  *string  `json:"contractDate"`
+	PropertyGroup string   `json:"propertyGroup"`
+	Area          *float64 `json:"area"`
+	Amount        *float64 `json:"amount"`
+	AmountPerSQM  *float64 `json:"amountPerSqm"`
+}
+
+type BuildingSearchResult struct {
+	CadastralMunicipalityCode int32   `json:"cadastralMunicipalityCode"`
+	BuildingNumber            string  `json:"buildingNumber"`
+	Settlement                *string `json:"settlement"`
+	Street                    *string `json:"street"`
+	HouseNumber               *string `json:"houseNumber"`
+	HouseNumberSuffix         *string `json:"houseNumberSuffix"`
+	Longitude                 float64 `json:"longitude"`
+	Latitude                  float64 `json:"latitude"`
+	SaleCount                 int64   `json:"saleCount"`
+}
+
 type BuildingStatistics struct {
 	CadastralMunicipalityCode int32                 `json:"cadastralMunicipalityCode"`
 	BuildingNumber            string                `json:"buildingNumber"`
@@ -37,10 +58,60 @@ type BuildingStatistics struct {
 	Rentals                   BuildingMarketSummary `json:"rentals"`
 	SaleHistory               []BuildingYearPoint   `json:"saleHistory"`
 	RentalHistory             []BuildingYearPoint   `json:"rentalHistory"`
+	SaleTransactions          []BuildingTransaction `json:"saleTransactions"`
 }
 
 type BuildingStore interface {
 	BuildingStatistics(context.Context, int32, string) (BuildingStatistics, error)
+	SearchBuildings(context.Context, string, int) ([]BuildingSearchResult, error)
+}
+
+func (r *StatisticsRepository) SearchBuildings(
+	ctx context.Context, search string, limit int,
+) ([]BuildingSearchResult, error) {
+	rows, err := r.pool.Query(ctx, `
+		WITH buildings AS (
+		  SELECT cadastral_municipality_code,building_number,
+		    max(settlement) settlement,max(street) street,max(house_number) house_number,
+		    max(house_number_suffix) house_number_suffix,
+		    ST_Centroid(ST_Collect(location)) location
+		  FROM building_parts
+		  WHERE cadastral_municipality_code IS NOT NULL
+		    AND building_number IS NOT NULL AND location IS NOT NULL
+		    AND to_tsvector('simple',concat_ws(' ',settlement,street,house_number,
+		      house_number_suffix,cadastral_municipality_code::text,building_number))
+		      @@ plainto_tsquery('simple',$1)
+		  GROUP BY cadastral_municipality_code,building_number
+		)
+		SELECT b.cadastral_municipality_code,b.building_number,b.settlement,b.street,
+		  b.house_number,b.house_number_suffix,ST_X(ST_Transform(b.location,4326)),
+		  ST_Y(ST_Transform(b.location,4326)),count(f.transaction_id)::bigint
+		FROM buildings b
+		LEFT JOIN analytics.sale_facts f
+		  ON f.cadastral_municipality_code=b.cadastral_municipality_code
+		  AND f.building_number=b.building_number
+		GROUP BY b.cadastral_municipality_code,b.building_number,b.settlement,b.street,
+		  b.house_number,b.house_number_suffix,b.location
+		ORDER BY count(f.transaction_id) DESC,b.settlement,b.street,b.house_number
+		LIMIT $2`, search, limit)
+	if err != nil {
+		return nil, fmt.Errorf("search buildings: %w", err)
+	}
+	defer rows.Close()
+	items := make([]BuildingSearchResult, 0)
+	for rows.Next() {
+		var item BuildingSearchResult
+		if err := rows.Scan(
+			&item.CadastralMunicipalityCode, &item.BuildingNumber,
+			&item.Settlement, &item.Street, &item.HouseNumber,
+			&item.HouseNumberSuffix, &item.Longitude, &item.Latitude,
+			&item.SaleCount,
+		); err != nil {
+			return nil, fmt.Errorf("scan building search result: %w", err)
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
 }
 
 func (r *StatisticsRepository) BuildingStatistics(
@@ -51,6 +122,7 @@ func (r *StatisticsRepository) BuildingStatistics(
 		BuildingNumber:            buildingNumber,
 		SaleHistory:               []BuildingYearPoint{},
 		RentalHistory:             []BuildingYearPoint{},
+		SaleTransactions:          []BuildingTransaction{},
 	}
 	err := r.pool.QueryRow(ctx, `
 		WITH parts AS (
@@ -91,7 +163,29 @@ func (r *StatisticsRepository) BuildingStatistics(
 	}
 	result.RentalHistory, err = r.loadBuildingHistory(ctx, "analytics.rental_facts",
 		"monthly_rent_per_sqm", cadastralCode, buildingNumber)
-	return result, err
+	if err != nil {
+		return BuildingStatistics{}, err
+	}
+	rows, err := r.pool.Query(ctx, `
+		SELECT transaction_id,contract_date::text,property_group,area::float8,
+		  price::float8,price_per_sqm::float8
+		FROM analytics.sale_facts
+		WHERE cadastral_municipality_code=$1 AND building_number=$2
+		ORDER BY contract_date DESC NULLS LAST,transaction_id`, cadastralCode, buildingNumber)
+	if err != nil {
+		return BuildingStatistics{}, fmt.Errorf("load building sale transactions: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var item BuildingTransaction
+		if err := rows.Scan(&item.TransactionID, &item.ContractDate,
+			&item.PropertyGroup, &item.Area, &item.Amount,
+			&item.AmountPerSQM); err != nil {
+			return BuildingStatistics{}, fmt.Errorf("scan building sale transaction: %w", err)
+		}
+		result.SaleTransactions = append(result.SaleTransactions, item)
+	}
+	return result, rows.Err()
 }
 
 func (r *StatisticsRepository) loadBuildingSummary(

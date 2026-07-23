@@ -1,5 +1,6 @@
 export type MarketMode = "sale" | "rent";
 export type PropertyGroup = "apartment" | "house" | "land" | "commercial" | "garage" | "room";
+export interface YearRange { from: number; to: number }
 
 export interface Geography {
   id: number;
@@ -49,7 +50,73 @@ export interface Cluster {
   latitude: number;
   transactionCount: number;
   medianAmountPerSqm?: number;
+  medianPricePerSqm?: number;
+  medianMonthlyRentPerSqm?: number;
+  representativeCount?: number;
 }
+
+export interface SaleTransactionDetail {
+  transactionId: number;
+  contractDate?: string;
+  propertyGroup: string;
+  area?: number;
+  price?: number;
+  pricePerSqm?: number;
+  buildingParts: Array<{
+    buildingPartType?: number;
+    constructionYear?: number;
+    floor?: string;
+    positionInBuilding?: string;
+    unitNumber?: string;
+    roomCount?: number;
+    soldArea?: number;
+    soldUsableArea?: number;
+    buildingPartArea?: number;
+    usableArea?: number;
+    outdoorParkingSpaces?: number;
+    settlement?: string;
+    street?: string;
+    houseNumber?: string;
+  }>;
+  landParcels: Array<{ parcelArea?: number }>;
+}
+
+export interface BuildingSearchResult {
+  cadastralMunicipalityCode: number;
+  buildingNumber: string;
+  settlement?: string;
+  street?: string;
+  houseNumber?: string;
+  houseNumberSuffix?: string;
+  longitude: number;
+  latitude: number;
+  saleCount: number;
+}
+
+export interface BuildingStatistics {
+  cadastralMunicipalityCode: number;
+  buildingNumber: string;
+  constructionYear?: number;
+  knownBuildingPartCount: number;
+  longitude?: number;
+  latitude?: number;
+  sales: { transactionCount: number; medianAmount?: number; medianAmountPerSqm?: number };
+  saleTransactions: Array<{
+    transactionId: number;
+    contractDate?: string;
+    propertyGroup: string;
+    area?: number;
+    amount?: number;
+    amountPerSqm?: number;
+  }>;
+}
+
+export type MapFeatureProperties = Record<string, string | number | boolean | null | number[]>;
+export type MapPointFeature = Feature<Point, MapFeatureProperties>;
+export type MapFeatureCollection = FeatureCollection<Point, MapFeatureProperties>;
+export type BoundaryProperties = Record<string, string | number | boolean | null | number[]>;
+export type BoundaryFeature = Feature<Polygon | MultiPolygon, BoundaryProperties>;
+export type BoundaryFeatureCollection = FeatureCollection<Polygon | MultiPolygon, BoundaryProperties>;
 
 export interface DashboardData {
   overview: Overview;
@@ -59,3 +126,4 @@ export interface DashboardData {
   geographies: Geography[];
   source: "live" | "demo";
 }
+import type { Feature, FeatureCollection, MultiPolygon, Point, Polygon } from "geojson";

@@ -41,8 +41,15 @@ type SaleBuildingPart struct {
 	BuildingPartNumber        *string  `json:"buildingPartNumber"`
 	BuildingPartType          *int32   `json:"buildingPartType"`
 	ConstructionYear          *int32   `json:"constructionYear"`
+	Floor                     *string  `json:"floor"`
+	PositionInBuilding        *string  `json:"positionInBuilding"`
+	UnitNumber                *string  `json:"unitNumber"`
+	RoomCount                 *float64 `json:"roomCount"`
 	SoldArea                  *float64 `json:"soldArea"`
 	SoldUsableArea            *float64 `json:"soldUsableArea"`
+	BuildingPartArea          *float64 `json:"buildingPartArea"`
+	UsableArea                *float64 `json:"usableArea"`
+	OutdoorParkingSpaces      *int32   `json:"outdoorParkingSpaces"`
 	ContractualPrice          *float64 `json:"contractualPrice"`
 	Settlement                *string  `json:"settlement"`
 	Street                    *string  `json:"street"`
@@ -277,8 +284,10 @@ func loadGeographies(
 func loadSaleBuildingParts(ctx context.Context, tx pgx.Tx, id int64) ([]SaleBuildingPart, error) {
 	rows, err := tx.Query(ctx, `
 		SELECT id,cadastral_municipality_code,building_number,building_part_number,
-		  building_part_type,construction_year,sold_area::float8,
-		  sold_usable_area::float8,contractual_price::float8,settlement,street,house_number
+		  building_part_type,construction_year,floor,position_in_building,
+		  apartment_or_business_unit_number,room_count::float8,sold_area::float8,
+		  sold_usable_area::float8,building_part_area::float8,usable_area::float8,
+		  outdoor_parking_spaces,contractual_price::float8,settlement,street,house_number
 		FROM building_parts WHERE transaction_id=$1 ORDER BY id`, id)
 	if err != nil {
 		return nil, fmt.Errorf("load sale building parts: %w", err)
@@ -289,9 +298,11 @@ func loadSaleBuildingParts(ctx context.Context, tx pgx.Tx, id int64) ([]SaleBuil
 		var item SaleBuildingPart
 		if err := rows.Scan(&item.ID, &item.CadastralMunicipalityCode,
 			&item.BuildingNumber, &item.BuildingPartNumber, &item.BuildingPartType,
-			&item.ConstructionYear, &item.SoldArea, &item.SoldUsableArea,
-			&item.ContractualPrice, &item.Settlement, &item.Street,
-			&item.HouseNumber); err != nil {
+			&item.ConstructionYear, &item.Floor, &item.PositionInBuilding,
+			&item.UnitNumber, &item.RoomCount, &item.SoldArea,
+			&item.SoldUsableArea, &item.BuildingPartArea, &item.UsableArea,
+			&item.OutdoorParkingSpaces, &item.ContractualPrice,
+			&item.Settlement, &item.Street, &item.HouseNumber); err != nil {
 			return nil, fmt.Errorf("scan sale building part: %w", err)
 		}
 		items = append(items, item)

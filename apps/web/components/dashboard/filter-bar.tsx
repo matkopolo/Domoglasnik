@@ -1,5 +1,5 @@
 import { Building2, CalendarDays, MapPin, SlidersHorizontal } from "lucide-react";
-import type { Geography, MarketMode, PropertyGroup } from "@/lib/types";
+import type { Geography, MarketMode, PropertyGroup, YearRange } from "@/lib/types";
 
 const properties: Array<{ value: PropertyGroup; label: string }> = [
   { value: "apartment", label: "Stanovanja" },
@@ -17,6 +17,8 @@ interface FilterBarProps {
   geographyId?: number;
   onGeographyChange: (id?: number) => void;
   geographies: Geography[];
+  years: YearRange;
+  onYearsChange: (years: YearRange) => void;
 }
 
 export function FilterBar(props: FilterBarProps) {
@@ -43,7 +45,37 @@ export function FilterBar(props: FilterBarProps) {
       </label>
       <label className="filter-field date-field">
         <CalendarDays size={17} />
-        <span>2018–2025</span>
+        <span className="sr-only">Od leta</span>
+        <select
+          aria-label="Od leta"
+          value={props.years.from}
+          onChange={(event) => props.onYearsChange({
+            from: Number(event.target.value),
+            to: Math.max(Number(event.target.value), props.years.to),
+          })}
+        >
+          {Array.from({ length: 2026 - (props.mode === "sale" ? 2007 : 2013) + 1 }, (_, index) => (
+            <option key={index} value={(props.mode === "sale" ? 2007 : 2013) + index}>
+              {(props.mode === "sale" ? 2007 : 2013) + index}
+            </option>
+          ))}
+        </select>
+        <span>–</span>
+        <span className="sr-only">Do leta</span>
+        <select
+          aria-label="Do leta"
+          value={props.years.to}
+          onChange={(event) => props.onYearsChange({
+            from: Math.min(props.years.from, Number(event.target.value)),
+            to: Number(event.target.value),
+          })}
+        >
+          {Array.from({ length: 2026 - (props.mode === "sale" ? 2007 : 2013) + 1 }, (_, index) => (
+            <option key={index} value={(props.mode === "sale" ? 2007 : 2013) + index}>
+              {(props.mode === "sale" ? 2007 : 2013) + index}
+            </option>
+          ))}
+        </select>
       </label>
       <label className="filter-field">
         <Building2 size={17} />
