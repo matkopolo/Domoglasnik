@@ -1,6 +1,6 @@
 # Analytics API
 
-Read-only Go API for Slovenian real-estate geographic and market analytics. The design reference is [docs/backend-api-plan.md](docs/backend-api-plan.md); the machine-readable HTTP contract is [openapi/openapi.yaml](openapi/openapi.yaml).
+Go API for Slovenian real-estate geographic and market analytics. The design reference is [docs/backend-api-plan.md](docs/backend-api-plan.md); the machine-readable HTTP contract is [openapi/openapi.yaml](openapi/openapi.yaml).
 
 ## Run with Docker
 
@@ -36,10 +36,12 @@ registry and is checked against OpenAPI. See the repository
 
 The API fails fast when `DATABASE_URL` is missing or PostgreSQL is unavailable. Configuration is environment-based; see the root `.env.example` and `internal/config`.
 
-Docker uses the dedicated `real_estate_api` PostgreSQL login. Its default
-transactions are read-only and it has `SELECT` only; migrations and analytical
-refreshes continue to run as the database owner. Replace all development
-credentials outside local environments.
+Docker uses the dedicated `real_estate_api` PostgreSQL login. It has `SELECT`
+access to source and analytical data plus narrowly scoped writes for identities,
+sessions, preferences, and authenticated anomaly-review metadata. It cannot
+modify imported transactions or run migrations and analytical refreshes; those
+remain database-owner operations. Replace all development credentials outside
+local environments.
 
 The development container has a 512 MB ceiling. It does not load transactions or property points into memory; PostgreSQL/PostGIS executes analytical and spatial queries. The database container has a 4 GB development ceiling, while Docker Desktop should be allocated 6–8 GB overall.
 

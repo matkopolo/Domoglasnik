@@ -99,20 +99,21 @@ Import current boundaries into PostGIS and assign geographic IDs to analytical f
 
 Not every municipality defines the same sub-municipal unit types. The API must expose which levels are available under each parent instead of promising nationwide city-district coverage.
 
-## Proposed API
+## API scope
 
-All routes are versioned under `/api/v1`.
+Implemented routes are versioned under `/api/v1` and defined authoritatively
+in `openapi/openapi.yaml`. Runtime registration in
+`internal/httpapi/routes.go` is tested against that contract.
 
 ### Operations and metadata
 
 ```http
 GET /api/v1/health
-GET /api/v1/filters
-GET /api/v1/property-types
+GET /api/v1/meta
 GET /api/v1/geographies
+GET /api/v1/geographies/{id}
 GET /api/v1/geographies/{id}/children
-GET /api/v1/municipalities
-GET /api/v1/years
+GET /api/v1/geographies/{id}/boundary
 ```
 
 ### Statistics
@@ -121,15 +122,26 @@ GET /api/v1/years
 GET /api/v1/statistics/overview
 GET /api/v1/statistics/timeseries
 GET /api/v1/statistics/distribution
-GET /api/v1/statistics/municipalities
-GET /api/v1/statistics/geographies/{id}
 GET /api/v1/statistics/outliers
-GET /api/v1/statistics/buildings/{cadastralMunicipalityCode}/{buildingNumber}
+GET /api/v1/rentals/statistics/overview
+GET /api/v1/rentals/statistics/timeseries
+GET /api/v1/rentals/statistics/distribution
+GET /api/v1/rentals/statistics/outliers
+GET /api/v1/buildings/{cadastralCode}/{buildingNumber}/statistics
+GET /api/v1/indices
 ```
 
-Filters should include transaction kind, date range, interval (`month`, `quarter`, or `year`), geographic unit, property type, area range, construction-year range, and quality level. Overview responses should expose transaction count, median and average price, median and average price per square metre, median area, and the price-per-square-metre sample size.
+Current filters include date range, interval (`month`, `quarter`, or `year`),
+geographic unit, and property group. Overview responses expose transaction
+count, robust and raw price metrics, area, explicit usable sample sizes, and
+excluded-outlier counts. Area ranges, construction-year ranges, and richer
+quality filters remain potential extensions.
 
-Time-series responses must support monthly, quarterly, and yearly intervals. A period is based on `contract_date`, not archive `dataset_year`. Mark incomplete periods such as the current month/year, return sample sizes, and suppress or flag statistically weak cells. Use three- or twelve-month rolling medians when monthly samples are sparse. Distribution responses should initially expose p10, p25, median, p75, and p90.
+Time-series responses support monthly, quarterly, and yearly intervals. A
+period is based on `contract_date`, not archive `dataset_year`. Responses
+return sample sizes and flag weak year-over-year rental comparisons.
+Distribution responses expose p05, p10, p25, median, p75, p90, and p95 plus a
+bounded histogram and explicit tail counts.
 
 ### Deep-market analysis
 
@@ -235,8 +247,8 @@ Do not send millions of points to the browser. Return clusters or PostGIS grid c
 ### Details
 
 ```http
-GET /api/v1/sales/{transactionId}
-GET /api/v1/rentals/{transactionId}
+GET /api/v1/sales/transactions/{transactionId}
+GET /api/v1/rentals/transactions/{transactionId}
 ```
 
 A detail response returns the transaction and all associated property rows, coordinates, source provenance, and relevant data-quality information.
@@ -250,10 +262,10 @@ apps/api/
 │   ├── analytics/
 │   ├── config/
 │   ├── database/
-│   ├── generated/
-│   └── http/
+│   ├── geography/
+│   ├── httpapi/
+│   └── identity/
 ├── openapi/
-├── queries/
 ├── Dockerfile
 └── go.mod
 ```
@@ -262,7 +274,7 @@ Preferred components:
 
 - standard Go HTTP facilities for the server;
 - `pgxpool` for PostgreSQL connections;
-- `sqlc` to generate type-safe Go code from reviewed SQL;
+- explicit repository methods with reviewed PostgreSQL/PostGIS SQL;
 - an OpenAPI contract shared with the future frontend;
 - structured JSON logs, request validation, timeouts, and graceful shutdown;
 - unit tests for statistical rules and PostgreSQL integration tests for queries.
@@ -278,23 +290,20 @@ Preferred components:
 7. Precompute monthly/yearly aggregates and robust cohort baselines; never run national polygon joins per request.
 8. Add HTTP caching only after measuring database performance.
 
-## First implementation milestone
+## Completed first implementation milestone
 
-1. Add a pipeline step and schema for current RPE statistical-region, municipality, and city-district boundaries.
-2. Define and test `analytics.sale_facts`, including geographic IDs and quality flags.
-3. Scaffold the Go API and its Docker Compose service.
-4. Implement health, geography, and filter endpoints.
-5. Implement monthly/yearly overview and time-series sale statistics.
-6. Implement one bounding-box map endpoint with clustering.
-7. Publish and validate the OpenAPI contract.
-8. Add unit and PostgreSQL integration tests.
-9. Use this vertical slice to support the first React dashboard and map.
+1. Added the pipeline step and schema for current RPE boundaries and hierarchy.
+2. Defined and tested sale and rental facts, geographic IDs, and quality flags.
+3. Added the Go API and Docker Compose service.
+4. Implemented health, metadata, geography, statistics, map, detail, anomaly,
+   identity, preference, index, and valuation endpoints.
+5. Published OpenAPI and added a runtime-route parity test.
+6. Added unit, race, permission, and PostgreSQL integration coverage.
 
-## Questions to resolve before implementation
+## Remaining design decisions
 
-- Map source property-type codes to stable API categories.
-- Define eligibility rules for price-per-square-metre calculations.
-- Determine the meaning and time basis of every rental price/duration field.
-- Define the refresh/version policy for current and historical RPE boundaries.
-- Define minimum samples and disclosure thresholds for small regions, buildings, and monthly periods.
-- Define privacy/precision rules before exposing individual transaction coordinates publicly.
+- Extend and version property-group mappings as new source codes appear.
+- Validate rental amount/time semantics against future source revisions.
+- Decide whether historical RPE boundaries merit an explicit historical mode.
+- Finalize disclosure thresholds for small regions, buildings, and periods.
+- Finalize production privacy/precision rules for individual coordinates.

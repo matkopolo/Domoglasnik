@@ -383,7 +383,7 @@ Both geometry columns have GiST indexes. Level, parent, and normalized-name look
 
 ### `analytics.refresh_runs`
 
-Audit trail for future boundary and analytical refresh processes.
+Audit trail for boundary and analytical refresh processes.
 
 | Column | Type | Meaning |
 |---|---|---|
