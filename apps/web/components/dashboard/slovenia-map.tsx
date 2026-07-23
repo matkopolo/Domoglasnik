@@ -235,6 +235,7 @@ export function SloveniaMap({
   const pointsRef = useRef<MapFeatureCollection>(initialPoints(clusters));
   const boundariesRef = useRef<BoundaryFeatureCollection>(EMPTY_BOUNDARIES);
   const markersRef = useRef<maplibregl.Marker[]>([]);
+  const popupRef = useRef<maplibregl.Popup | null>(null);
   const modeRef = useRef(mode);
   const onSelectRef = useRef(onSelect);
   const [styleId, setStyleId] = useState<MapStyleId>("street");
@@ -270,6 +271,8 @@ export function SloveniaMap({
   }, [searchQuery]);
 
   function chooseBuilding(result: BuildingSearchResult) {
+    popupRef.current?.remove();
+    popupRef.current = null;
     setSearchResults([]);
     setSearchQuery([
       result.street,
@@ -296,11 +299,16 @@ export function SloveniaMap({
     content.className = "map-popup";
     content.textContent = "Nalagam podatke …";
     const controller = new AbortController();
+    popupRef.current?.remove();
     const popup = new maplibregl.Popup({ offset: 18 })
       .setLngLat([selectedBuilding.longitude, selectedBuilding.latitude])
       .setDOMContent(content)
       .addTo(map);
-    popup.on("close", () => controller.abort());
+    popupRef.current = popup;
+    popup.on("close", () => {
+      controller.abort();
+      if (popupRef.current === popup) popupRef.current = null;
+    });
     loadSaleTransaction(transactionId, controller.signal)
       .then((detail) => appendSaleDetail(content, detail))
       .catch(() => { content.textContent = "Podatkov ni bilo mogoče naložiti."; });
@@ -373,10 +381,15 @@ export function SloveniaMap({
           event.stopPropagation();
           const coordinates = feature.geometry.coordinates as [number, number];
           const content = popupContent(feature, modeRef.current);
+          popupRef.current?.remove();
           const popup = new maplibregl.Popup({ offset: 18, closeButton: false })
             .setLngLat(coordinates)
             .setDOMContent(content)
             .addTo(map);
+          popupRef.current = popup;
+          popup.on("close", () => {
+            if (popupRef.current === popup) popupRef.current = null;
+          });
           if (isBuilding && feature.properties.cadastralMunicipalityCode && feature.properties.buildingNumber) {
             const controller = new AbortController();
             popup.on("close", () => controller.abort());
@@ -416,6 +429,8 @@ export function SloveniaMap({
       if (regionId) onSelectRef.current(regionId);
     });
     return () => {
+      popupRef.current?.remove();
+      popupRef.current = null;
       markersRef.current.forEach((marker) => marker.remove());
       markersRef.current = [];
       map.remove();
@@ -474,10 +489,15 @@ export function SloveniaMap({
                 event.stopPropagation();
                 const coordinates = feature.geometry.coordinates as [number, number];
                 const content = popupContent(feature, mode);
+                popupRef.current?.remove();
                 const popup = new maplibregl.Popup({ offset: 18, closeButton: false })
                   .setLngLat(coordinates)
                   .setDOMContent(content)
                   .addTo(map);
+                popupRef.current = popup;
+                popup.on("close", () => {
+                  if (popupRef.current === popup) popupRef.current = null;
+                });
                 if (isBuilding && feature.properties.cadastralMunicipalityCode && feature.properties.buildingNumber) {
                   const buildingController = new AbortController();
                   popup.on("close", () => buildingController.abort());

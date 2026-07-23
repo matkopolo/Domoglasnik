@@ -209,6 +209,17 @@ func TestGeographySummariesIntegration(t *testing.T) {
 	}
 	defer pool.Close()
 	repository := NewStatisticsRepository(pool)
+	var expected int
+	if err := pool.QueryRow(context.Background(), `
+		SELECT count(DISTINCT statistical_region_id)
+		FROM analytics.sale_facts
+		WHERE statistical_region_id IS NOT NULL AND property_group='apartment'
+	`).Scan(&expected); err != nil {
+		t.Fatalf("count populated sale regions: %v", err)
+	}
+	if expected == 0 {
+		t.Skip("requires imported sale facts with statistical-region assignments")
+	}
 	items, err := repository.GeographySummaries(
 		context.Background(),
 		StatisticsFilter{PropertyGroup: "apartment"},
@@ -219,8 +230,8 @@ func TestGeographySummariesIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GeographySummaries(): %v", err)
 	}
-	if len(items) != 12 {
-		t.Fatalf("GeographySummaries() count=%d want=12", len(items))
+	if len(items) != expected {
+		t.Fatalf("GeographySummaries() count=%d want=%d", len(items), expected)
 	}
 	for _, item := range items {
 		if item.Name == "" || item.TransactionCount == 0 || len(item.Bounds) != 4 {
