@@ -152,7 +152,9 @@ make api-build
 ```
 
 Root `make lint` and `make test` run checks for the Python pipeline, Go API,
-and TypeScript frontend.
+and TypeScript frontend. The root `package.json` is the npm workspace
+entrypoint used by monorepo-aware editors and frontend hosting; Docker and
+application-specific npm commands continue to use `apps/web`.
 
 ## Start the web dashboard
 
