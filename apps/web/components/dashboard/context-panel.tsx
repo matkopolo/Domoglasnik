@@ -7,6 +7,7 @@ import {
   loadGeography,
   loadGeographyChildren,
   loadGeographyComparisons,
+  loadMarketIndices,
   loadTransaction,
   loadTransactionContext,
 } from "@/lib/api";
@@ -23,6 +24,7 @@ import type {
   Geography,
   GeographyComparison,
   MarketContext,
+  MarketIndex,
   MarketMode,
   Overview,
   PropertyGroup,
@@ -149,12 +151,43 @@ function TransactionView({
           Cena na m² je izračunana iz celotnega pogodbenega paketa in referenčne površine.
         </p>
       )}
+      {sale?.buildingParts.map((buildingPart, index) => (
+        <article className="component-detail-card" key={buildingPart.id}>
+          <strong>{buildingPart.buildingPartTypeDescription ?? `Del stavbe ${index + 1}`}</strong>
+          <FieldList fields={[
+            { label: "Prodana površina", value: buildingPart.soldArea == null
+              ? null : `${decimal.format(buildingPart.soldArea)} m²` },
+            { label: "Prodana uporabna površina", value: buildingPart.soldUsableArea == null
+              ? null : `${decimal.format(buildingPart.soldUsableArea)} m²` },
+            { label: "Registrirana površina", value: buildingPart.buildingPartArea == null
+              ? null : `${decimal.format(buildingPart.buildingPartArea)} m²` },
+            { label: "Nadstropje", value: meaningfulText(buildingPart.floor) },
+            { label: "Položaj", value: meaningfulPosition(buildingPart.positionInBuilding) },
+            { label: "Pogodbena cena dela", value: buildingPart.contractualPrice == null
+              ? null : euro.format(buildingPart.contractualPrice) },
+          ]} />
+        </article>
+      ))}
       {sale?.landParcels.map((parcel) => (
         <div className="component-card" key={parcel.id}>
           <strong>{parcel.landTypeDescription ?? "Zemljišče"}</strong>
           {parcel.parcelArea != null && <span>{decimal.format(parcel.parcelArea)} m²</span>}
           {parcel.contractualPrice != null && <span>{euro.format(parcel.contractualPrice)}</span>}
         </div>
+      ))}
+      {rental?.spaces.map((rentalSpace, index) => (
+        <article className="component-detail-card" key={rentalSpace.id}>
+          <strong>{rentalSpace.rentedSpaceTypeDescription ?? `Oddani prostor ${index + 1}`}</strong>
+          <FieldList fields={[
+            { label: "Površina", value: rentalSpace.area == null
+              ? null : `${decimal.format(rentalSpace.area)} m²` },
+            { label: "Uporabna površina", value: rentalSpace.usableArea == null
+              ? null : `${decimal.format(rentalSpace.usableArea)} m²` },
+            { label: "Pogodbena najemnina", value: rentalSpace.contractualRent == null
+              ? null : euro.format(rentalSpace.contractualRent) },
+            { label: "Leto gradnje", value: rentalSpace.constructionYear },
+          ]} />
+        </article>
       ))}
       <section className="context-section">
         <h3>Primerjava s trgom</h3>
@@ -214,6 +247,7 @@ export function ContextPanel({
   const [loadedKey, setLoadedKey] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
+  const [indices, setIndices] = useState<MarketIndex[]>([]);
   const generation = useRef(0);
   const key = contextKey(context);
 
@@ -273,6 +307,15 @@ export function ContextPanel({
     return () => controller.abort();
   }, [context, key, mode, propertyGroup, years]);
 
+  useEffect(() => {
+    if (context.kind !== "country") return;
+    const controller = new AbortController();
+    loadMarketIndices(mode, propertyGroup, controller.signal)
+      .then((response) => setIndices(response.items))
+      .catch(() => { if (!controller.signal.aborted) setIndices([]); });
+    return () => controller.abort();
+  }, [context.kind, mode, propertyGroup]);
+
   const current = loadedKey === key ? loaded : undefined;
   return (
     <aside className="context-panel" aria-live="polite">
@@ -307,6 +350,21 @@ export function ContextPanel({
                 : overview.medianMonthlyRentPerSqm!)}/m²`}</strong>
           </div>
           <p>Izberite regijo, občino, lokalno območje, stavbo ali posel za primerjave na isti ravni.</p>
+          {indices.length > 0 && (
+            <section className="context-section">
+              <h3>Nacionalni indeks cen</h3>
+              {indices.slice(-4).map((index) => (
+                <div className="benchmark-card" key={index.period}>
+                  <div><strong>{index.period.slice(0, 4)}</strong>
+                    <span>baza {index.basePeriod.slice(0, 4)} · n={index.sampleSize}</span>
+                  </div>
+                  <b>{index.isPublishable ? decimal.format(index.indexValue) : "—"}</b>
+                  {!index.isPublishable && <small>{index.suppressionReason ?? "ni objavljivo"}</small>}
+                </div>
+              ))}
+              <small>Hedonski indeks stalne kakovosti; 100 pomeni bazno obdobje.</small>
+            </section>
+          )}
         </>
       )}
       {context.kind !== "country" && !loading && !error && !current && (

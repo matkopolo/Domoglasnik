@@ -4,7 +4,10 @@ import { MarketDashboard } from "./market-dashboard";
 
 const { loadDashboardMock } = vi.hoisted(() => ({ loadDashboardMock: vi.fn() }));
 vi.mock("@/lib/api", async () => {
-  return { loadDashboard: loadDashboardMock };
+  return {
+    loadDashboard: loadDashboardMock,
+    loadMarketIndices: vi.fn(async () => ({ items: [] })),
+  };
 });
 
 vi.mock("./slovenia-map", () => ({

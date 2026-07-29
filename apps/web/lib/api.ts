@@ -10,6 +10,7 @@ import type {
   GeographyComparison,
   MapFeatureCollection,
   MarketMode,
+  MarketIndex,
   Overview,
   PropertyGroup,
   RentalTransactionDetail,
@@ -175,6 +176,19 @@ export function loadTransactionContext(mode: MarketMode, id: number, signal: Abo
     `/api/v1/${kind}/transactions/${id}/context`,
     signal,
   );
+}
+
+export function loadMarketIndices(
+  mode: MarketMode,
+  propertyGroup: PropertyGroup,
+  signal: AbortSignal,
+) {
+  const query = new URLSearchParams({
+    transactionKind: mode,
+    method: "hedonic",
+    propertyGroup,
+  });
+  return getJSON<{ items: MarketIndex[] }>(`/api/v1/indices?${query}`, signal);
 }
 
 export function searchBuildings(query: string, signal: AbortSignal) {

@@ -49,6 +49,7 @@ vi.mock("@/lib/api", () => ({
   loadBuildingStatistics: vi.fn(),
   loadGeography: vi.fn(),
   loadGeographyChildren: vi.fn(),
+  loadMarketIndices: vi.fn(async () => ({ items: [] })),
 }));
 
 describe("ContextPanel", () => {

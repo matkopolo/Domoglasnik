@@ -213,6 +213,20 @@ export interface ValuationPrediction {
   warnings: string[];
 }
 
+export interface MarketIndex {
+  transactionKind: MarketMode;
+  method: "matched_pair_median" | "hedonic";
+  propertyGroup: PropertyGroup;
+  period: string;
+  indexValue: number;
+  sampleSize: number;
+  basePeriod: string;
+  lowerIndexValue?: number | null;
+  upperIndexValue?: number | null;
+  isPublishable: boolean;
+  suppressionReason?: string | null;
+}
+
 export interface TransactionContextResponse {
   transactionKind: MarketMode;
   transactionId: number;
