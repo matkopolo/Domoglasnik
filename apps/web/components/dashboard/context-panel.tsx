@@ -345,6 +345,9 @@ export function ContextPanel({
   }, [context.kind, mode, propertyGroup]);
 
   const current = loadedKey === key ? loaded : undefined;
+  const latestIndices = (["hedonic", "matched_pair_median"] as const)
+    .map((method) => indices.filter((item) => item.method === method && item.isPublishable).at(-1))
+    .filter((item): item is MarketIndex => item != null);
   return (
     <aside className="context-panel" aria-live="polite">
       <header>
@@ -381,16 +384,17 @@ export function ContextPanel({
           {indices.length > 0 && (
             <section className="context-section">
               <h3>Nacionalni indeks cen</h3>
-              {indices.slice(-4).map((index) => (
-                <div className="benchmark-card" key={index.period}>
-                  <div><strong>{index.period.slice(0, 4)}</strong>
+              {latestIndices.map((index) => (
+                <div className="benchmark-card" key={index.method}>
+                  <div><strong>{index.method === "hedonic" ? "Hedonski" : "Ponovne prodaje"}</strong>
                     <span>baza {index.basePeriod.slice(0, 4)} · n={index.sampleSize}</span>
                   </div>
-                  <b>{index.isPublishable ? decimal.format(index.indexValue) : "—"}</b>
-                  {!index.isPublishable && <small>{index.suppressionReason ?? "ni objavljivo"}</small>}
+                  <b>{decimal.format(index.indexValue)} točk</b>
+                  <small>{index.indexValue >= 100 ? "+" : ""}
+                    {decimal.format(index.indexValue - 100)} % od baze · {index.period.slice(0, 7)}</small>
                 </div>
               ))}
-              <small>Hedonski indeks stalne kakovosti; 100 pomeni bazno obdobje.</small>
+              <small>Indeks 100 pomeni bazno obdobje; to ni število poslov.</small>
             </section>
           )}
         </>
