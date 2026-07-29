@@ -39,12 +39,47 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      pipeline-worker:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--spider", "http://localhost:8080/health/ready"]
       interval: 10s
       timeout: 3s
       retries: 5
       start_period: 5s
+
+  pipeline-worker:
+    build:
+      context: ./apps/data-pipeline
+      dockerfile: Dockerfile
+    image: real-estate-data-pipeline:development
+    command:
+      - schedule
+      - --interval-days
+      - "${REFRESH_INTERVAL_DAYS:-14}"
+      - --retry-hours
+      - "${REFRESH_RETRY_HOURS:-1}"
+      - --output-dir
+      - /data/raw
+      - --health-file
+      - /tmp/pipeline-healthy
+    environment:
+      DATABASE_URL: postgresql://real_estate:real_estate@db:5432/real_estate
+    init: true
+    mem_limit: 3g
+    restart: unless-stopped
+    stop_grace_period: 30s
+    volumes:
+      - pipeline_data:/data
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "from pathlib import Path; raise SystemExit(not Path('/tmp/pipeline-healthy').is_file())"]
+      interval: 30s
+      timeout: 5s
+      retries: 240
+      start_period: 10s
 
   web:
     build:
@@ -70,3 +105,4 @@ services:
 
 volumes:
   postgres_data:
+  pipeline_data:

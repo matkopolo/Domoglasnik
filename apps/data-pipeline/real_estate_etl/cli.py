@@ -12,6 +12,14 @@ import psycopg
 
 from .geography import sync_geographies
 from .importer import import_zip
+from .operations import (
+    DEFAULT_INTERVAL_DAYS,
+    DEFAULT_RETRY_HOURS,
+    refresh_analytics,
+    refresh_system,
+    reset_and_repopulate,
+    scheduled_refresh_loop,
+)
 from .pipeline import (
     fetch_national_zip,
     fetch_zip,
@@ -68,6 +76,47 @@ def build_parser() -> argparse.ArgumentParser:
     )
     all_national.add_argument("--end-year", type=int, default=date.today().year)
     _add_refresh_options(all_national, "Refresh national years already imported")
+
+    system = commands.add_parser(
+        "refresh-system",
+        help="Incrementally import GURS data, synchronize geography, and refresh analytics/models",
+    )
+    system.add_argument("--end-year", type=int, default=date.today().year)
+    _add_refresh_options(system, "Download current source versions even when already imported")
+
+    commands.add_parser(
+        "refresh-analytics",
+        help="Refresh deterministic analytical facts, outliers, quality profiles, and indices",
+    )
+
+    reset = commands.add_parser(
+        "reset-and-repopulate",
+        help="Delete imported/derived market data and rebuild it; preserves users/preferences",
+    )
+    reset.add_argument("--confirm-reset", action="store_true")
+    reset.add_argument("--end-year", type=int, default=date.today().year)
+    reset.add_argument("--output-dir", type=Path, default=Path("data/raw"))
+    _add_workers(reset, "Parallel download and model workers")
+    reset.add_argument("--verbose", action="store_true")
+
+    schedule = commands.add_parser(
+        "schedule",
+        help="Run a complete refresh immediately and then every configured interval",
+    )
+    schedule.add_argument(
+        "--interval-days",
+        type=int,
+        default=int(os.getenv("REFRESH_INTERVAL_DAYS", DEFAULT_INTERVAL_DAYS)),
+    )
+    schedule.add_argument(
+        "--retry-hours",
+        type=int,
+        default=int(os.getenv("REFRESH_RETRY_HOURS", DEFAULT_RETRY_HOURS)),
+    )
+    schedule.add_argument("--output-dir", type=Path, default=Path("data/raw"))
+    schedule.add_argument("--health-file", type=Path)
+    _add_workers(schedule, "Parallel download and model workers")
+    schedule.add_argument("--verbose", action="store_true")
     return parser
 
 
@@ -93,11 +142,27 @@ def validate_arguments(parser: argparse.ArgumentParser, args: argparse.Namespace
         start_year = NATIONAL_DATASETS[args.dataset_type].start_year
         if args.year < start_year:
             parser.error(f"{args.dataset_type} national data starts in {start_year}")
-    if args.command not in {"refresh-all-sales", "refresh-all-data", "refresh-models"}:
+    if args.command == "reset-and-repopulate" and not args.confirm_reset:
+        parser.error("reset-and-repopulate requires --confirm-reset")
+    if args.command == "schedule":
+        if args.interval_days < 1:
+            parser.error("--interval-days must be at least 1")
+        if args.retry_hours < 1:
+            parser.error("--retry-hours must be at least 1")
+    if args.command not in {
+        "refresh-all-sales",
+        "refresh-all-data",
+        "refresh-models",
+        "refresh-system",
+        "reset-and-repopulate",
+        "schedule",
+    }:
         return
     if args.command == "refresh-all-sales" and args.start_year > args.end_year:
         parser.error("--start-year must not be later than --end-year")
-    if args.command == "refresh-all-data" and args.end_year < NATIONAL_DATASETS["sales"].start_year:
+    if args.command in {"refresh-all-data", "refresh-system", "reset-and-repopulate"} and (
+        args.end_year < NATIONAL_DATASETS["sales"].start_year
+    ):
         parser.error("--end-year must be 2007 or later")
     try:
         validate_worker_count(args.workers)
@@ -111,6 +176,17 @@ def run(args: argparse.Namespace) -> None:
         return
     if args.command == "fetch-national":
         fetch_national_zip(args.dataset_type, args.year, args.output_dir)
+        return
+    if args.command == "schedule":
+        scheduled_refresh_loop(
+            args.database_url,
+            output_dir=args.output_dir,
+            interval_days=args.interval_days,
+            retry_hours=args.retry_hours,
+            workers=args.workers,
+            verbose=args.verbose,
+            health_file=args.health_file,
+        )
         return
 
     with psycopg.connect(args.database_url) as connection:
@@ -151,6 +227,32 @@ def run(args: argparse.Namespace) -> None:
                 args.force,
                 args.workers,
                 args.verbose,
+            )
+        elif args.command == "refresh-system":
+            refresh_system(
+                connection,
+                output_dir=args.output_dir,
+                end_year=args.end_year,
+                force=args.force,
+                workers=args.workers,
+                verbose=args.verbose,
+            )
+        elif args.command == "refresh-analytics":
+            counts = refresh_analytics(connection)
+            print(
+                "Refreshed analytics: "
+                + ", ".join(
+                    f"{name.rsplit('.', 1)[-1]}={count}"
+                    for name, count in counts.items()
+                )
+            )
+        elif args.command == "reset-and-repopulate":
+            reset_and_repopulate(
+                connection,
+                output_dir=args.output_dir,
+                end_year=args.end_year,
+                workers=args.workers,
+                verbose=args.verbose,
             )
 
 

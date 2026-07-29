@@ -12,7 +12,7 @@ from typing import TypeVar
 
 from .api import DatasetUnavailable, client_for
 from .importer import import_zip
-from .models import ArchiveResult
+from .models import ArchiveResult, RefreshSummary
 from .settings import API_BASE, AVAILABLE_THREADS, NATIONAL_DATASETS
 
 WorkItem = TypeVar("WorkItem")
@@ -96,7 +96,7 @@ def _run_refresh(
     prepare: Callable[[WorkItem], ArchiveResult],
     label: Callable[[int, int, WorkItem], str],
     summary_prefix: str,
-) -> None:
+) -> RefreshSummary:
     """Download concurrently while importing sequentially on one DB connection."""
     started_at = time.monotonic()
     work = iter(combinations)
@@ -161,6 +161,7 @@ def _run_refresh(
         f"download_worker_time={format_duration(download_seconds)}, "
         f"csv_parsing={format_duration(parsing_seconds)}, database={format_duration(database_seconds)}"
     )
+    return RefreshSummary(imported, skipped, unavailable)
 
 
 def refresh_all_sales(
@@ -171,7 +172,7 @@ def refresh_all_sales(
     force: bool,
     workers: int,
     verbose: bool = False,
-) -> None:
+) -> RefreshSummary:
     sync_reference_data(connection)
     with connection.cursor() as cursor:
         cursor.execute("SELECT code FROM municipalities ORDER BY code")
@@ -181,7 +182,7 @@ def refresh_all_sales(
     connection.commit()
     all_items = [(code, year) for year in range(start_year, end_year + 1) for code in municipalities]
     items = [item for item in all_items if force or item not in imported]
-    _run_refresh(
+    return _run_refresh(
         connection,
         items,
         skipped=len(all_items) - len(items),
@@ -203,7 +204,8 @@ def refresh_all_national(
     force: bool,
     workers: int,
     verbose: bool = False,
-) -> None:
+    refresh_current_year: bool = False,
+) -> RefreshSummary:
     sync_reference_data(connection)
     with connection.cursor() as cursor:
         cursor.execute(
@@ -217,15 +219,25 @@ def refresh_all_national(
         for dataset_type, product in NATIONAL_DATASETS.items()
         for year in range(product.start_year, end_year + 1)
     ]
-    items = [item for item in all_items if force or item not in imported]
-    _run_refresh(
+    items = [
+        item
+        for item in all_items
+        if force
+        or item not in imported
+        or (refresh_current_year and item[1] == end_year)
+    ]
+    return _run_refresh(
         connection,
         items,
         skipped=len(all_items) - len(items),
         workers=workers,
         verbose=verbose,
         thread_name="jgp-national-download",
-        prepare=lambda item: prepare_national_archive(*item, output_dir, force),
+        prepare=lambda item: prepare_national_archive(
+            *item,
+            output_dir,
+            force or (refresh_current_year and item[1] == end_year),
+        ),
         label=lambda position, total, item: (
             f"[{position}/{total}] national {item[0]} year={item[1]}"
         ),

@@ -18,3 +18,10 @@ class ArchiveResult:
     path: Path
     reused: bool
     download_seconds: float
+
+
+@dataclass(frozen=True)
+class RefreshSummary:
+    imported: int
+    already_imported: int
+    unavailable: int
