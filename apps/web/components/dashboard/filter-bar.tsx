@@ -1,5 +1,5 @@
 import { Building2, CalendarDays, MapPin, SlidersHorizontal } from "lucide-react";
-import type { Geography, MarketMode, PropertyGroup, YearRange } from "@/lib/types";
+import type { AreaRange, Geography, MarketMode, PropertyGroup, YearRange } from "@/lib/types";
 
 const properties: Array<{ value: PropertyGroup; label: string }> = [
   { value: "apartment", label: "Stanovanja" },
@@ -19,6 +19,8 @@ interface FilterBarProps {
   geographies: Geography[];
   years: YearRange;
   onYearsChange: (years: YearRange) => void;
+  area: AreaRange;
+  onAreaChange: (area: AreaRange) => void;
 }
 
 export function FilterBar(props: FilterBarProps) {
@@ -86,10 +88,22 @@ export function FilterBar(props: FilterBarProps) {
           ))}
         </select>
       </label>
-      <button className="more-filters" type="button" title="Dodatni filtri bodo dodani v naslednji različici">
+      <label className="filter-field area-field">
         <SlidersHorizontal size={17} />
-        <span>Več filtrov</span>
-      </button>
+        <span className="sr-only">Površina od</span>
+        <input aria-label="Površina od" type="number" min="1" step="1" placeholder="Od m²"
+          value={props.area.min ?? ""}
+          onChange={(event) => props.onAreaChange({
+            ...props.area, min: event.target.value ? Number(event.target.value) : undefined,
+          })} />
+        <span>–</span>
+        <span className="sr-only">Površina do</span>
+        <input aria-label="Površina do" type="number" min="1" step="1" placeholder="Do m²"
+          value={props.area.max ?? ""}
+          onChange={(event) => props.onAreaChange({
+            ...props.area, max: event.target.value ? Number(event.target.value) : undefined,
+          })} />
+      </label>
     </section>
   );
 }

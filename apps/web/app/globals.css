@@ -107,6 +107,7 @@ main { width: min(1480px, calc(100% - 48px)); margin: 0 auto; padding: 25px 0 30
   border-radius: var(--radius);
 }
 .filter-field select { width: 100%; border: 0; color: inherit; background: transparent; outline: 0; cursor: pointer; }
+.area-field input { width: 72px; min-width: 0; border: 0; outline: 0; background: transparent; color: inherit; }
 .filter-field svg, .more-filters svg { color: #59655e; flex: 0 0 auto; }
 .more-filters { justify-content: center; cursor: pointer; }
 .more-filters:hover { border-color: #a4b4a8; }

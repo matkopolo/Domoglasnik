@@ -4,6 +4,7 @@ import { Menu, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { loadDashboard } from "@/lib/api";
 import type {
+  AreaRange,
   DashboardData,
   GeographyLevel,
   MarketContext,
@@ -49,6 +50,7 @@ function initialState(): {
   years: YearRange;
   context: MarketContext;
   geographyContext?: GeographyContext;
+  area: AreaRange;
 } {
   if (typeof window === "undefined") {
     return {
@@ -57,6 +59,7 @@ function initialState(): {
       years: { from: 2018, to: 2025 },
       context: { kind: "country" } as MarketContext,
       geographyContext: undefined,
+      area: {},
     };
   }
   const query = new URLSearchParams(window.location.search);
@@ -66,6 +69,8 @@ function initialState(): {
   const propertyGroup = allowed.includes(group ?? "") ? group as PropertyGroup : "apartment";
   const from = Number(query.get("from")) || 2018;
   const to = Number(query.get("to")) || 2025;
+  const min = Number(query.get("minArea")) || undefined;
+  const max = Number(query.get("maxArea")) || undefined;
   const contextKind = query.get("context");
   const geographyContext = Number(query.get("geographyId"))
     ? {
@@ -91,7 +96,7 @@ function initialState(): {
       id: Number(query.get("transactionId")),
     };
   }
-  return { mode, propertyGroup, years: { from, to }, context, geographyContext };
+  return { mode, propertyGroup, years: { from, to }, context, geographyContext, area: { min, max } };
 }
 
 export function MarketDashboard() {
@@ -99,6 +104,7 @@ export function MarketDashboard() {
   const [mode, setMode] = useState(initial.mode);
   const [propertyGroup, setPropertyGroup] = useState(initial.propertyGroup);
   const [years, setYears] = useState<YearRange>(initial.years);
+  const [area, setArea] = useState<AreaRange>(initial.area);
   const [context, setContext] = useState<MarketContext>(initial.context);
   const [geographyContext, setGeographyContext] = useState<GeographyContext | undefined>(
     initial.geographyContext,
@@ -118,7 +124,7 @@ export function MarketDashboard() {
         setError(undefined);
       }
     });
-    loadDashboard(mode, propertyGroup, geographyId, years, controller.signal)
+    loadDashboard(mode, propertyGroup, geographyId, years, controller.signal, area)
       .then((result) => {
         if (requestGeneration === generation.current) setData(result);
       })
@@ -133,7 +139,7 @@ export function MarketDashboard() {
         if (!controller.signal.aborted && requestGeneration === generation.current) setLoading(false);
       });
     return () => controller.abort();
-  }, [mode, propertyGroup, geographyId, years]);
+  }, [mode, propertyGroup, geographyId, years, area]);
 
   useEffect(() => {
     const query = new URLSearchParams();
@@ -141,6 +147,8 @@ export function MarketDashboard() {
     query.set("propertyGroup", propertyGroup);
     query.set("from", String(years.from));
     query.set("to", String(years.to));
+    if (area.min != null) query.set("minArea", String(area.min));
+    if (area.max != null) query.set("maxArea", String(area.max));
     query.set("context", context.kind);
     if (geographyContext) {
       query.set("geographyId", String(geographyContext.id));
@@ -155,7 +163,7 @@ export function MarketDashboard() {
       query.set("transactionId", String(context.id));
     }
     window.history.replaceState(null, "", `?${query}`);
-  }, [context, geographyContext, mode, propertyGroup, years]);
+  }, [area, context, geographyContext, mode, propertyGroup, years]);
 
   const selectedName = geographyContext?.name ?? "Slovenija";
   const analysisContext: MarketContext = geographyContext ?? { kind: "country" };
@@ -227,6 +235,8 @@ export function MarketDashboard() {
           geographies={data.geographies}
           years={years}
           onYearsChange={setYears}
+          area={area}
+          onAreaChange={setArea}
         />
         <div className="primary-grid contextual">
           <SloveniaMap
@@ -237,6 +247,7 @@ export function MarketDashboard() {
             regions={data.geographies}
             selectedId={geographyId}
             years={years}
+            area={area}
             onContextChange={handleContext}
           />
           <div className="context-column" id="market-context">

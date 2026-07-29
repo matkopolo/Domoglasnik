@@ -1221,6 +1221,10 @@ export interface components {
         /** @description Inclusive contract-date upper bound. */
         ToDate: string;
         PropertyGroup: components["schemas"]["PropertyGroup"];
+        /** @description Inclusive minimum analytical property area in square metres. */
+        MinArea: number;
+        /** @description Inclusive maximum analytical property area in square metres. */
+        MaxArea: number;
         /** @description Land readiness population. Defaults to verified-buildable ETN codes 1 and 2; broad allows only codes 1-3 and all is explicit audit access. It has no effect unless propertyGroup is land.
          *      */
         LandScope: "strict" | "broad" | "all";
@@ -1424,6 +1428,10 @@ export interface operations {
                 /** @description Inclusive contract-date upper bound. */
                 to?: components["parameters"]["ToDate"];
                 propertyGroup?: components["parameters"]["PropertyGroup"];
+                /** @description Inclusive minimum analytical property area in square metres. */
+                minArea?: components["parameters"]["MinArea"];
+                /** @description Inclusive maximum analytical property area in square metres. */
+                maxArea?: components["parameters"]["MaxArea"];
                 /** @description Land readiness population. Defaults to verified-buildable ETN codes 1 and 2; broad allows only codes 1-3 and all is explicit audit access. It has no effect unless propertyGroup is land.
                  *      */
                 landScope?: components["parameters"]["LandScope"];
@@ -1457,6 +1465,10 @@ export interface operations {
                 /** @description Inclusive contract-date upper bound. */
                 to?: components["parameters"]["ToDate"];
                 propertyGroup?: components["parameters"]["PropertyGroup"];
+                /** @description Inclusive minimum analytical property area in square metres. */
+                minArea?: components["parameters"]["MinArea"];
+                /** @description Inclusive maximum analytical property area in square metres. */
+                maxArea?: components["parameters"]["MaxArea"];
                 /** @description Land readiness population. Defaults to verified-buildable ETN codes 1 and 2; broad allows only codes 1-3 and all is explicit audit access. It has no effect unless propertyGroup is land.
                  *      */
                 landScope?: components["parameters"]["LandScope"];
@@ -1491,6 +1503,10 @@ export interface operations {
                 /** @description Inclusive contract-date upper bound. */
                 to?: components["parameters"]["ToDate"];
                 propertyGroup?: components["parameters"]["PropertyGroup"];
+                /** @description Inclusive minimum analytical property area in square metres. */
+                minArea?: components["parameters"]["MinArea"];
+                /** @description Inclusive maximum analytical property area in square metres. */
+                maxArea?: components["parameters"]["MaxArea"];
                 /** @description Land readiness population. Defaults to verified-buildable ETN codes 1 and 2; broad allows only codes 1-3 and all is explicit audit access. It has no effect unless propertyGroup is land.
                  *      */
                 landScope?: components["parameters"]["LandScope"];
@@ -1527,6 +1543,10 @@ export interface operations {
                 /** @description Inclusive contract-date upper bound. */
                 to?: components["parameters"]["ToDate"];
                 propertyGroup?: components["parameters"]["PropertyGroup"];
+                /** @description Inclusive minimum analytical property area in square metres. */
+                minArea?: components["parameters"]["MinArea"];
+                /** @description Inclusive maximum analytical property area in square metres. */
+                maxArea?: components["parameters"]["MaxArea"];
                 /** @description Land readiness population. Defaults to verified-buildable ETN codes 1 and 2; broad allows only codes 1-3 and all is explicit audit access. It has no effect unless propertyGroup is land.
                  *      */
                 landScope?: components["parameters"]["LandScope"];
@@ -1561,6 +1581,10 @@ export interface operations {
                 /** @description Inclusive contract-date upper bound. */
                 to?: components["parameters"]["ToDate"];
                 propertyGroup?: components["parameters"]["PropertyGroup"];
+                /** @description Inclusive minimum analytical property area in square metres. */
+                minArea?: components["parameters"]["MinArea"];
+                /** @description Inclusive maximum analytical property area in square metres. */
+                maxArea?: components["parameters"]["MaxArea"];
                 /** @description Official geographic unit at any supported hierarchy level. */
                 geographyId?: components["parameters"]["StatisticsGeographyId"];
             };
@@ -1591,6 +1615,10 @@ export interface operations {
                 /** @description Inclusive contract-date upper bound. */
                 to?: components["parameters"]["ToDate"];
                 propertyGroup?: components["parameters"]["PropertyGroup"];
+                /** @description Inclusive minimum analytical property area in square metres. */
+                minArea?: components["parameters"]["MinArea"];
+                /** @description Inclusive maximum analytical property area in square metres. */
+                maxArea?: components["parameters"]["MaxArea"];
                 /** @description Official geographic unit at any supported hierarchy level. */
                 geographyId?: components["parameters"]["StatisticsGeographyId"];
                 interval?: "month" | "quarter" | "year";
@@ -1622,6 +1650,10 @@ export interface operations {
                 /** @description Inclusive contract-date upper bound. */
                 to?: components["parameters"]["ToDate"];
                 propertyGroup?: components["parameters"]["PropertyGroup"];
+                /** @description Inclusive minimum analytical property area in square metres. */
+                minArea?: components["parameters"]["MinArea"];
+                /** @description Inclusive maximum analytical property area in square metres. */
+                maxArea?: components["parameters"]["MaxArea"];
                 /** @description Official geographic unit at any supported hierarchy level. */
                 geographyId?: components["parameters"]["StatisticsGeographyId"];
                 limit?: number;
@@ -1656,6 +1688,10 @@ export interface operations {
                 /** @description Inclusive contract-date upper bound. */
                 to?: components["parameters"]["ToDate"];
                 propertyGroup?: components["parameters"]["PropertyGroup"];
+                /** @description Inclusive minimum analytical property area in square metres. */
+                minArea?: components["parameters"]["MinArea"];
+                /** @description Inclusive maximum analytical property area in square metres. */
+                maxArea?: components["parameters"]["MaxArea"];
                 /** @description Official geographic unit at any supported hierarchy level. */
                 geographyId?: components["parameters"]["StatisticsGeographyId"];
                 zoom?: number;
@@ -1689,6 +1725,10 @@ export interface operations {
                 /** @description Inclusive contract-date upper bound. */
                 to?: components["parameters"]["ToDate"];
                 propertyGroup?: components["parameters"]["PropertyGroup"];
+                /** @description Inclusive minimum analytical property area in square metres. */
+                minArea?: components["parameters"]["MinArea"];
+                /** @description Inclusive maximum analytical property area in square metres. */
+                maxArea?: components["parameters"]["MaxArea"];
                 /** @description Official geographic unit at any supported hierarchy level. */
                 geographyId?: components["parameters"]["StatisticsGeographyId"];
                 limit?: number;
@@ -1722,6 +1762,10 @@ export interface operations {
                 /** @description Inclusive contract-date upper bound. */
                 to?: components["parameters"]["ToDate"];
                 propertyGroup?: components["parameters"]["PropertyGroup"];
+                /** @description Inclusive minimum analytical property area in square metres. */
+                minArea?: components["parameters"]["MinArea"];
+                /** @description Inclusive maximum analytical property area in square metres. */
+                maxArea?: components["parameters"]["MaxArea"];
                 /** @description Official geographic unit at any supported hierarchy level. */
                 geographyId?: components["parameters"]["StatisticsGeographyId"];
                 level: "country" | "statistical_region" | "municipality" | "city_district" | "local_community" | "settlement";
@@ -1849,6 +1893,10 @@ export interface operations {
                 /** @description Inclusive contract-date upper bound. */
                 to?: components["parameters"]["ToDate"];
                 propertyGroup?: components["parameters"]["PropertyGroup"];
+                /** @description Inclusive minimum analytical property area in square metres. */
+                minArea?: components["parameters"]["MinArea"];
+                /** @description Inclusive maximum analytical property area in square metres. */
+                maxArea?: components["parameters"]["MaxArea"];
                 /** @description Land readiness population. Defaults to verified-buildable ETN codes 1 and 2; broad allows only codes 1-3 and all is explicit audit access. It has no effect unless propertyGroup is land.
                  *      */
                 landScope?: components["parameters"]["LandScope"];
@@ -1884,6 +1932,10 @@ export interface operations {
                 /** @description Inclusive contract-date upper bound. */
                 to?: components["parameters"]["ToDate"];
                 propertyGroup?: components["parameters"]["PropertyGroup"];
+                /** @description Inclusive minimum analytical property area in square metres. */
+                minArea?: components["parameters"]["MinArea"];
+                /** @description Inclusive maximum analytical property area in square metres. */
+                maxArea?: components["parameters"]["MaxArea"];
                 /** @description Official geographic unit at any supported hierarchy level. */
                 geographyId?: components["parameters"]["StatisticsGeographyId"];
                 metric?: "monthlyRent" | "rentPerSqm";
@@ -1945,6 +1997,10 @@ export interface operations {
                 /** @description Inclusive contract-date upper bound. */
                 to?: components["parameters"]["ToDate"];
                 propertyGroup?: components["parameters"]["PropertyGroup"];
+                /** @description Inclusive minimum analytical property area in square metres. */
+                minArea?: components["parameters"]["MinArea"];
+                /** @description Inclusive maximum analytical property area in square metres. */
+                maxArea?: components["parameters"]["MaxArea"];
             };
             header?: never;
             path: {
@@ -1978,6 +2034,10 @@ export interface operations {
                 /** @description Inclusive contract-date upper bound. */
                 to?: components["parameters"]["ToDate"];
                 propertyGroup?: components["parameters"]["PropertyGroup"];
+                /** @description Inclusive minimum analytical property area in square metres. */
+                minArea?: components["parameters"]["MinArea"];
+                /** @description Inclusive maximum analytical property area in square metres. */
+                maxArea?: components["parameters"]["MaxArea"];
                 /** @description Land readiness population. Defaults to verified-buildable ETN codes 1 and 2; broad allows only codes 1-3 and all is explicit audit access. It has no effect unless propertyGroup is land.
                  *      */
                 landScope?: components["parameters"]["LandScope"];
@@ -2014,6 +2074,10 @@ export interface operations {
                 /** @description Inclusive contract-date upper bound. */
                 to?: components["parameters"]["ToDate"];
                 propertyGroup?: components["parameters"]["PropertyGroup"];
+                /** @description Inclusive minimum analytical property area in square metres. */
+                minArea?: components["parameters"]["MinArea"];
+                /** @description Inclusive maximum analytical property area in square metres. */
+                maxArea?: components["parameters"]["MaxArea"];
                 /** @description Land readiness population. Defaults to verified-buildable ETN codes 1 and 2; broad allows only codes 1-3 and all is explicit audit access. It has no effect unless propertyGroup is land.
                  *      */
                 landScope?: components["parameters"]["LandScope"];
@@ -2050,6 +2114,10 @@ export interface operations {
                 /** @description Inclusive contract-date upper bound. */
                 to?: components["parameters"]["ToDate"];
                 propertyGroup?: components["parameters"]["PropertyGroup"];
+                /** @description Inclusive minimum analytical property area in square metres. */
+                minArea?: components["parameters"]["MinArea"];
+                /** @description Inclusive maximum analytical property area in square metres. */
+                maxArea?: components["parameters"]["MaxArea"];
                 /** @description Land readiness population. Defaults to verified-buildable ETN codes 1 and 2; broad allows only codes 1-3 and all is explicit audit access. It has no effect unless propertyGroup is land.
                  *      */
                 landScope?: components["parameters"]["LandScope"];

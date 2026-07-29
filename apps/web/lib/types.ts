@@ -7,6 +7,7 @@ export type MarketMode = ApiSchemas["Metadata"]["transactionKinds"][number];
 export type PropertyGroup = Exclude<ApiSchemas["PropertyGroup"], "mixed" | "unknown">;
 export type GeographyLevel = ApiSchemas["GeographyLevel"];
 export interface YearRange { from: number; to: number }
+export interface AreaRange { min?: number; max?: number }
 
 export interface Geography {
   id: number;

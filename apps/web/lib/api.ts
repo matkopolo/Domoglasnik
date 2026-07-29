@@ -22,6 +22,7 @@ import type {
   TransactionExtreme,
   TransactionContextResponse,
   YearRange,
+  AreaRange,
 } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? "http://localhost:8080";
@@ -40,6 +41,7 @@ export function marketQuery(
   propertyGroup: PropertyGroup,
   years: YearRange,
   geographyId?: number,
+  area: AreaRange = {},
 ) {
   const query = new URLSearchParams({
     from: `${years.from}-01-01`,
@@ -47,6 +49,8 @@ export function marketQuery(
     propertyGroup,
   });
   if (geographyId) query.set("geographyId", String(geographyId));
+  if (area.min != null) query.set("minArea", String(area.min));
+  if (area.max != null) query.set("maxArea", String(area.max));
   return query;
 }
 
@@ -65,8 +69,9 @@ export async function loadDashboard(
   geographyId: number | undefined,
   years: YearRange,
   signal: AbortSignal,
+  area: AreaRange = {},
 ): Promise<DashboardData> {
-  const query = marketQuery(propertyGroup, years, geographyId);
+  const query = marketQuery(propertyGroup, years, geographyId, area);
   const prefix = mode === "sale" ? "" : "/rentals";
   const distributionMetric = mode === "sale" ? "pricePerSqm" : "rentPerSqm";
   const mapPath = mode === "sale" ? "/api/v1/map/clusters" : "/api/v1/rentals/map/clusters";
@@ -108,8 +113,9 @@ export async function loadMapFeatures(
   bounds: [number, number, number, number],
   zoom: number,
   signal: AbortSignal,
+  area: AreaRange = {},
 ): Promise<MapFeatureCollection> {
-  const query = marketQuery(propertyGroup, years, geographyId);
+  const query = marketQuery(propertyGroup, years, geographyId, area);
   query.set("bbox", bounds.join(","));
   const mapPrefix = mode === "sale" ? "/api/v1/map" : "/api/v1/rentals/map";
   const showProperties = zoom >= 13.5;

@@ -87,6 +87,21 @@ describe("MarketDashboard", () => {
     expect(window.location.search).toContain("to=2024");
   });
 
+  it("filters the market by an inclusive area range", async () => {
+    render(<MarketDashboard />);
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Površina od" }), {
+      target: { value: "60" },
+    });
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Površina do" }), {
+      target: { value: "90" },
+    });
+    await waitFor(() => {
+      expect(loadDashboardMock.mock.calls.at(-1)?.[5]).toEqual({ min: 60, max: 90 });
+    });
+    expect(window.location.search).toContain("minArea=60");
+    expect(window.location.search).toContain("maxArea=90");
+  });
+
   it("ignores a stale response after filters change", async () => {
     const { demoDashboard } = await import("@/lib/demo-data");
     let resolveFirst!: (value: ReturnType<typeof demoDashboard>) => void;

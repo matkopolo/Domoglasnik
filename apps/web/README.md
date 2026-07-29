@@ -40,6 +40,8 @@ The dashboard uses MapLibre GL JS for a real interactive map:
   year, and additional building-part area when those values exist in GURS;
 - selectable from/to years update the map, overview, distribution, and trend
   chart together;
+- inclusive minimum/maximum area filters update the same market population and
+  are preserved in the shareable URL;
 - address search zooms directly to a building and exposes its individually
   selectable sale transactions;
 - street-level sales sharing a cadastral building are consolidated into one

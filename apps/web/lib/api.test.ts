@@ -1,7 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { APIError, loadDashboard, loadGeographyComparisons, loadMapFeatures } from "./api";
+import { APIError, loadDashboard, loadGeographyComparisons, loadMapFeatures, marketQuery } from "./api";
 
 afterEach(() => vi.unstubAllGlobals());
+
+it("adds inclusive area bounds to every market query", () => {
+  const query = marketQuery("apartment", { from: 2025, to: 2025 }, 12, { min: 60, max: 90 });
+  expect(query.get("minArea")).toBe("60");
+  expect(query.get("maxArea")).toBe("90");
+});
 
 describe("loadMapFeatures", () => {
   it("requests zoom-aware sale clusters for broad map views", async () => {

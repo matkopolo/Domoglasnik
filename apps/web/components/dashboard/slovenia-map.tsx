@@ -8,6 +8,7 @@ import { buildMapPopup, mapAmountLabel } from "@/lib/map-popup";
 import { mapStyle, type MapStyleId } from "@/lib/map-styles";
 import type {
   BoundaryFeatureCollection,
+  AreaRange,
   BuildingSearchResult,
   Cluster,
   Geography,
@@ -75,6 +76,7 @@ interface SloveniaMapProps {
   regions: Geography[];
   selectedId?: number;
   years: YearRange;
+  area: AreaRange;
   onContextChange: (context: MarketContext) => void;
 }
 
@@ -86,6 +88,7 @@ export function SloveniaMap({
   regions,
   selectedId,
   years,
+  area,
   onContextChange,
 }: SloveniaMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -354,6 +357,7 @@ export function SloveniaMap({
           [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()],
           map.getZoom(),
           controller.signal,
+          area,
         ).then((data) => {
           if (requestGeneration !== generation) return;
           pointsRef.current = data;
@@ -372,7 +376,7 @@ export function SloveniaMap({
       controller.abort();
       map.off("moveend", refresh);
     };
-  }, [mode, propertyGroup, renderMarkers, selectedId, years]);
+  }, [area, mode, propertyGroup, renderMarkers, selectedId, years]);
 
   useEffect(() => {
     if (regions.length === 0) return;
