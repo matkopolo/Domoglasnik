@@ -10,9 +10,31 @@ This project downloads national yearly ZIP archives from GURS JGP, preserves the
 - `database/migrations/`: shared PostgreSQL schema and incremental migrations
 - `database/documentation/`: shared data-model documentation
 - `docs/development-guidelines.md`: Go/Python conventions and test-layout policy
-- `infrastructure/docker/`: future service-specific Docker assets
+- `infrastructure/docker/`: service-specific Docker assets
 - `data/raw/`: local downloaded archives, excluded from Git
 - `Makefile`: root commands shared by all developers
+
+## Run the complete system
+
+Docker Desktop (or Docker Engine with Compose) is the only requirement for the
+normal workflow on Windows, macOS, and Linux:
+
+```bash
+docker compose up -d --build --wait
+```
+
+On the first run, `pipeline-worker` downloads and imports the national GURS
+history, synchronizes geographic boundaries, refreshes analytics, and builds
+the valuation/anomaly models. The API waits for that first successful refresh
+before becoming ready, then the web application starts at
+<http://localhost:3000>. Follow progress with:
+
+```bash
+docker compose logs -f pipeline-worker
+```
+
+PostgreSQL data and downloaded ZIP archives live in named Docker volumes and
+survive `docker compose down` and application rebuilds.
 
 ## Visual Studio Code
 
@@ -79,7 +101,6 @@ clusters/points over tested analytical tables.
 ## Start PostgreSQL with PostGIS
 
 ```bash
-make setup
 make db-up
 ```
 
@@ -110,9 +131,15 @@ The point is the source property's centroid, not necessarily an entrance or post
 
 ### Development memory budget
 
-PostgreSQL/PostGIS remains the source of truth and analytical engine; the dataset is never copied wholesale into Go memory. Docker Compose applies protective development ceilings of 4 GB for PostgreSQL and 512 MB for the Go API. These are maximums, not reserved memory: with the current dataset the containers normally use far less.
+PostgreSQL/PostGIS remains the source of truth and analytical engine; the
+dataset is never copied wholesale into Go memory. Docker Compose applies
+development ceilings of 4 GB for PostgreSQL, 3 GB for the offline pipeline
+worker, 512 MB for the Go API, and 768 MB for the web application. These are
+maximums, not reserved memory.
 
-Allocate 6–8 GB to Docker Desktop so PostgreSQL, the API, image builds, and operating-system cache have room to coexist. The API must use bounded SQL queries, pagination, map bounding boxes, and precomputed database aggregates. Any future application cache is limited to small reference or aggregate results and must be justified by measurements.
+Allocate 8–12 GB to Docker Desktop for a full model refresh alongside
+PostgreSQL and image builds. The API uses bounded SQL queries, pagination, map
+bounding boxes, and precomputed database aggregates.
 
 ## Start the Go analytics API
 
@@ -127,11 +154,11 @@ curl http://localhost:8080/api/v1/meta
 Refresh the official GURS RPE statistical-region, municipality, city-district, local-community, and settlement hierarchy with:
 
 ```bash
-.venv/bin/real-estate-etl sync-geographies
+docker compose run --rm pipeline-worker sync-geographies
 ```
 
-After importing or replacing sale or rental archives, rebuild the persisted
-analytical facts and versioned sale/rental outlier evaluations:
+The scheduled/full worker already performs downstream refreshes. For targeted
+development, rebuild only the persisted analytics or models with:
 
 ```bash
 make analytics-refresh
@@ -172,24 +199,47 @@ application-specific npm commands remain isolated in `apps/web`.
 `make web-generate-api-types` regenerates the checked-in transport schema from
 OpenAPI, and `make web-contract-drift` fails if it has drifted.
 
-## Next operational phase
+## Automated data-pipeline worker
 
-The next phase targets a Docker-first `data-pipeline-worker`, so Windows,
-macOS, and Linux hosts need only Docker/Compose for normal operation:
+`pipeline-worker` contains Python and all ETL/model dependencies. It runs a
+complete refresh immediately and then every **14 days**:
 
-- one command starts the database, applies migrations, incrementally imports
-  sources, refreshes analytics/models, and starts the API and web application;
-- an explicitly named destructive command clears imported and derived data,
-  then repopulates from source;
-- a scheduled job runs every two months, compares available national
-  product-years with successful imports, downloads only missing or changed
-  archives, and refreshes dependent analytics;
-- Python, Go, Node, and their packages remain inside containers; local language
-  installations are optional developer conveniences;
-- refreshes remain idempotent and must not publish partially refreshed data.
+1. acquire a PostgreSQL advisory lock so scheduled and manual runs cannot
+   overlap;
+2. compare national BUY/RENT product-years with `source_files`;
+3. download/import missing years and re-check the current year for revisions;
+4. synchronize current GURS RPE geography;
+5. refresh facts, strict-land populations, outliers, anomaly signals,
+   duplicates, missingness profiles, and matched-pair indices;
+6. refresh versioned hedonic models, intervals, Isolation Forest scores, and
+   hedonic indices;
+7. mark the worker healthy only after a complete successful run.
 
-This is future Phase 4 scope; the current virtual-environment workflow remains
-supported until the container worker replaces it.
+Failures retain the last committed database state and retry after one hour.
+Override the interval or retry delay in `.env`:
+
+```dotenv
+REFRESH_INTERVAL_DAYS=14
+REFRESH_RETRY_HOURS=1
+```
+
+Run the workflow immediately:
+
+```bash
+docker compose run --rm pipeline-worker refresh-system --output-dir /data/raw
+```
+
+Deliberately delete imported and derived market data and rebuild it:
+
+```bash
+docker compose run --rm pipeline-worker reset-and-repopulate \
+  --confirm-reset --output-dir /data/raw
+```
+
+The reset preserves application users and saved preferences. The confirmation
+flag is mandatory. Cached valid archives are reused, while the current year is
+retrieved again. Equivalent convenience commands are `make start`,
+`make refresh-system`, and `make reset-and-repopulate`.
 
 ## Start the web dashboard
 
@@ -216,47 +266,41 @@ local-use stage; choose a licensed tile service before public production use.
 
 ## Windows setup
 
-Install Docker Desktop for Windows and Python 3.9 or newer. Then open PowerShell in the project folder and run:
+Install Docker Desktop, open PowerShell in the project folder, and run:
 
 ```powershell
-docker compose up -d --wait db
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -e "apps/data-pipeline[dev,ml]"
-.\.venv\Scripts\real-estate-etl.exe refresh-all-data
+docker compose up -d --build --wait
 ```
 
-On a new Docker volume PostgreSQL applies every migration automatically. To
-upgrade an existing Windows database without GNU Make, run:
+No Python, Go, Node, GNU Make, or virtual environment is required. Monitor the
+initial import in another PowerShell window:
 
 ```powershell
-Get-ChildItem database/migrations/0*.sql |
-  Where-Object { [int]$_.BaseName.Substring(0, 3) -ge 7 } |
-  Sort-Object Name |
-  ForEach-Object {
-    docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f "/docker-entrypoint-initdb.d/$($_.Name)"
-  }
-docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -c "SELECT analytics.refresh_sale_facts();"
-docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -c "SELECT analytics.refresh_sale_outliers();"
-docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -c "SELECT analytics.refresh_rental_facts();"
-docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -c "SELECT analytics.refresh_rental_outliers();"
-docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -c "SELECT analytics.refresh_anomaly_signals();"
-docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -c "SELECT analytics.refresh_repeat_sales_indices();"
-.\.venv\Scripts\real-estate-etl.exe refresh-models --workers 6
+docker compose logs -f pipeline-worker
 ```
 
-If PowerShell blocks virtual-environment activation, enable it for only the current PowerShell process:
+Manual refresh and reset commands are identical on all supported systems:
 
 ```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-.\.venv\Scripts\Activate.ps1
+docker compose run --rm pipeline-worker refresh-system --output-dir /data/raw
+docker compose run --rm pipeline-worker reset-and-repopulate --confirm-reset --output-dir /data/raw
 ```
 
-Windows does not provide the macOS `caffeinate` command. Disable automatic sleep in **Settings → System → Power & battery → Screen and sleep** while a full import is running.
+Disable automatic sleep while the first import runs. Do not copy Docker
+volumes between computers; share the repository and let Compose create them.
 
-Do not copy `.venv` or a local PostgreSQL volume between computers. Share the source project; each user should create their own virtual environment and Docker database with the commands above.
+## Optional local pipeline development
 
-## Load downloaded national samples
+The normal runtime does not need a host Python installation. Contributors who
+want IDE debugging and local pytest execution can optionally create `.venv`:
+
+```bash
+make setup
+```
+
+The following low-level commands use that optional development environment.
+
+### Load downloaded national samples
 
 ```bash
 .venv/bin/real-estate-etl sync-reference-data

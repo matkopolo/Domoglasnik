@@ -1,7 +1,6 @@
-PYTHON := .venv/bin/python
 PYTEST := .venv/bin/pytest
-ETL := .venv/bin/real-estate-etl
 PIPELINE_DIR := apps/data-pipeline
+PIPELINE_RUN := docker compose run --rm pipeline-worker
 DATABASE_URL ?= postgresql://real_estate:real_estate@localhost:5432/real_estate
 WORKERS ?= 6
 GO_IMAGE ?= golang:1.26.5-bookworm
@@ -14,12 +13,21 @@ WEB_NODE_MODULES := real_estate_web_node_modules_debian
 NODE_RUN := docker run --rm -v "$(CURDIR):/repo" -v $(WEB_NODE_MODULES):/repo/$(WEB_DIR)/node_modules -w /repo/$(WEB_DIR) $(NODE_IMAGE)
 MIGRATION_FILES := $(notdir $(wildcard database/migrations/0[0][7-9]_*.sql database/migrations/01*.sql database/migrations/02*.sql))
 
-.PHONY: setup db-up db-migrate db-down db-status analytics-refresh models-refresh api-up api-down api-logs api-fmt api-vet api-test api-build web-setup web-up web-down web-logs web-generate-api-types web-contract-drift web-lint web-typecheck web-test web-build lint pipeline-lint test pipeline-test test-unit import-data import-data-verbose
+.PHONY: setup start refresh-system reset-and-repopulate db-up db-migrate db-down db-status analytics-refresh models-refresh api-up api-down api-logs api-fmt api-vet api-test api-build web-setup web-up web-down web-logs web-generate-api-types web-contract-drift web-lint web-typecheck web-test web-build lint pipeline-lint test pipeline-test test-unit import-data import-data-verbose
 
 setup:
 	python3 -m venv .venv
 	.venv/bin/python -m pip install --upgrade pip
 	.venv/bin/pip install -e "$(PIPELINE_DIR)[dev,ml]"
+
+start:
+	docker compose up -d --build --wait
+
+refresh-system: db-up
+	$(PIPELINE_RUN) refresh-system --workers $(WORKERS) --output-dir /data/raw
+
+reset-and-repopulate: db-up
+	$(PIPELINE_RUN) reset-and-repopulate --confirm-reset --workers $(WORKERS) --output-dir /data/raw
 
 db-up:
 	docker compose up -d --wait db
@@ -32,18 +40,10 @@ db-migrate:
 	done
 
 analytics-refresh: db-up
-	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -c "SELECT analytics.refresh_sale_facts();"
-	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -c "SELECT analytics.refresh_land_transaction_facts();"
-	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -c "SELECT analytics.refresh_sale_outliers();"
-	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -c "SELECT analytics.refresh_rental_facts();"
-	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -c "SELECT analytics.refresh_rental_outliers();"
-	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -c "SELECT analytics.refresh_anomaly_signals();"
-	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -c "SELECT analytics.refresh_near_duplicate_candidates();"
-	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -c "SELECT analytics.refresh_missingness_profiles();"
-	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -c "SELECT analytics.refresh_repeat_sales_indices();"
+	$(PIPELINE_RUN) refresh-analytics
 
 models-refresh: db-up
-	$(ETL) refresh-models --workers $(WORKERS)
+	$(PIPELINE_RUN) refresh-models --workers $(WORKERS)
 
 db-down:
 	docker compose down
@@ -115,8 +115,8 @@ pipeline-test:
 test-unit:
 	cd $(PIPELINE_DIR) && ../../$(PYTEST) -q -m "not integration"
 
-import-data:
-	$(ETL) refresh-all-data --workers $(WORKERS)
+import-data: db-up
+	$(PIPELINE_RUN) refresh-all-data --workers $(WORKERS) --output-dir /data/raw
 
-import-data-verbose:
-	$(ETL) refresh-all-data --workers $(WORKERS) --verbose
+import-data-verbose: db-up
+	$(PIPELINE_RUN) refresh-all-data --workers $(WORKERS) --output-dir /data/raw --verbose

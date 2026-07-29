@@ -40,6 +40,10 @@ jobs:
         working-directory: apps/data-pipeline
       - run: pytest -q
         working-directory: apps/data-pipeline
+      - name: Build pipeline worker
+        run: docker build -t real-estate-data-pipeline:test apps/data-pipeline
+      - name: Validate Compose services
+        run: docker compose config --quiet
       - name: Apply database migrations
         run: |
           for migration in database/migrations/*.sql; do

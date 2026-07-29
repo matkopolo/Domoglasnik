@@ -77,11 +77,11 @@ by an automatic forced upgrade.
 
 No P0 finding remains open. Remaining debt is contained and listed above.
 
-## Phase 4 handoff
+## Phase 4 operational follow-up
 
-Containerize the pipeline as a one-shot/scheduled worker; make Docker Compose
-the normal Windows/macOS/Linux entrypoint; add an explicitly destructive
-reset-and-repopulate command; and run incremental source discovery every two
-months followed by transactional analytics/model refresh. Use
-`source_files`, checksums, and refresh state instead of downloading blindly,
-and never publish partially refreshed derived data.
+The follow-up is implemented by the Docker `pipeline-worker`. Compose is the
+normal Windows/macOS/Linux runtime, the worker performs incremental discovery
+and current-year revision checks every 14 days, and a confirmation-protected
+reset-and-repopulate command preserves identities/preferences. Source,
+geography, deterministic analytics, and versioned models run under one
+PostgreSQL advisory lock; API readiness waits for the first successful chain.
