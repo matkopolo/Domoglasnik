@@ -4,7 +4,7 @@ import { Layers3, LocateFixed, Mountain, Search, X } from "lucide-react";
 import maplibregl, { type GeoJSONSource, type LngLatBoundsLike } from "maplibre-gl";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { loadMapFeatures, loadRegionBoundaries, loadTransaction, searchBuildings } from "@/lib/api";
-import { decimal, euro } from "@/lib/display-values";
+import { buildMapPopup, mapAmountLabel } from "@/lib/map-popup";
 import { mapStyle, type MapStyleId } from "@/lib/map-styles";
 import type {
   BoundaryFeatureCollection,
@@ -36,47 +36,6 @@ function initialPoints(clusters: Cluster[]): MapFeatureCollection {
       properties: { ...cluster, featureKind: "cluster" },
     })),
   };
-}
-
-function amountLabel(properties: MapPointFeature["properties"], mode: MarketMode) {
-  const value = mode === "sale"
-    ? properties.medianPricePerSqm ?? properties.pricePerSqm
-    : properties.medianMonthlyRentPerSqm ?? properties.monthlyRentPerSqm;
-  return typeof value === "number" ? `${decimal.format(value)} €/m²` : undefined;
-}
-
-function popupContent(feature: MapPointFeature, mode: MarketMode) {
-  const wrapper = document.createElement("div");
-  wrapper.className = "map-popup compact";
-  const properties = feature.properties;
-  const kind = String(properties.featureKind);
-  const title = document.createElement("strong");
-  title.textContent = kind === "building"
-    ? `Stavba · ${Number(properties.transactionCount ?? 1)} poslov`
-    : kind === "property"
-      ? `${mode === "sale" ? "Prodaja" : "Najem"} #${properties.transactionId ?? ""}`
-      : String(properties.name ?? `${properties.transactionCount ?? 0} poslov`);
-  wrapper.append(title);
-  const amount = amountLabel(properties, mode);
-  if (amount) {
-    const row = document.createElement("span");
-    row.textContent = amount;
-    wrapper.append(row);
-  }
-  if (kind === "property" && typeof properties.area === "number") {
-    const row = document.createElement("span");
-    row.textContent = `${decimal.format(properties.area)} m²`;
-    wrapper.append(row);
-  }
-  if (kind === "property" && mode === "sale" && typeof properties.price === "number") {
-    const row = document.createElement("span");
-    row.textContent = euro.format(properties.price);
-    wrapper.append(row);
-  }
-  const hint = document.createElement("small");
-  hint.textContent = "Podrobnosti so odprte v kontekstnem panelu.";
-  wrapper.append(hint);
-  return wrapper;
 }
 
 function nextSemanticZoom(level: unknown) {
@@ -172,7 +131,7 @@ export function SloveniaMap({
       if (isBuilding) element.textContent = count.toLocaleString("sl-SI");
       if (!isBuilding && !isProperty) {
         element.textContent = String(feature.properties.name ?? "");
-        const metric = amountLabel(feature.properties, modeRef.current);
+        const metric = mapAmountLabel(feature.properties, modeRef.current);
         if (metric) {
           const small = document.createElement("small");
           small.textContent = metric;
@@ -184,7 +143,7 @@ export function SloveniaMap({
         popupRef.current?.remove();
         popupRef.current = new maplibregl.Popup({ offset: 18, closeButton: false })
           .setLngLat(feature.geometry.coordinates as [number, number])
-          .setDOMContent(popupContent(feature, modeRef.current))
+          .setDOMContent(buildMapPopup(feature, modeRef.current))
           .addTo(map);
         if (isBuilding) {
           contextRef.current({
@@ -362,7 +321,7 @@ export function SloveniaMap({
       popupRef.current?.remove();
       popupRef.current = new maplibregl.Popup({ offset: 18, closeButton: false })
         .setLngLat(coordinates)
-        .setDOMContent(popupContent(feature, context.mode))
+        .setDOMContent(buildMapPopup(feature, context.mode))
         .addTo(map);
       map.easeTo({ center: coordinates, zoom: 17, duration: 850 });
     }).catch(() => {

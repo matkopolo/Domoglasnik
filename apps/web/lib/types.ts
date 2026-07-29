@@ -1,14 +1,11 @@
 import type { Feature, FeatureCollection, MultiPolygon, Point, Polygon } from "geojson";
+import type { components } from "@/lib/generated/api-schema";
 
-export type MarketMode = "sale" | "rent";
-export type PropertyGroup = "apartment" | "house" | "land" | "commercial" | "garage" | "room";
-export type GeographyLevel =
-  | "country"
-  | "statistical_region"
-  | "municipality"
-  | "city_district"
-  | "local_community"
-  | "settlement";
+type ApiSchemas = components["schemas"];
+
+export type MarketMode = ApiSchemas["Metadata"]["transactionKinds"][number];
+export type PropertyGroup = Exclude<ApiSchemas["PropertyGroup"], "mixed" | "unknown">;
+export type GeographyLevel = ApiSchemas["GeographyLevel"];
 export interface YearRange { from: number; to: number }
 
 export interface Geography {

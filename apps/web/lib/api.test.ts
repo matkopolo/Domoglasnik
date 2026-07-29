@@ -5,10 +5,13 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe("loadMapFeatures", () => {
   it("requests zoom-aware sale clusters for broad map views", async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
-      type: "FeatureCollection",
-      features: [],
-    }), { status: 200 }));
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      void input;
+      return new Response(JSON.stringify({
+        type: "FeatureCollection",
+        features: [],
+      }), { status: 200 });
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     await loadMapFeatures(
@@ -28,15 +31,18 @@ describe("loadMapFeatures", () => {
   });
 
   it("requests individual rental properties at street level", async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
-      type: "FeatureCollection",
-      features: [{
-        type: "Feature",
-        id: 42,
-        geometry: { type: "Point", coordinates: [14.5, 46.1] },
-        properties: { transactionId: 42 },
-      }],
-    }), { status: 200 }));
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      void input;
+      return new Response(JSON.stringify({
+        type: "FeatureCollection",
+        features: [{
+          type: "Feature",
+          id: 42,
+          geometry: { type: "Point", coordinates: [14.5, 46.1] },
+          properties: { transactionId: 42 },
+        }],
+      }), { status: 200 });
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await loadMapFeatures(

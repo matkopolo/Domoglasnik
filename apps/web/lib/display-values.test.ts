@@ -17,7 +17,7 @@ describe("property display policy", () => {
   });
 
   it("filters missing fields without inventing replacements", () => {
-    expect(visibleFields([
+    expect(visibleFields<string | number>([
       { label: "A", value: null },
       { label: "B", value: "" },
       { label: "C", value: 0 },
