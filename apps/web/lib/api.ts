@@ -11,11 +11,15 @@ import type {
   MapFeatureCollection,
   MarketMode,
   MarketIndex,
+  FullValuationPrediction,
+  AnomalySummary,
   Overview,
   PropertyGroup,
   RentalTransactionDetail,
   SaleTransactionDetail,
+  StatisticalOutlier,
   TimePoint,
+  TransactionExtreme,
   TransactionContextResponse,
   YearRange,
 } from "./types";
@@ -182,13 +186,108 @@ export function loadMarketIndices(
   mode: MarketMode,
   propertyGroup: PropertyGroup,
   signal: AbortSignal,
+  method?: "matched_pair_median" | "hedonic",
 ) {
   const query = new URLSearchParams({
     transactionKind: mode,
-    method: "hedonic",
     propertyGroup,
   });
+  if (method) query.set("method", method);
   return getJSON<{ items: MarketIndex[] }>(`/api/v1/indices?${query}`, signal);
+}
+
+export function loadDetailedTimeSeries(
+  mode: MarketMode,
+  propertyGroup: PropertyGroup,
+  geographyId: number | undefined,
+  years: YearRange,
+  interval: "month" | "quarter" | "year",
+  signal: AbortSignal,
+) {
+  const query = marketQuery(propertyGroup, years, geographyId);
+  query.set("interval", interval);
+  const prefix = mode === "sale" ? "" : "/rentals";
+  return getJSON<{ items: TimePoint[] }>(
+    `/api/v1${prefix}/statistics/timeseries?${query}`,
+    signal,
+  );
+}
+
+export function loadStatisticalOutliers(
+  mode: MarketMode,
+  propertyGroup: PropertyGroup,
+  geographyId: number | undefined,
+  years: YearRange,
+  signal: AbortSignal,
+) {
+  const query = marketQuery(propertyGroup, years, geographyId);
+  query.set("limit", "12");
+  const prefix = mode === "sale" ? "" : "/rentals";
+  return getJSON<{ items: StatisticalOutlier[]; total: number }>(
+    `/api/v1${prefix}/statistics/outliers?${query}`,
+    signal,
+  );
+}
+
+export function loadAnomalySummary(mode: MarketMode, signal: AbortSignal) {
+  return getJSON<AnomalySummary>(
+    `/api/v1/anomalies/summary?transactionKind=${mode}`,
+    signal,
+  );
+}
+
+export function loadTransactionExtremes(
+  mode: MarketMode,
+  propertyGroup: PropertyGroup,
+  geographyId: number | undefined,
+  years: YearRange,
+  signal: AbortSignal,
+) {
+  const query = marketQuery(propertyGroup, years, geographyId);
+  query.set("transactionKind", mode);
+  query.set("limit", "3");
+  return getJSON<{ items: TransactionExtreme[]; population: "representative" }>(
+    `/api/v1/transactions/extremes?${query}`,
+    signal,
+  );
+}
+
+export function loadFullValuation(mode: MarketMode, id: number, signal: AbortSignal) {
+  return getJSON<FullValuationPrediction>(
+    `/api/v1/valuations/${mode}/${id}`,
+    signal,
+  );
+}
+
+export async function loadGeographyRankings(
+  mode: MarketMode,
+  level: Geography["level"],
+  bounds: [number, number, number, number],
+  propertyGroup: PropertyGroup,
+  years: YearRange,
+  signal: AbortSignal,
+  geographyId?: number,
+) {
+  const query = marketQuery(propertyGroup, years, geographyId);
+  query.set("bbox", bounds.join(","));
+  query.set("level", level);
+  const prefix = mode === "sale" ? "/api/v1/map" : "/api/v1/rentals/map";
+  const response = await getJSON<MapFeatureCollection>(
+    `${prefix}/geographies?${query}`,
+    signal,
+  );
+  return response.features.map((feature) => ({
+    id: Number(feature.properties.geographyId ?? feature.properties.id),
+    name: String(feature.properties.name),
+    level: String(feature.properties.level) as Geography["level"],
+    transactionCount: Number(feature.properties.transactionCount ?? 0),
+    representativeCount: Number(feature.properties.representativeCount ?? 0),
+    medianAmountPerSqm: typeof feature.properties.medianPricePerSqm === "number"
+      ? feature.properties.medianPricePerSqm
+      : typeof feature.properties.medianMonthlyRentPerSqm === "number"
+        ? feature.properties.medianMonthlyRentPerSqm
+        : undefined,
+  }));
 }
 
 export function searchBuildings(query: string, signal: AbortSignal) {
@@ -243,9 +342,13 @@ export async function loadGeographyComparisons(
     level: String(feature.properties.level) as Geography["level"],
     transactionCount: Number(feature.properties.transactionCount ?? 0),
     representativeCount: Number(feature.properties.representativeCount ?? 0),
-    medianAmountPerSqm: typeof feature.properties.medianAmountPerSqm === "number"
-      ? feature.properties.medianAmountPerSqm
-      : undefined,
+    medianAmountPerSqm: typeof feature.properties.medianPricePerSqm === "number"
+      ? feature.properties.medianPricePerSqm
+      : typeof feature.properties.medianMonthlyRentPerSqm === "number"
+        ? feature.properties.medianMonthlyRentPerSqm
+        : typeof feature.properties.medianAmountPerSqm === "number"
+          ? feature.properties.medianAmountPerSqm
+          : undefined,
   }));
 }
 

@@ -29,6 +29,16 @@ export interface GeographyComparison {
   medianAmountPerSqm?: number | null;
 }
 
+export interface TransactionExtreme {
+  direction: "lowest" | "highest";
+  transactionId: number;
+  contractDate?: string | null;
+  propertyGroup: PropertyGroup;
+  area?: number | null;
+  amount?: number | null;
+  amountPerSqm: number;
+}
+
 export interface Overview {
   transactionCount: number;
   eligibleCount: number;
@@ -39,6 +49,14 @@ export interface Overview {
   cleanedAveragePrice?: number | null;
   medianMonthlyRent?: number | null;
   medianMonthlyRentPerSqm?: number | null;
+  priceSampleSize?: number;
+  pricePerSqmSampleSize?: number;
+  rawAveragePrice?: number | null;
+  rawAveragePricePerSqm?: number | null;
+  cleanedAveragePricePerSqm?: number | null;
+  medianArea?: number | null;
+  isPublishable?: boolean;
+  suppressionReason?: string | null;
 }
 
 export interface TimePoint {
@@ -50,6 +68,16 @@ export interface TimePoint {
   medianPrice?: number | null;
   medianMonthlyRent?: number | null;
   yearOverYearMedianRentPerSqmPercent?: number | null;
+  incomplete?: boolean;
+  eligibleCount?: number;
+  excludedOutlierCount?: number;
+  rawAveragePrice?: number | null;
+  rawAveragePricePerSqm?: number | null;
+  cleanedAveragePrice?: number | null;
+  cleanedAveragePricePerSqm?: number | null;
+  medianArea?: number | null;
+  isPublishable?: boolean;
+  suppressionReason?: string | null;
 }
 
 export interface Distribution {
@@ -225,6 +253,69 @@ export interface MarketIndex {
   upperIndexValue?: number | null;
   isPublishable: boolean;
   suppressionReason?: string | null;
+  methodologyVersion?: string;
+  modelVersion?: string | null;
+  observedSampleSize?: number;
+  referenceSampleSize?: number | null;
+  nominalCoverage?: number | null;
+  uncertaintyMethod?: string | null;
+}
+
+export interface StatisticalOutlier {
+  transactionId: number;
+  contractDate?: string | null;
+  propertyGroup: PropertyGroup;
+  area?: number | null;
+  price?: number | null;
+  pricePerSqm?: number | null;
+  monthlyRent?: number | null;
+  monthlyRentPerSqm?: number | null;
+  cohortLevel: string;
+  cohortSize: number;
+  cohortMedian: number;
+  lowerBound: number;
+  upperBound: number;
+  modifiedZScore?: number | null;
+  ruleVersion: string;
+}
+
+export interface FullValuationPrediction extends ValuationPrediction {
+  transactionKind: MarketMode;
+  transactionId: number;
+  propertyGroup: PropertyGroup;
+  area: number;
+  actualAmountPerSqm: number;
+  logResidual: number;
+  modelType: string;
+  trainingRows: number;
+  metrics: {
+    r2_log?: number;
+    rmse_log?: number;
+    median_absolute_percentage_error?: number;
+    empirical_interval_coverage?: number;
+    property_groups?: Record<string, {
+      temporal?: {
+        r2_log?: number;
+        rmse_log?: number;
+        median_absolute_percentage_error?: number;
+        empirical_interval_coverage?: number;
+        mae_amount_per_sqm?: number;
+      };
+      spatial?: {
+        r2_log?: number;
+        rmse_log?: number;
+        median_absolute_percentage_error?: number;
+        held_out_municipalities?: number;
+      };
+    }>;
+  };
+}
+
+export interface AnomalySummary {
+  total: number;
+  flagged: number;
+  unreviewed: number;
+  highPriority: number;
 }
 
 export interface TransactionContextResponse {

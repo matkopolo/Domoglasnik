@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { APIError, loadDashboard, loadMapFeatures } from "./api";
+import { APIError, loadDashboard, loadGeographyComparisons, loadMapFeatures } from "./api";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -98,5 +98,45 @@ describe("loadDashboard", () => {
       { from: 2024, to: 2025 },
       new AbortController().signal,
     )).rejects.toBeInstanceOf(APIError);
+  });
+});
+
+describe("loadGeographyComparisons", () => {
+  it.each([
+    ["sale", "medianPricePerSqm", 1430],
+    ["rent", "medianMonthlyRentPerSqm", 12.6],
+  ] as const)("maps the %s mode-specific median", async (mode, field, median) => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      type: "FeatureCollection",
+      features: [{
+        type: "Feature",
+        id: 137,
+        geometry: { type: "Point", coordinates: [15.63, 46.56] },
+        properties: {
+          geographyId: 137,
+          level: "municipality",
+          name: "Maribor",
+          transactionCount: 10,
+          representativeCount: 8,
+          [field]: median,
+        },
+      }],
+    }), { status: 200 })));
+
+    const result = await loadGeographyComparisons(
+      mode,
+      {
+        id: 2,
+        level: "statistical_region",
+        name: "Podravska",
+        bounds: [15.3, 46.2, 16.3, 46.8],
+      },
+      [{ id: 137, level: "municipality", name: "Maribor" }],
+      "apartment",
+      { from: 2018, to: 2025 },
+      new AbortController().signal,
+    );
+
+    expect(result[0].medianAmountPerSqm).toBe(median);
   });
 });

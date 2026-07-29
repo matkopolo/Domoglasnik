@@ -50,6 +50,9 @@ vi.mock("@/lib/api", () => ({
   loadGeography: vi.fn(),
   loadGeographyChildren: vi.fn(),
   loadMarketIndices: vi.fn(async () => ({ items: [] })),
+  loadFullValuation: vi.fn(async () => {
+    throw new Error("no model");
+  }),
 }));
 
 describe("ContextPanel", () => {

@@ -1,0 +1,108 @@
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+import { AnalyticsWorkspace } from "./analytics-workspace";
+
+vi.mock("@/lib/api", () => ({
+  loadDetailedTimeSeries: vi.fn(async () => ({ items: [{
+    period: "2025-01-01",
+    transactionCount: 100,
+    includedSampleSize: 80,
+    excludedOutlierCount: 5,
+    medianPricePerSqm: 2500,
+  }] })),
+  loadMarketIndices: vi.fn(async () => ({ items: [{
+    transactionKind: "sale",
+    method: "hedonic",
+    propertyGroup: "apartment",
+    period: "2025-01-01",
+    indexValue: 121,
+    sampleSize: 80,
+    basePeriod: "2018-01-01",
+    isPublishable: true,
+  }, {
+    transactionKind: "sale",
+    method: "matched_pair_median",
+    propertyGroup: "apartment",
+    period: "2025-01-01",
+    indexValue: 118,
+    sampleSize: 41,
+    basePeriod: "2018-01-01",
+    isPublishable: true,
+  }] })),
+  loadStatisticalOutliers: vi.fn(async () => ({ items: [{
+    transactionId: 99,
+    propertyGroup: "apartment",
+    pricePerSqm: 9000,
+    cohortLevel: "municipality_year",
+    cohortSize: 40,
+    cohortMedian: 2000,
+    lowerBound: 1000,
+    upperBound: 4000,
+    modifiedZScore: 7.2,
+    ruleVersion: "test",
+  }], total: 1 })),
+  loadAnomalySummary: vi.fn(async () => ({
+    total: 100, flagged: 20, unreviewed: 15, highPriority: 4,
+  })),
+  loadTransactionExtremes: vi.fn(async () => ({ population: "representative", items: [{
+    direction: "highest",
+    transactionId: 501,
+    propertyGroup: "apartment",
+    amount: 400000,
+    area: 80,
+    amountPerSqm: 5000,
+  }, {
+    direction: "lowest",
+    transactionId: 502,
+    propertyGroup: "apartment",
+    amount: 80000,
+    area: 80,
+    amountPerSqm: 1000,
+  }] })),
+  loadGeographyRankings: vi.fn(async () => [{
+    id: 2,
+    name: "Podravska",
+    level: "statistical_region",
+    transactionCount: 100,
+    representativeCount: 80,
+    medianAmountPerSqm: 2200,
+  }]),
+  loadGeography: vi.fn(),
+  loadGeographyChildren: vi.fn(),
+}));
+
+describe("AnalyticsWorkspace", () => {
+  it("exposes indices, geography rankings, and outlier diagnostics", async () => {
+    render(<AnalyticsWorkspace
+      mode="sale"
+      propertyGroup="apartment"
+      years={{ from: 2018, to: 2025 }}
+      context={{ kind: "country" }}
+      overview={{
+        transactionCount: 100,
+        eligibleCount: 90,
+        includedSampleSize: 80,
+        excludedOutlierCount: 10,
+        medianPrice: 180000,
+        medianArea: 65,
+        isPublishable: true,
+      }}
+      onContextChange={vi.fn()}
+    />);
+    expect(await screen.findByText("180.000 €")).toBeInTheDocument();
+    expect(screen.getByText("Vsi evidentirani posli")).toBeInTheDocument();
+    expect(screen.getByText("#501")).toBeInTheDocument();
+    expect(screen.getByText("#502")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Indeksi in modeli/ }));
+    expect((await screen.findAllByText("121")).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("118").length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole("button", { name: /Primerjava območij/ }));
+    expect(screen.getByText("Podravska")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Odstopanja/ }));
+    expect(screen.getByText("#99")).toBeInTheDocument();
+    expect(screen.getByText("7,2")).toBeInTheDocument();
+  });
+});

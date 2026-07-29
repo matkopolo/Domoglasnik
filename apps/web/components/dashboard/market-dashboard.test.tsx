@@ -7,6 +7,11 @@ vi.mock("@/lib/api", async () => {
   return {
     loadDashboard: loadDashboardMock,
     loadMarketIndices: vi.fn(async () => ({ items: [] })),
+    loadDetailedTimeSeries: vi.fn(async () => ({ items: [] })),
+    loadStatisticalOutliers: vi.fn(async () => ({ items: [], total: 0 })),
+    loadAnomalySummary: vi.fn(async () => ({ total: 0, flagged: 0, unreviewed: 0, highPriority: 0 })),
+    loadTransactionExtremes: vi.fn(async () => ({ items: [], population: "representative" })),
+    loadGeographyRankings: vi.fn(async () => []),
   };
 });
 

@@ -13,6 +13,7 @@ import type {
 } from "@/lib/types";
 import { Brand } from "@/components/ui/brand";
 import { ContextPanel } from "./context-panel";
+import { AnalyticsWorkspace } from "./analytics-workspace";
 import { DistributionChart } from "./distribution-chart";
 import { FilterBar } from "./filter-bar";
 import { SloveniaMap } from "./slovenia-map";
@@ -225,6 +226,14 @@ export function MarketDashboard() {
           <TrendChart mode={mode} points={data.timeSeries} years={years} />
           <DistributionChart mode={mode} data={data.distribution} />
         </div>
+        <AnalyticsWorkspace
+          mode={mode}
+          propertyGroup={propertyGroup}
+          years={years}
+          context={context}
+          overview={data.overview}
+          onContextChange={handleContext}
+        />
         <footer>
           <span>
             Vir: GURS ETN in RPE · Mediane in primerjave uporabljajo reprezentativni vzorec;

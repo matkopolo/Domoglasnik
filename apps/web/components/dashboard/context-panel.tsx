@@ -7,6 +7,7 @@ import {
   loadGeography,
   loadGeographyChildren,
   loadGeographyComparisons,
+  loadFullValuation,
   loadMarketIndices,
   loadTransaction,
   loadTransactionContext,
@@ -23,6 +24,7 @@ import type {
   BuildingStatistics,
   Geography,
   GeographyComparison,
+  FullValuationPrediction,
   MarketContext,
   MarketIndex,
   MarketMode,
@@ -46,6 +48,7 @@ type LoadedContext =
       kind: "transaction";
       detail: SaleTransactionDetail | RentalTransactionDetail;
       context: TransactionContextResponse;
+      model?: FullValuationPrediction;
     };
 
 interface ContextPanelProps {
@@ -90,7 +93,7 @@ function TransactionView({
   loaded: Extract<LoadedContext, { kind: "transaction" }>;
   onChange: (context: MarketContext) => void;
 }) {
-  const { detail, context } = loaded;
+  const { detail, context, model } = loaded;
   const sale = context.transactionKind === "sale"
     ? detail as SaleTransactionDetail
     : undefined;
@@ -231,6 +234,28 @@ function TransactionView({
           <small>Statistična ocena ni uradna cenitev.</small>
         </section>
       )}
+      {model && (
+        <section className="context-section model-diagnostics">
+          <h3>Diagnostika modela</h3>
+          <FieldList fields={[
+            { label: "Model", value: model.modelType },
+            { label: "Različica", value: model.modelVersion },
+            { label: "Učni vzorec", value: model.trainingRows.toLocaleString("sl-SI") },
+            { label: "Log ostanek", value: decimal.format(model.logResidual) },
+            { label: "Napaka MAPE", value: model.metrics.property_groups?.[model.propertyGroup]?.temporal
+              ?.median_absolute_percentage_error == null ? null
+              : `${decimal.format(100 * model.metrics.property_groups[model.propertyGroup]!.temporal!.median_absolute_percentage_error!)} %` },
+            { label: "Pokritost intervala", value: model.metrics.property_groups?.[model.propertyGroup]?.temporal
+              ?.empirical_interval_coverage == null ? null
+              : `${decimal.format(100 * model.metrics.property_groups[model.propertyGroup]!.temporal!.empirical_interval_coverage!)} %` },
+            { label: "Časovni R²", value: model.metrics.property_groups?.[model.propertyGroup]?.temporal?.r2_log == null
+              ? null : decimal.format(model.metrics.property_groups[model.propertyGroup]!.temporal!.r2_log!) },
+            { label: "Prostorski R²", value: model.metrics.property_groups?.[model.propertyGroup]?.spatial?.r2_log == null
+              ? null : decimal.format(model.metrics.property_groups[model.propertyGroup]!.spatial!.r2_log!) },
+          ]} />
+          <p>Ostanek kaže odmik posla od modela. Diagnostika opisuje napako modela, ne gotovosti posamezne cenitve.</p>
+        </section>
+      )}
     </>
   );
 }
@@ -289,10 +314,13 @@ export function ContextPanel({
         : Promise.all([
             loadTransaction(context.mode, context.id, controller.signal),
             loadTransactionContext(context.mode, context.id, controller.signal),
-          ]).then(([detail, transactionContext]) => ({
+            loadFullValuation(context.mode, context.id, controller.signal)
+              .catch(() => undefined),
+          ]).then(([detail, transactionContext, model]) => ({
             kind: "transaction" as const,
             detail,
             context: transactionContext,
+            model,
           }));
     request.then((result) => {
       if (generation.current !== currentGeneration) return;
@@ -418,6 +446,30 @@ export function ContextPanel({
       )}
       {current?.kind === "building" && (
         <>
+          {(() => {
+            const summary = mode === "sale" ? current.building.sales : current.building.rentals;
+            const history = mode === "sale" ? current.building.saleHistory : current.building.rentalHistory;
+            const max = Math.max(...history.map((point) => point.medianAmountPerSqm ?? 0), 1);
+            return <>
+              <div className="building-market-kpis">
+                <div><span>Vsi posli</span><strong>{summary.transactionCount.toLocaleString("sl-SI")}</strong></div>
+                <div><span>Reprezentativni</span><strong>{summary.representativeCount.toLocaleString("sl-SI")}</strong></div>
+                <div><span>Mediana / m²</span><strong>{summary.medianAmountPerSqm == null
+                  ? "—" : `${decimal.format(summary.medianAmountPerSqm)} €`}</strong></div>
+              </div>
+              {history.length > 0 && <section className="context-section">
+                <h3>Zgodovina stavbe</h3>
+                <div className="building-history">
+                  {history.map((point) => <div key={point.year}>
+                    <span>{point.year}</span>
+                    <i style={{ height: `${Math.max(8, 100 * (point.medianAmountPerSqm ?? 0) / max)}%` }} />
+                    <strong>{point.medianAmountPerSqm == null ? "—" : decimal.format(point.medianAmountPerSqm)}</strong>
+                    <small>n={point.representativeCount}</small>
+                  </div>)}
+                </div>
+              </section>}
+            </>;
+          })()}
           <FieldList fields={[
             { label: "Katastrska občina", value: current.building.cadastralMunicipalityCode },
             { label: "Številka stavbe", value: current.building.buildingNumber },
