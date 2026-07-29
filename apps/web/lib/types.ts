@@ -1,14 +1,32 @@
+import type { Feature, FeatureCollection, MultiPolygon, Point, Polygon } from "geojson";
+
 export type MarketMode = "sale" | "rent";
 export type PropertyGroup = "apartment" | "house" | "land" | "commercial" | "garage" | "room";
+export type GeographyLevel =
+  | "country"
+  | "statistical_region"
+  | "municipality"
+  | "city_district"
+  | "local_community"
+  | "settlement";
 export interface YearRange { from: number; to: number }
 
 export interface Geography {
   id: number;
-  level: string;
+  level: GeographyLevel;
   code?: number;
   name: string;
   parentId?: number;
   bounds?: [number, number, number, number];
+}
+
+export interface GeographyComparison {
+  id: number;
+  name: string;
+  level: GeographyLevel;
+  transactionCount: number;
+  representativeCount: number;
+  medianAmountPerSqm?: number | null;
 }
 
 export interface Overview {
@@ -16,30 +34,32 @@ export interface Overview {
   eligibleCount: number;
   includedSampleSize: number;
   excludedOutlierCount: number;
-  medianPrice?: number;
-  medianPricePerSqm?: number;
-  cleanedAveragePrice?: number;
-  medianMonthlyRent?: number;
-  medianMonthlyRentPerSqm?: number;
+  medianPrice?: number | null;
+  medianPricePerSqm?: number | null;
+  cleanedAveragePrice?: number | null;
+  medianMonthlyRent?: number | null;
+  medianMonthlyRentPerSqm?: number | null;
 }
 
 export interface TimePoint {
   period: string;
   transactionCount: number;
   includedSampleSize: number;
-  medianPricePerSqm?: number;
-  medianMonthlyRentPerSqm?: number;
-  medianPrice?: number;
-  medianMonthlyRent?: number;
+  medianPricePerSqm?: number | null;
+  medianMonthlyRentPerSqm?: number | null;
+  medianPrice?: number | null;
+  medianMonthlyRent?: number | null;
   yearOverYearMedianRentPerSqmPercent?: number | null;
 }
 
 export interface Distribution {
   metric: string;
   sampleSize: number;
-  percentiles: Record<"p05" | "p10" | "p25" | "p50" | "p75" | "p90" | "p95", number>;
-  histogramLowerBound: number;
-  histogramUpperBound: number;
+  isPublishable: boolean;
+  suppressionReason?: string | null;
+  percentiles?: Record<"p05" | "p10" | "p25" | "p50" | "p75" | "p90" | "p95", number> | null;
+  histogramLowerBound?: number;
+  histogramUpperBound?: number;
   belowBoundCount: number;
   aboveBoundCount: number;
   buckets: Array<{ index: number; from: number; to: number; count: number }>;
@@ -49,36 +69,162 @@ export interface Cluster {
   longitude: number;
   latitude: number;
   transactionCount: number;
-  medianAmountPerSqm?: number;
-  medianPricePerSqm?: number;
-  medianMonthlyRentPerSqm?: number;
+  medianAmountPerSqm?: number | null;
+  medianPricePerSqm?: number | null;
+  medianMonthlyRentPerSqm?: number | null;
   representativeCount?: number;
+}
+
+export interface QualityDecision {
+  isQualityEligible: boolean;
+  isRepresentative: boolean;
+  reasons: string[];
+}
+
+export interface OutlierEvidence {
+  status: string;
+  method?: string | null;
+  cohortLevel?: string | null;
+  cohortSize?: number | null;
+  cohortMedian?: number | null;
+  lowerBound?: number | null;
+  upperBound?: number | null;
+  modifiedZScore?: number | null;
+  ruleVersion: string;
+}
+
+export interface TransactionGeography {
+  id: number;
+  level: GeographyLevel;
+  name: string;
+}
+
+export interface SaleBuildingPart {
+  id: number;
+  cadastralMunicipalityCode?: number | null;
+  buildingNumber?: string | null;
+  buildingPartNumber?: string | null;
+  buildingPartType?: number | null;
+  buildingPartTypeDescription?: string | null;
+  constructionYear?: number | null;
+  floor?: string | null;
+  positionInBuilding?: string | null;
+  roomCount?: number | null;
+  soldArea?: number | null;
+  soldUsableArea?: number | null;
+  buildingPartArea?: number | null;
+  usableArea?: number | null;
+  outdoorParkingSpaces?: number | null;
+  contractualPrice?: number | null;
+  settlement?: string | null;
+  street?: string | null;
+  houseNumber?: string | null;
+}
+
+export interface SaleLandParcel {
+  id: number;
+  cadastralMunicipalityCode?: number | null;
+  parcelNumber?: string | null;
+  landType?: number | null;
+  landTypeDescription?: string | null;
+  parcelArea?: number | null;
+  contractualPrice?: number | null;
 }
 
 export interface SaleTransactionDetail {
   transactionId: number;
-  contractDate?: string;
-  propertyGroup: string;
-  area?: number;
-  price?: number;
-  pricePerSqm?: number;
-  buildingParts: Array<{
-    buildingPartType?: number;
-    constructionYear?: number;
-    floor?: string;
-    positionInBuilding?: string;
-    unitNumber?: string;
-    roomCount?: number;
-    soldArea?: number;
-    soldUsableArea?: number;
-    buildingPartArea?: number;
-    usableArea?: number;
-    outdoorParkingSpaces?: number;
-    settlement?: string;
-    street?: string;
-    houseNumber?: string;
-  }>;
-  landParcels: Array<{ parcelArea?: number }>;
+  contractDate?: string | null;
+  datasetYear: number;
+  propertyGroup: PropertyGroup;
+  area?: number | null;
+  price?: number | null;
+  pricePerSqm?: number | null;
+  priceDerivation: string;
+  quality: QualityDecision;
+  outlier?: OutlierEvidence | null;
+  geographies: TransactionGeography[];
+  buildingParts: SaleBuildingPart[];
+  landParcels: SaleLandParcel[];
+}
+
+export interface RentalSpace {
+  id: number;
+  cadastralMunicipalityCode?: number | null;
+  buildingNumber?: string | null;
+  buildingPartNumber?: string | null;
+  rentedSpaceType?: number | null;
+  rentedSpaceTypeDescription?: string | null;
+  furnishing?: number | null;
+  area?: number | null;
+  usableArea?: number | null;
+  contractualRent?: number | null;
+  constructionYear?: number | null;
+  settlement?: string | null;
+  street?: string | null;
+  houseNumber?: string | null;
+}
+
+export interface RentalTransactionDetail {
+  transactionId: number;
+  contractDate?: string | null;
+  rentalStartDate?: string | null;
+  rentalEndDate?: string | null;
+  datasetYear: number;
+  propertyGroup: PropertyGroup;
+  area?: number | null;
+  monthlyRentReported?: number | null;
+  monthlyRentExVat?: number | null;
+  monthlyRentPerSqm?: number | null;
+  rentDerivation: string;
+  rentalTerm: string;
+  durationMonths?: number | null;
+  operatingCostsIncluded?: boolean | null;
+  isMarketRent: boolean;
+  quality: QualityDecision;
+  outlier?: OutlierEvidence | null;
+  geographies: TransactionGeography[];
+  spaces: RentalSpace[];
+}
+
+export interface ContextBenchmark {
+  scope: string;
+  label: string;
+  geographyId?: number;
+  medianAmountPerSqm: number;
+  sampleSize: number;
+  differencePercent: number;
+  percentile: number;
+  period: number;
+  radiusMeters?: number;
+  reliability: "very_low" | "low" | "moderate";
+  isPublishable: boolean;
+}
+
+export interface ValuationPrediction {
+  actualAmountPerSqm: number;
+  predictedAmountPerSqm: number;
+  lowerAmountPerSqm: number;
+  upperAmountPerSqm: number;
+  predictedTotal: number;
+  lowerTotal: number;
+  upperTotal: number;
+  modelVersion: string;
+  reliability: "very_low" | "low" | "moderate";
+  warnings: string[];
+}
+
+export interface TransactionContextResponse {
+  transactionKind: MarketMode;
+  transactionId: number;
+  contractYear: number;
+  incompletePeriod: boolean;
+  propertyGroup: PropertyGroup;
+  actualAmountPerSqm: number;
+  benchmarks: ContextBenchmark[];
+  valuation?: ValuationPrediction | null;
+  quality: QualityDecision;
+  outlierStatus?: string | null;
+  methodologyVersion: string;
 }
 
 export interface BuildingSearchResult {
@@ -93,23 +239,51 @@ export interface BuildingSearchResult {
   saleCount: number;
 }
 
+export interface BuildingTransaction {
+  transactionId: number;
+  contractDate?: string | null;
+  propertyGroup: PropertyGroup;
+  area?: number | null;
+  amount?: number | null;
+  amountPerSqm?: number | null;
+}
+
 export interface BuildingStatistics {
   cadastralMunicipalityCode: number;
   buildingNumber: string;
-  constructionYear?: number;
+  constructionYear?: number | null;
   knownBuildingPartCount: number;
-  longitude?: number;
-  latitude?: number;
-  sales: { transactionCount: number; medianAmount?: number; medianAmountPerSqm?: number };
-  saleTransactions: Array<{
-    transactionId: number;
-    contractDate?: string;
-    propertyGroup: string;
-    area?: number;
-    amount?: number;
-    amountPerSqm?: number;
-  }>;
+  longitude?: number | null;
+  latitude?: number | null;
+  sales: BuildingMarketSummary;
+  rentals: BuildingMarketSummary;
+  saleHistory: BuildingYearPoint[];
+  rentalHistory: BuildingYearPoint[];
+  saleTransactions: BuildingTransaction[];
+  rentalTransactions: BuildingTransaction[];
 }
+
+export interface BuildingMarketSummary {
+  transactionCount: number;
+  representativeCount: number;
+  medianAmount?: number | null;
+  medianAmountPerSqm?: number | null;
+  firstContractDate?: string | null;
+  lastContractDate?: string | null;
+}
+
+export interface BuildingYearPoint {
+  year: number;
+  transactionCount: number;
+  representativeCount: number;
+  medianAmountPerSqm?: number | null;
+}
+
+export type MarketContext =
+  | { kind: "country" }
+  | { kind: "geography"; id: number; level: GeographyLevel; name: string }
+  | { kind: "building"; cadastralCode: number; buildingNumber: string; label?: string }
+  | { kind: "transaction"; mode: MarketMode; id: number };
 
 export type MapFeatureProperties = Record<string, string | number | boolean | null | number[]>;
 export type MapPointFeature = Feature<Point, MapFeatureProperties>;
@@ -124,6 +298,5 @@ export interface DashboardData {
   distribution: Distribution;
   clusters: Cluster[];
   geographies: Geography[];
-  source: "live" | "demo";
+  source: "live";
 }
-import type { Feature, FeatureCollection, MultiPolygon, Point, Polygon } from "geojson";

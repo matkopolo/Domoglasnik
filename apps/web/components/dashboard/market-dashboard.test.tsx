@@ -1,10 +1,10 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MarketDashboard } from "./market-dashboard";
 
+const { loadDashboardMock } = vi.hoisted(() => ({ loadDashboardMock: vi.fn() }));
 vi.mock("@/lib/api", async () => {
-  const { demoDashboard } = await import("@/lib/demo-data");
-  return { loadDashboard: vi.fn(async (mode: "sale" | "rent") => demoDashboard(mode)) };
+  return { loadDashboard: loadDashboardMock };
 });
 
 vi.mock("./slovenia-map", () => ({
@@ -14,9 +14,16 @@ vi.mock("./slovenia-map", () => ({
 afterEach(cleanup);
 
 describe("MarketDashboard", () => {
+  beforeEach(async () => {
+    const { demoDashboard } = await import("@/lib/demo-data");
+    loadDashboardMock.mockReset();
+    loadDashboardMock.mockImplementation(async (mode: "sale" | "rent") => demoDashboard(mode));
+    window.history.replaceState(null, "", "/");
+  });
+
   it("renders the map-first market overview", async () => {
     render(<MarketDashboard />);
-    expect(screen.getByRole("heading", { name: "Pregled trga" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Analiza nepremičninskega trga" })).toBeInTheDocument();
     expect(screen.getByRole("application", { name: "Interaktivni zemljevid nepremičninskih poslov v Sloveniji" })).toBeInTheDocument();
     const metric = await screen.findByText("Srednja cena / m²");
     expect(metric.nextElementSibling).toHaveTextContent("2596");
@@ -37,5 +44,20 @@ describe("MarketDashboard", () => {
     fireEvent.change(to, { target: { value: "2024" } });
     expect(from).toHaveValue("2020");
     expect(to).toHaveValue("2024");
+    expect(window.location.search).toContain("from=2020");
+    expect(window.location.search).toContain("to=2024");
+  });
+
+  it("ignores a stale response after filters change", async () => {
+    const { demoDashboard } = await import("@/lib/demo-data");
+    let resolveFirst!: (value: ReturnType<typeof demoDashboard>) => void;
+    loadDashboardMock
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve; }))
+      .mockResolvedValueOnce(demoDashboard("rent"));
+    render(<MarketDashboard />);
+    fireEvent.click(screen.getByRole("button", { name: "Najem" }));
+    await screen.findByText("Srednja najemnina / m²");
+    await act(async () => resolveFirst(demoDashboard("sale")));
+    expect(screen.getByText("Srednja najemnina / m²")).toBeInTheDocument();
   });
 });

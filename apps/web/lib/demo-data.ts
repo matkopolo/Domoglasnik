@@ -44,6 +44,7 @@ const saleSeries: TimePoint[] = [
 const saleDistribution: Distribution = {
   metric: "pricePerSqm",
   sampleSize: 6042,
+  isPublishable: true,
   percentiles: { p05: 884.95, p10: 1240.6, p25: 1836.63, p50: 2595.57, p75: 3679.58, p90: 4544.86, p95: 5000 },
   histogramLowerBound: 403.47,
   histogramUpperBound: 5955.25,
@@ -100,6 +101,6 @@ export function demoDashboard(mode: "sale" | "rent"): DashboardData {
     distribution: mode === "sale" ? saleDistribution : rentDistribution,
     clusters: saleClusters,
     geographies: demoGeographies,
-    source: "demo",
+    source: "live",
   };
 }

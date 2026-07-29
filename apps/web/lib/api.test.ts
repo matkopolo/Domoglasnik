@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { loadMapFeatures } from "./api";
+import { APIError, loadDashboard, loadMapFeatures } from "./api";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -85,5 +85,18 @@ describe("loadMapFeatures", () => {
     expect(result.features).toHaveLength(1);
     expect(result.features[0].properties.featureKind).toBe("building");
     expect(result.features[0].properties.transactionCount).toBe(2);
+  });
+});
+
+describe("loadDashboard", () => {
+  it("surfaces an API failure instead of returning demo data", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("unavailable", { status: 503 })));
+    await expect(loadDashboard(
+      "sale",
+      "apartment",
+      undefined,
+      { from: 2024, to: 2025 },
+      new AbortController().signal,
+    )).rejects.toBeInstanceOf(APIError);
   });
 });
