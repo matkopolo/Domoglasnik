@@ -98,7 +98,9 @@ function MarketDepth({
         {(["highest", "lowest"] as const).map((direction) => (
           <section key={direction}>
             <header>
-              <span>{direction === "highest" ? "Najvišje prodaje" : "Najnižje prodaje"}</span>
+              <span>{mode === "sale"
+                ? direction === "highest" ? "Najvišje prodaje" : "Najnižje prodaje"
+                : direction === "highest" ? "Najvišje najemnine" : "Najnižje najemnine"}</span>
               <small>reprezentativna skupna cena</small>
             </header>
             {extremes.filter((item) => item.direction === direction).map((item) => (
