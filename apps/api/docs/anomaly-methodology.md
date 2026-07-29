@@ -13,7 +13,9 @@ queryable.
 2. **Duplicate candidates:** exact source identity is handled by import keys.
    Analytical candidates use transaction date, component identifiers, area,
    amount, and location. They are labelled exact, near, or possible; legitimate
-   multi-component packages must not be collapsed.
+   multi-component packages must not be collapsed. Near candidates compare
+   different transaction facts for the same cadastral building part within 30
+   days, 2% relative area, and 2% relative amount.
 3. **Robust comparable cohorts:** IQR and modified z-scores based on MAD within
    building when possible, otherwise municipality/property type/area band/year,
    with statistical-region fallback and explicit minimum samples.
@@ -42,7 +44,7 @@ and publishes both component scores and the total:
 review_score =
     0.35 * hard_rule_score +
     0.20 * robust_cohort_score +
-    0.20 * cross_fitted_residual_score +
+    0.20 * held_out_residual_score +
     0.10 * isolation_forest_score +
     0.10 * duplicate_score +
     0.05 * spatial_score
@@ -63,10 +65,13 @@ At minimum: `invalid_area`, `invalid_amount`, `invalid_date`,
 
 ## Model evaluation
 
-- Use time-based train/validation/test splits to prevent future leakage.
-- Cross-fit residuals so a transaction is not scored by a model trained on it.
-- Report MAE, median absolute error, RMSLE, interval coverage, and error by
-  geography/property type/price band.
+- Use the latest complete calendar year as test, the preceding year for
+  split-conformal calibration, and earlier data for training.
+- Score model residual anomalies only on held-out rows; rows without an honest
+  held-out prediction do not receive a residual anomaly score.
+- Report MAE, median absolute percentage error, log RMSE, log R², interval
+  coverage, a train-only local-median baseline, and property-group metrics.
+- Report a separate deterministic municipality-blocked holdout.
 - Check spatial autocorrelation of residuals; remaining structure means the
   model or uncertainty interval is incomplete.
 - Prefer interpretable hedonic/GAM baselines before more complex models.

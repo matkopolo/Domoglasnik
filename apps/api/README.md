@@ -139,10 +139,13 @@ database-backed facts with:
 ```bash
 docker compose exec -T db psql -U real_estate -d real_estate \
   -c "SELECT analytics.refresh_sale_facts();" \
+  -c "SELECT analytics.refresh_land_transaction_facts();" \
   -c "SELECT analytics.refresh_sale_outliers();" \
   -c "SELECT analytics.refresh_rental_facts();" \
   -c "SELECT analytics.refresh_rental_outliers();" \
   -c "SELECT analytics.refresh_anomaly_signals();" \
+  -c "SELECT analytics.refresh_near_duplicate_candidates();" \
+  -c "SELECT analytics.refresh_missingness_profiles();" \
   -c "SELECT analytics.refresh_repeat_sales_indices();"
 ```
 
@@ -156,13 +159,20 @@ make analytics-refresh
 make models-refresh WORKERS=6
 ```
 
-The first command refreshes sale/rental facts and robust outliers,
-deterministic anomaly signals, and repeat-sales indices. The second cross-fits
-property-group hedonic models, trains deterministic Isolation Forest models,
-and refreshes transaction predictions, model signals, and hedonic indices.
+The first command refreshes sale/rental facts, strict land readiness, robust
+outliers, missingness, duplicate candidates, and the accurately named
+matched-pair median index. The second evaluates property-group hedonic models
+on the latest complete year and municipality holdouts, calibrates intervals
+on the preceding year, trains deterministic Isolation Forest models, and
+appends a hedonic-index vintage.
 Rental amounts are treated as monthly, and only homogeneous market-rent
 packages passing explicit quality and robust comparable-cohort rules are
 representative. Raw source observations are never removed.
+
+Sale endpoints accept `landScope=strict|broad|all`. The default `strict`
+population includes land-only contracts containing exclusively ETN land codes
+1 and 2. `broad` permits only codes 1–3; `all` is explicit audit access. The
+scope has no effect for other property groups.
 
 ## Design principles
 

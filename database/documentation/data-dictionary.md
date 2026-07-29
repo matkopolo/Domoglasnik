@@ -414,13 +414,43 @@ reviewer, and time are preserved when signals are refreshed.
 ### Model and index tables
 
 - `analytics.model_runs`: immutable model version, feature schema, random seed,
-  training window/sample, and out-of-fold metrics.
+  training window/sample, latest-complete-year temporal metrics,
+  municipality-blocked diagnostics, and honest split-conformal coverage.
 - `analytics.valuation_predictions`: observed and predicted amount per m²,
-  empirical lower/upper range, and residual for every model-eligible fact.
+  calibrated lower/upper range, and residual for every model-eligible fact.
 - `analytics.repeat_sale_pairs`: consecutive representative sales of the same
   cadastral building part, at least 180 days apart.
-- `analytics.market_indices`: national repeat-sales and constant-quality
-  hedonic series with method version, sample, base period, and model run.
+- `analytics.index_calculation_runs`: append-only index calculation vintage,
+  data range, methodology version, and parameters.
+- `analytics.market_indices`: append-only matched-pair median and
+  constant-quality hedonic series with observed/reference samples, uncertainty,
+  publication state, base period, model run, and calculation vintage.
+- `analytics.current_market_indices`: latest vintage for each series/period.
+
+The `matched_pair_median` method compounds median annualized log returns from
+matched building-part pairs. It is not labelled as a weighted repeat-sales
+regression.
+
+### Land, coverage, and duplicate methodology
+
+- `analytics.land_transaction_facts`: one row per land-only contract, retaining
+  every land sale and recording parcel count, distinct ETN codes, readiness,
+  strict/broad eligibility, area, price, and price/m².
+- `analytics.sale_facts_strict_land`: default facts; non-land is unchanged and
+  land contains exclusively ETN codes 1 and/or 2.
+- `analytics.sale_facts_broad_land`: opt-in land codes 1–3.
+- `analytics.sale_facts_all_land`: explicit unrestricted audit population.
+- `analytics.missingness_profiles`: field coverage by transaction kind,
+  property group, contract year, and national/municipality geography. Targets
+  are never imputed.
+- `analytics.publication_policy`: minimum samples and policy version.
+- `analytics.near_duplicate_candidates`: explainable cross-transaction
+  same-building-part candidates within date, area, and amount tolerances.
+
+Contract count and parcel count are deliberately separate. A contract mixing
+code 1 or 2 with code 3 or any other class is not strict. Land attached to a
+house or apartment remains part of that package and is not reclassified as a
+land-only sale.
 
 ### Identity and preferences
 

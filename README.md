@@ -133,10 +133,17 @@ make analytics-refresh
 make models-refresh WORKERS=6
 ```
 
-`analytics-refresh` rebuilds deterministic facts, robust outliers, anomaly
-signals, and repeat-sales indices. `models-refresh` separately cross-fits the
-heavier hedonic and Isolation Forest models and refreshes predictions,
-model-based anomaly scores, and hedonic indices.
+`analytics-refresh` rebuilds deterministic facts, strict land readiness,
+robust outliers, missingness profiles, exact/near-duplicate signals, and the
+matched-pair median index. `models-refresh` separately evaluates hedonic models
+on the latest complete year and municipality holdouts, calibrates prediction
+ranges on the preceding year, trains Isolation Forest models, and appends a
+new hedonic-index vintage.
+
+For `propertyGroup=land`, API statistics and maps default to contracts whose
+parcels are exclusively verified-buildable ETN codes 1 and 2. `landScope=broad`
+opts into codes 1–3 and `landScope=all` explicitly requests every retained land
+class. Raw and analytical land transactions are never deleted.
 
 The initial analytical refresh takes several minutes; indexed API queries then
 complete in milliseconds. The API role cannot mutate imported transactions or
