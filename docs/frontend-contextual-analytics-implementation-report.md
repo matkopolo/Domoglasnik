@@ -225,3 +225,21 @@ required.
 6. Keyboard focus movement from a map marker into the context panel can be
    improved during accessibility-focused Phase 3 work; all panel actions are
    native buttons and keyboard-operable now.
+
+## Follow-up analytical workspace
+
+The dashboard now includes a compact four-tab analytical workspace for market
+depth, quality-adjusted indices/model diagnostics, geography rankings, and
+outlier evidence. Counts explicitly distinguish all recorded transactions
+from the representative population used for medians.
+
+A dedicated transaction-extremes API calculates the three highest and three
+lowest representative transactions for the active geography, date range, and
+property group. Extremes are ranked by total sale price (or monthly rent), not
+by visible map markers. Each row also shows amount per square metre and area
+and opens the full transaction detail.
+
+The main desktop map has a fixed 610 px card height. The right summary/context
+column scrolls independently when its content is longer, preventing the map
+from changing size. The contextual and analytical sections use reduced
+spacing and typography; mobile layout returns to natural document flow.

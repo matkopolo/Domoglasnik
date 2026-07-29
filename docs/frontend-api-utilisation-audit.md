@@ -165,3 +165,27 @@ frontend uses 24 operations, including the two new context operations:
 No endpoint is unclassified. Operations described as missing in the **Before**
 column are either integrated above or retain the explicit audience/deferral in
 the matrix.
+
+## Phase 2 analytical-workspace extension
+
+The follow-up implementation expands the public analytical workspace beyond
+the original context panel:
+
+- sale and rental overview/timeseries payloads now expose raw, cleaned,
+  representative, publication, incomplete-period, area, and sample fields;
+- both market-index methods are plotted together with sample and uncertainty
+  metadata;
+- sale and rental statistical-outlier lists and the aggregate anomaly summary
+  are visible as diagnostic, non-deletion evidence;
+- geography rankings show both all recorded transactions and the
+  representative sample;
+- the standalone valuation operation supplies complete model diagnostics;
+- `GET /api/v1/transactions/extremes` is a new operation consumed by the
+  frontend. It returns highest and lowest representative transactions by total
+  sale price or monthly rent for the exact active filters. Price per square
+  metre and area remain visible as context.
+
+The runtime now contains 40 operations across 39 paths. The frontend calls 28
+operations. The remaining operations are operational health, static metadata,
+authentication/preferences, and the analyst review workflow rather than
+unused public market analytics.
