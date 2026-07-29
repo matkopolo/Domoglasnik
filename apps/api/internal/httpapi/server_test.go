@@ -129,6 +129,9 @@ func TestStatisticsRejectInvalidFilters(t *testing.T) {
 		"/api/v1/statistics/overview?propertyGroup=castle",
 		"/api/v1/statistics/overview?propertyGroup=land&landScope=speculative",
 		"/api/v1/statistics/overview?geographyId=-1",
+		"/api/v1/statistics/overview?minArea=0",
+		"/api/v1/statistics/overview?maxArea=nope",
+		"/api/v1/statistics/overview?minArea=90&maxArea=60",
 		"/api/v1/statistics/timeseries?interval=week",
 	}
 	for _, path := range tests {

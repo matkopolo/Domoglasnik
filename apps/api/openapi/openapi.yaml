@@ -147,6 +147,8 @@ paths:
         - $ref: "#/components/parameters/FromDate"
         - $ref: "#/components/parameters/ToDate"
         - $ref: "#/components/parameters/PropertyGroup"
+        - $ref: "#/components/parameters/MinArea"
+        - $ref: "#/components/parameters/MaxArea"
         - $ref: "#/components/parameters/LandScope"
         - $ref: "#/components/parameters/StatisticsGeographyId"
       responses:
@@ -168,6 +170,8 @@ paths:
         - $ref: "#/components/parameters/FromDate"
         - $ref: "#/components/parameters/ToDate"
         - $ref: "#/components/parameters/PropertyGroup"
+        - $ref: "#/components/parameters/MinArea"
+        - $ref: "#/components/parameters/MaxArea"
         - $ref: "#/components/parameters/LandScope"
         - $ref: "#/components/parameters/StatisticsGeographyId"
         - name: interval
@@ -195,6 +199,8 @@ paths:
         - $ref: "#/components/parameters/FromDate"
         - $ref: "#/components/parameters/ToDate"
         - $ref: "#/components/parameters/PropertyGroup"
+        - $ref: "#/components/parameters/MinArea"
+        - $ref: "#/components/parameters/MaxArea"
         - $ref: "#/components/parameters/LandScope"
         - $ref: "#/components/parameters/StatisticsGeographyId"
         - name: limit
@@ -235,6 +241,8 @@ paths:
         - $ref: "#/components/parameters/FromDate"
         - $ref: "#/components/parameters/ToDate"
         - $ref: "#/components/parameters/PropertyGroup"
+        - $ref: "#/components/parameters/MinArea"
+        - $ref: "#/components/parameters/MaxArea"
         - $ref: "#/components/parameters/LandScope"
         - $ref: "#/components/parameters/StatisticsGeographyId"
         - name: limit
@@ -263,6 +271,8 @@ paths:
         - $ref: "#/components/parameters/FromDate"
         - $ref: "#/components/parameters/ToDate"
         - $ref: "#/components/parameters/PropertyGroup"
+        - $ref: "#/components/parameters/MinArea"
+        - $ref: "#/components/parameters/MaxArea"
         - $ref: "#/components/parameters/StatisticsGeographyId"
       responses:
         "200":
@@ -283,6 +293,8 @@ paths:
         - $ref: "#/components/parameters/FromDate"
         - $ref: "#/components/parameters/ToDate"
         - $ref: "#/components/parameters/PropertyGroup"
+        - $ref: "#/components/parameters/MinArea"
+        - $ref: "#/components/parameters/MaxArea"
         - $ref: "#/components/parameters/StatisticsGeographyId"
         - name: interval
           in: query
@@ -309,6 +321,8 @@ paths:
         - $ref: "#/components/parameters/FromDate"
         - $ref: "#/components/parameters/ToDate"
         - $ref: "#/components/parameters/PropertyGroup"
+        - $ref: "#/components/parameters/MinArea"
+        - $ref: "#/components/parameters/MaxArea"
         - $ref: "#/components/parameters/StatisticsGeographyId"
         - name: limit
           in: query
@@ -343,6 +357,8 @@ paths:
         - $ref: "#/components/parameters/FromDate"
         - $ref: "#/components/parameters/ToDate"
         - $ref: "#/components/parameters/PropertyGroup"
+        - $ref: "#/components/parameters/MinArea"
+        - $ref: "#/components/parameters/MaxArea"
         - $ref: "#/components/parameters/StatisticsGeographyId"
         - name: zoom
           in: query
@@ -367,6 +383,8 @@ paths:
         - $ref: "#/components/parameters/FromDate"
         - $ref: "#/components/parameters/ToDate"
         - $ref: "#/components/parameters/PropertyGroup"
+        - $ref: "#/components/parameters/MinArea"
+        - $ref: "#/components/parameters/MaxArea"
         - $ref: "#/components/parameters/StatisticsGeographyId"
         - name: limit
           in: query
@@ -391,6 +409,8 @@ paths:
         - $ref: "#/components/parameters/FromDate"
         - $ref: "#/components/parameters/ToDate"
         - $ref: "#/components/parameters/PropertyGroup"
+        - $ref: "#/components/parameters/MinArea"
+        - $ref: "#/components/parameters/MaxArea"
         - $ref: "#/components/parameters/StatisticsGeographyId"
         - name: level
           in: query
@@ -483,6 +503,8 @@ paths:
         - $ref: "#/components/parameters/FromDate"
         - $ref: "#/components/parameters/ToDate"
         - $ref: "#/components/parameters/PropertyGroup"
+        - $ref: "#/components/parameters/MinArea"
+        - $ref: "#/components/parameters/MaxArea"
         - $ref: "#/components/parameters/LandScope"
         - $ref: "#/components/parameters/StatisticsGeographyId"
         - name: metric
@@ -508,6 +530,8 @@ paths:
         - $ref: "#/components/parameters/FromDate"
         - $ref: "#/components/parameters/ToDate"
         - $ref: "#/components/parameters/PropertyGroup"
+        - $ref: "#/components/parameters/MinArea"
+        - $ref: "#/components/parameters/MaxArea"
         - $ref: "#/components/parameters/StatisticsGeographyId"
         - name: metric
           in: query
@@ -567,6 +591,8 @@ paths:
         - $ref: "#/components/parameters/FromDate"
         - $ref: "#/components/parameters/ToDate"
         - $ref: "#/components/parameters/PropertyGroup"
+        - $ref: "#/components/parameters/MinArea"
+        - $ref: "#/components/parameters/MaxArea"
       responses:
         "200":
           description: Sale and rental history for one cadastral building identity.
@@ -587,6 +613,8 @@ paths:
         - $ref: "#/components/parameters/FromDate"
         - $ref: "#/components/parameters/ToDate"
         - $ref: "#/components/parameters/PropertyGroup"
+        - $ref: "#/components/parameters/MinArea"
+        - $ref: "#/components/parameters/MaxArea"
         - $ref: "#/components/parameters/LandScope"
         - $ref: "#/components/parameters/StatisticsGeographyId"
         - name: zoom
@@ -616,6 +644,8 @@ paths:
         - $ref: "#/components/parameters/FromDate"
         - $ref: "#/components/parameters/ToDate"
         - $ref: "#/components/parameters/PropertyGroup"
+        - $ref: "#/components/parameters/MinArea"
+        - $ref: "#/components/parameters/MaxArea"
         - $ref: "#/components/parameters/LandScope"
         - $ref: "#/components/parameters/StatisticsGeographyId"
         - name: limit
@@ -645,6 +675,8 @@ paths:
         - $ref: "#/components/parameters/FromDate"
         - $ref: "#/components/parameters/ToDate"
         - $ref: "#/components/parameters/PropertyGroup"
+        - $ref: "#/components/parameters/MinArea"
+        - $ref: "#/components/parameters/MaxArea"
         - $ref: "#/components/parameters/LandScope"
         - $ref: "#/components/parameters/StatisticsGeographyId"
         - name: level
@@ -937,6 +969,16 @@ components:
       in: query
       schema:
         $ref: "#/components/schemas/PropertyGroup"
+    MinArea:
+      name: minArea
+      in: query
+      description: Inclusive minimum analytical property area in square metres.
+      schema: {type: number, exclusiveMinimum: 0, maximum: 1000000}
+    MaxArea:
+      name: maxArea
+      in: query
+      description: Inclusive maximum analytical property area in square metres.
+      schema: {type: number, exclusiveMinimum: 0, maximum: 1000000}
     LandScope:
       name: landScope
       in: query

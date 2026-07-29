@@ -90,11 +90,11 @@ func (r *StatisticsRepository) RentalClusters(
 	}
 	query := fmt.Sprintf(`
 		WITH bounded AS (
-		  SELECT ST_SnapToGrid(ST_Transform(location,4326),$9,$9) grid_point,
+		  SELECT ST_SnapToGrid(ST_Transform(location,4326),$11,$11) grid_point,
 		    monthly_rent_per_sqm,representative_eligible
 		  FROM analytics.rental_facts
 		  WHERE location IS NOT NULL
-		    AND location && ST_Transform(ST_MakeEnvelope($5,$6,$7,$8,4326),3794)
+		    AND location && ST_Transform(ST_MakeEnvelope($7,$8,$9,$10,4326),3794)
 		    AND ($1::date IS NULL OR contract_date >= $1)
 		    AND ($2::date IS NULL OR contract_date <= $2)
 		    AND ($3 = '' OR property_group=$3) AND %s
@@ -105,7 +105,7 @@ func (r *StatisticsRepository) RentalClusters(
 		    FILTER (WHERE representative_eligible)::float8
 		FROM bounded GROUP BY grid_point ORDER BY count(*) DESC LIMIT 5000`, clause)
 	rows, err := r.pool.Query(ctx, query, filter.FromDate, filter.ToDate,
-		filter.PropertyGroup, geographyID, bounds.West, bounds.South,
+		filter.PropertyGroup, geographyID, filter.MinArea, filter.MaxArea, bounds.West, bounds.South,
 		bounds.East, bounds.North, gridSize)
 	if err != nil {
 		return nil, fmt.Errorf("rental map clusters: %w", err)
@@ -139,13 +139,13 @@ func (r *StatisticsRepository) RentalPropertyPoints(
 		  monthly_rent_per_sqm::float8,representative_eligible
 		FROM analytics.rental_facts
 		WHERE location IS NOT NULL
-		  AND location && ST_Transform(ST_MakeEnvelope($5,$6,$7,$8,4326),3794)
+		  AND location && ST_Transform(ST_MakeEnvelope($7,$8,$9,$10,4326),3794)
 		  AND ($1::date IS NULL OR contract_date >= $1)
 		  AND ($2::date IS NULL OR contract_date <= $2)
 		  AND ($3 = '' OR property_group=$3) AND %s
-		ORDER BY contract_date DESC NULLS LAST,transaction_id LIMIT $9`, clause)
+		ORDER BY contract_date DESC NULLS LAST,transaction_id LIMIT $11`, clause)
 	rows, err := r.pool.Query(ctx, query, filter.FromDate, filter.ToDate,
-		filter.PropertyGroup, geographyID, bounds.West, bounds.South,
+		filter.PropertyGroup, geographyID, filter.MinArea, filter.MaxArea, bounds.West, bounds.South,
 		bounds.East, bounds.North, limit)
 	if err != nil {
 		return nil, fmt.Errorf("rental map points: %w", err)
@@ -195,7 +195,7 @@ func (r *StatisticsRepository) RentalOverview(
 		  AND ($3 = '' OR property_group=$3) AND %s`, clause)
 	var result RentalOverview
 	err = r.pool.QueryRow(ctx, query, filter.FromDate, filter.ToDate,
-		filter.PropertyGroup, geographyID).Scan(
+		filter.PropertyGroup, geographyID, filter.MinArea, filter.MaxArea).Scan(
 		&result.TransactionCount, &result.EligibleCount, &result.IncludedSampleSize,
 		&result.ExcludedOutlierCount, &result.MonthlyRentSampleSize,
 		&result.RentPerSQMSampleSize, &result.MedianMonthlyRent,
@@ -255,7 +255,7 @@ func (r *StatisticsRepository) RentalTimeSeries(
 		FROM compared ORDER BY period`,
 		unit, unit, step, clause, lag, lag, lag, lag)
 	rows, err := r.pool.Query(ctx, query, filter.FromDate, filter.ToDate,
-		filter.PropertyGroup, geographyID)
+		filter.PropertyGroup, geographyID, filter.MinArea, filter.MaxArea)
 	if err != nil {
 		return nil, fmt.Errorf("rental time-series statistics: %w", err)
 	}
@@ -302,9 +302,9 @@ func (r *StatisticsRepository) RentalOutliers(
 		  AND ($2::date IS NULL OR f.contract_date <= $2)
 		  AND ($3 = '' OR f.property_group=$3) AND %s
 		ORDER BY e.modified_z_score DESC NULLS LAST,f.transaction_id
-		LIMIT $5 OFFSET $6`, clause)
+		LIMIT $7 OFFSET $8`, clause)
 	rows, err := r.pool.Query(ctx, query, filter.FromDate, filter.ToDate,
-		filter.PropertyGroup, geographyID, limit, offset)
+		filter.PropertyGroup, geographyID, filter.MinArea, filter.MaxArea, limit, offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list rental outliers: %w", err)
 	}

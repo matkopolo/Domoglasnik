@@ -42,6 +42,17 @@ func TestStatisticsRepositoryIntegration(t *testing.T) {
 		overview.MedianPricePerSQM == nil {
 		t.Fatalf("Overview()=%+v", overview)
 	}
+	minimumArea := 60.0
+	larger, err := repository.Overview(ctx, StatisticsFilter{
+		FromDate: &from, ToDate: &to, PropertyGroup: "apartment", MinArea: &minimumArea,
+	})
+	if err != nil {
+		t.Fatalf("area-filtered Overview(): %v", err)
+	}
+	if larger.TransactionCount > overview.TransactionCount {
+		t.Fatalf("area-filtered count=%d exceeds unfiltered=%d",
+			larger.TransactionCount, overview.TransactionCount)
+	}
 
 	points, err := repository.TimeSeries(ctx, StatisticsFilter{
 		FromDate: &from, ToDate: &to, PropertyGroup: "apartment",

@@ -84,7 +84,7 @@ func (r *StatisticsRepository) distribution(
 		    percentile_cont(.99) WITHIN GROUP(ORDER BY value) high
 		  FROM values
 		), bucketed AS (
-		  SELECT greatest(1,least($5,width_bucket(value,s.low,s.high,$5))) bucket,
+		  SELECT greatest(1,least($7,width_bucket(value,s.low,s.high,$7))) bucket,
 		    count(*)::bigint count
 		  FROM values CROSS JOIN summary s
 		  WHERE s.high>s.low GROUP BY 1
@@ -97,18 +97,18 @@ func (r *StatisticsRepository) distribution(
 		  s.low,s.high,
 		  t.below_count,t.above_count,
 		  series.bucket,
-		  s.low+(series.bucket-1)*(s.high-s.low)/$5 bucket_from,
-		  s.low+series.bucket*(s.high-s.low)/$5 bucket_to,
+		  s.low+(series.bucket-1)*(s.high-s.low)/$7 bucket_from,
+		  s.low+series.bucket*(s.high-s.low)/$7 bucket_to,
 		  coalesce(b.count,0)
 		FROM summary s
 		CROSS JOIN tails t
-		CROSS JOIN generate_series(1,$5) series(bucket)
+		CROSS JOIN generate_series(1,$7) series(bucket)
 		LEFT JOIN bucketed b ON b.bucket=series.bucket
 		GROUP BY s.sample_size,s.p05,s.p10,s.p25,s.p50,s.p75,s.p90,s.p95,
 		  s.low,s.high,t.below_count,t.above_count,series.bucket,b.count
 		ORDER BY series.bucket`, column, table, column, clause)
 	rows, err := r.pool.Query(ctx, query, filter.FromDate, filter.ToDate,
-		filter.PropertyGroup, geographyID, bins)
+		filter.PropertyGroup, geographyID, filter.MinArea, filter.MaxArea, bins)
 	if err != nil {
 		return Distribution{}, fmt.Errorf("calculate %s distribution: %w", metric, err)
 	}

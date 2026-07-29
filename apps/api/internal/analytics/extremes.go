@@ -48,17 +48,17 @@ func (r *StatisticsRepository) TransactionExtremes(
 		FROM (
 		  SELECT 'lowest' direction,transaction_id,contract_date::text,property_group,
 		    area::float8,amount::float8,amount_per_sqm::float8
-		  FROM ranked WHERE low_rank<=$5
+		  FROM ranked WHERE low_rank<=$7
 		  UNION ALL
 		  SELECT 'highest' direction,transaction_id,contract_date::text,property_group,
 		    area::float8,amount::float8,amount_per_sqm::float8
-		  FROM ranked WHERE high_rank<=$5
+		  FROM ranked WHERE high_rank<=$7
 		) extremes
 		ORDER BY CASE direction WHEN 'highest' THEN 0 ELSE 1 END,
 		  CASE WHEN direction='highest' THEN -amount ELSE amount END`,
 		amount, perSQM, table, perSQM, amount, clause)
 	rows, err := r.pool.Query(ctx, query, filter.FromDate, filter.ToDate,
-		filter.PropertyGroup, geographyID, limit)
+		filter.PropertyGroup, geographyID, filter.MinArea, filter.MaxArea, limit)
 	if err != nil {
 		return nil, fmt.Errorf("load transaction extremes: %w", err)
 	}

@@ -92,8 +92,8 @@ func (r *StatisticsRepository) GeographySummaries(
 		FROM analytics.geographic_units unit
 		JOIN %s fact ON %s
 		CROSS JOIN LATERAL ST_Envelope(unit.geometry_wgs84) extent
-		WHERE unit.level=$9
-		  AND unit.geometry_wgs84 && ST_MakeEnvelope($5,$6,$7,$8,4326)
+		WHERE unit.level=$11
+		  AND unit.geometry_wgs84 && ST_MakeEnvelope($7,$8,$9,$10,4326)
 		  AND ($1::date IS NULL OR fact.contract_date >= $1)
 		  AND ($2::date IS NULL OR fact.contract_date <= $2)
 		  AND ($3 = '' OR fact.property_group=$3)
@@ -101,7 +101,7 @@ func (r *StatisticsRepository) GeographySummaries(
 		GROUP BY unit.id,unit.level,unit.name,unit.geometry_wgs84,extent
 		ORDER BY count(*) DESC`, metric, table, join, geographyClause)
 	rows, err := r.pool.Query(ctx, query,
-		filter.FromDate, filter.ToDate, filter.PropertyGroup, geographyID,
+		filter.FromDate, filter.ToDate, filter.PropertyGroup, geographyID, filter.MinArea, filter.MaxArea,
 		bounds.West, bounds.South, bounds.East, bounds.North, level,
 	)
 	if err != nil {
@@ -137,11 +137,11 @@ func (r *StatisticsRepository) Clusters(
 	query := fmt.Sprintf(`
 		WITH bounded AS (
 			SELECT
-				ST_SnapToGrid(ST_Transform(location,4326),$9,$9) AS grid_point,
+				ST_SnapToGrid(ST_Transform(location,4326),$11,$11) AS grid_point,
 				price_per_sqm,representative_eligible
 			FROM %s
 			WHERE location IS NOT NULL
-			  AND location && ST_Transform(ST_MakeEnvelope($5,$6,$7,$8,4326),3794)
+			  AND location && ST_Transform(ST_MakeEnvelope($7,$8,$9,$10,4326),3794)
 			  AND ($1::date IS NULL OR contract_date >= $1)
 			  AND ($2::date IS NULL OR contract_date <= $2)
 			  AND ($3 = '' OR property_group = $3)
@@ -156,7 +156,7 @@ func (r *StatisticsRepository) Clusters(
 		ORDER BY count(*) DESC
 		LIMIT 5000`, saleFactsTable(filter), geographyClause)
 	rows, err := r.pool.Query(ctx, query,
-		filter.FromDate, filter.ToDate, filter.PropertyGroup, geographyID,
+		filter.FromDate, filter.ToDate, filter.PropertyGroup, geographyID, filter.MinArea, filter.MaxArea,
 		bounds.West, bounds.South, bounds.East, bounds.North, gridSize,
 	)
 	if err != nil {
@@ -198,15 +198,15 @@ func (r *StatisticsRepository) PropertyPoints(
 		       representative_eligible
 		FROM %s
 		WHERE location IS NOT NULL
-		  AND location && ST_Transform(ST_MakeEnvelope($5,$6,$7,$8,4326),3794)
+		  AND location && ST_Transform(ST_MakeEnvelope($7,$8,$9,$10,4326),3794)
 		  AND ($1::date IS NULL OR contract_date >= $1)
 		  AND ($2::date IS NULL OR contract_date <= $2)
 		  AND ($3 = '' OR property_group = $3)
 		  AND %s
 		ORDER BY contract_date DESC NULLS LAST,transaction_id
-		LIMIT $9`, saleFactsTable(filter), geographyClause)
+		LIMIT $11`, saleFactsTable(filter), geographyClause)
 	rows, err := r.pool.Query(ctx, query,
-		filter.FromDate, filter.ToDate, filter.PropertyGroup, geographyID,
+		filter.FromDate, filter.ToDate, filter.PropertyGroup, geographyID, filter.MinArea, filter.MaxArea,
 		bounds.West, bounds.South, bounds.East, bounds.North, limit,
 	)
 	if err != nil {

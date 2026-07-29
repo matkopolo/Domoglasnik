@@ -20,6 +20,8 @@ type StatisticsFilter struct {
 	PropertyGroup string
 	GeographyID   *int64
 	LandScope     string
+	MinArea       *float64
+	MaxArea       *float64
 }
 
 func saleFactsTable(filter StatisticsFilter) string {
@@ -135,7 +137,7 @@ func (r *StatisticsRepository) Overview(ctx context.Context, filter StatisticsFi
 		  AND %s`, saleFactsTable(filter), geographyClause)
 	var result Overview
 	err = r.pool.QueryRow(ctx, query,
-		filter.FromDate, filter.ToDate, filter.PropertyGroup, geographyID,
+		filter.FromDate, filter.ToDate, filter.PropertyGroup, geographyID, filter.MinArea, filter.MaxArea,
 	).Scan(
 		&result.TransactionCount, &result.EligibleCount,
 		&result.IncludedSampleSize, &result.ExcludedOutlierCount,
@@ -191,7 +193,7 @@ func (r *StatisticsRepository) TimeSeries(
 		GROUP BY 1,2 ORDER BY 1`, truncUnit, truncUnit, step,
 		saleFactsTable(filter), geographyClause)
 	rows, err := r.pool.Query(ctx, query,
-		filter.FromDate, filter.ToDate, filter.PropertyGroup, geographyID,
+		filter.FromDate, filter.ToDate, filter.PropertyGroup, geographyID, filter.MinArea, filter.MaxArea,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("time-series statistics: %w", err)
@@ -268,9 +270,9 @@ func (r *StatisticsRepository) Outliers(
 		  AND ($3 = '' OR fact.property_group = $3)
 		  AND %s
 		ORDER BY evaluation.modified_z_score DESC NULLS LAST,fact.transaction_id
-		LIMIT $5 OFFSET $6`, saleFactsTable(filter), geographyClause)
+		LIMIT $7 OFFSET $8`, saleFactsTable(filter), geographyClause)
 	rows, err := r.pool.Query(ctx, query,
-		filter.FromDate, filter.ToDate, filter.PropertyGroup, geographyID, limit, offset,
+		filter.FromDate, filter.ToDate, filter.PropertyGroup, geographyID, filter.MinArea, filter.MaxArea, limit, offset,
 	)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list statistical outliers: %w", err)
@@ -302,7 +304,7 @@ func (r *StatisticsRepository) geographyClause(
 	geographyID *int64,
 ) (string, *int64, error) {
 	if geographyID == nil {
-		return "$4::bigint IS NULL", nil, nil
+		return "$4::bigint IS NULL AND ($5::float8 IS NULL OR area >= $5) AND ($6::float8 IS NULL OR area <= $6)", nil, nil
 	}
 	var level string
 	err := r.pool.QueryRow(ctx,
@@ -319,9 +321,9 @@ func (r *StatisticsRepository) geographyClause(
 		return "", nil, fmt.Errorf("unsupported geography level %q", level)
 	}
 	if column == "" {
-		return "$4::bigint IS NOT NULL", geographyID, nil
+		return "$4::bigint IS NOT NULL AND ($5::float8 IS NULL OR area >= $5) AND ($6::float8 IS NULL OR area <= $6)", geographyID, nil
 	}
-	return column + " = $4", geographyID, nil
+	return column + " = $4 AND ($5::float8 IS NULL OR area >= $5) AND ($6::float8 IS NULL OR area <= $6)", geographyID, nil
 }
 
 func geographyFactColumn(level string) (string, bool) {

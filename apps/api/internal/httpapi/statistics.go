@@ -133,6 +133,16 @@ func statisticsFilter(w http.ResponseWriter, r *http.Request) (analytics.Statist
 		writeError(w, r, http.StatusBadRequest, "invalid_date_range", "from must not be after to")
 		return filter, false
 	}
+	if filter.MinArea, ok = optionalPositiveFloat(w, r, "minArea"); !ok {
+		return filter, false
+	}
+	if filter.MaxArea, ok = optionalPositiveFloat(w, r, "maxArea"); !ok {
+		return filter, false
+	}
+	if filter.MinArea != nil && filter.MaxArea != nil && *filter.MinArea > *filter.MaxArea {
+		writeError(w, r, http.StatusBadRequest, "invalid_area_range", "minArea must not exceed maxArea")
+		return filter, false
+	}
 	filter.PropertyGroup = r.URL.Query().Get("propertyGroup")
 	if filter.PropertyGroup != "" && !validPropertyGroup(filter.PropertyGroup) {
 		writeError(w, r, http.StatusBadRequest, "invalid_property_group", "unsupported propertyGroup")
@@ -157,6 +167,19 @@ func statisticsFilter(w http.ResponseWriter, r *http.Request) (analytics.Statist
 		filter.GeographyID = &parsed
 	}
 	return filter, true
+}
+
+func optionalPositiveFloat(w http.ResponseWriter, r *http.Request, name string) (*float64, bool) {
+	value := r.URL.Query().Get(name)
+	if value == "" {
+		return nil, true
+	}
+	parsed, err := strconv.ParseFloat(value, 64)
+	if err != nil || parsed <= 0 || parsed > 1000000 {
+		writeError(w, r, http.StatusBadRequest, "invalid_area", name+" must be a positive number")
+		return nil, false
+	}
+	return &parsed, true
 }
 
 func optionalDate(w http.ResponseWriter, r *http.Request, name string) (*time.Time, bool) {
