@@ -82,7 +82,9 @@ func (store fakeAnomalies) ReviewAnomaly(context.Context, string, int64, string,
 	return store.err
 }
 
-func (store fakeBuildings) BuildingStatistics(context.Context, int32, string) (analytics.BuildingStatistics, error) {
+func (store fakeBuildings) BuildingStatistics(
+	context.Context, int32, string, analytics.BuildingFilter,
+) (analytics.BuildingStatistics, error) {
 	return analytics.BuildingStatistics{
 		CadastralMunicipalityCode: 657,
 		BuildingNumber:            "123",
@@ -128,6 +130,15 @@ func (store fakeTransactions) SaleTransaction(context.Context, int64) (analytics
 
 func (store fakeTransactions) RentalTransaction(context.Context, int64) (analytics.RentalTransactionDetail, error) {
 	return analytics.RentalTransactionDetail{TransactionID: 1, PropertyGroup: "apartment"}, store.err
+}
+
+func (store fakeTransactions) TransactionContext(
+	context.Context, string, int64,
+) (analytics.TransactionContext, error) {
+	return analytics.TransactionContext{
+		TransactionKind: "sale", TransactionID: 1,
+		PropertyGroup: "apartment", Benchmarks: []analytics.ContextBenchmark{},
+	}, store.err
 }
 
 func (fakeMaps) Clusters(

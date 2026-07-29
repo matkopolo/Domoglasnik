@@ -32,6 +32,28 @@ func (s *server) rentalTransaction(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
+func (s *server) saleTransactionContext(w http.ResponseWriter, r *http.Request) {
+	s.transactionContext(w, r, "sale")
+}
+
+func (s *server) rentalTransactionContext(w http.ResponseWriter, r *http.Request) {
+	s.transactionContext(w, r, "rent")
+}
+
+func (s *server) transactionContext(
+	w http.ResponseWriter, r *http.Request, kind string,
+) {
+	id, ok := transactionID(w, r)
+	if !ok {
+		return
+	}
+	result, err := s.transactions.TransactionContext(r.Context(), kind, id)
+	if transactionError(w, r, s, err) {
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
 func transactionID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil || id == 0 {

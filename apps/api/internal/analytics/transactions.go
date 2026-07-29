@@ -35,25 +35,25 @@ type TransactionGeography struct {
 }
 
 type SaleBuildingPart struct {
-	ID                        int64    `json:"id"`
-	CadastralMunicipalityCode *int32   `json:"cadastralMunicipalityCode"`
-	BuildingNumber            *string  `json:"buildingNumber"`
-	BuildingPartNumber        *string  `json:"buildingPartNumber"`
-	BuildingPartType          *int32   `json:"buildingPartType"`
-	ConstructionYear          *int32   `json:"constructionYear"`
-	Floor                     *string  `json:"floor"`
-	PositionInBuilding        *string  `json:"positionInBuilding"`
-	UnitNumber                *string  `json:"unitNumber"`
-	RoomCount                 *float64 `json:"roomCount"`
-	SoldArea                  *float64 `json:"soldArea"`
-	SoldUsableArea            *float64 `json:"soldUsableArea"`
-	BuildingPartArea          *float64 `json:"buildingPartArea"`
-	UsableArea                *float64 `json:"usableArea"`
-	OutdoorParkingSpaces      *int32   `json:"outdoorParkingSpaces"`
-	ContractualPrice          *float64 `json:"contractualPrice"`
-	Settlement                *string  `json:"settlement"`
-	Street                    *string  `json:"street"`
-	HouseNumber               *string  `json:"houseNumber"`
+	ID                          int64    `json:"id"`
+	CadastralMunicipalityCode   *int32   `json:"cadastralMunicipalityCode"`
+	BuildingNumber              *string  `json:"buildingNumber"`
+	BuildingPartNumber          *string  `json:"buildingPartNumber"`
+	BuildingPartType            *int32   `json:"buildingPartType"`
+	BuildingPartTypeDescription *string  `json:"buildingPartTypeDescription"`
+	ConstructionYear            *int32   `json:"constructionYear"`
+	Floor                       *string  `json:"floor"`
+	PositionInBuilding          *string  `json:"positionInBuilding"`
+	RoomCount                   *float64 `json:"roomCount"`
+	SoldArea                    *float64 `json:"soldArea"`
+	SoldUsableArea              *float64 `json:"soldUsableArea"`
+	BuildingPartArea            *float64 `json:"buildingPartArea"`
+	UsableArea                  *float64 `json:"usableArea"`
+	OutdoorParkingSpaces        *int32   `json:"outdoorParkingSpaces"`
+	ContractualPrice            *float64 `json:"contractualPrice"`
+	Settlement                  *string  `json:"settlement"`
+	Street                      *string  `json:"street"`
+	HouseNumber                 *string  `json:"houseNumber"`
 }
 
 type SaleLandParcel struct {
@@ -61,6 +61,7 @@ type SaleLandParcel struct {
 	CadastralMunicipalityCode *int32   `json:"cadastralMunicipalityCode"`
 	ParcelNumber              *string  `json:"parcelNumber"`
 	LandType                  *int32   `json:"landType"`
+	LandTypeDescription       *string  `json:"landTypeDescription"`
 	ParcelArea                *float64 `json:"parcelArea"`
 	ContractualPrice          *float64 `json:"contractualPrice"`
 }
@@ -84,19 +85,20 @@ type SaleTransactionDetail struct {
 }
 
 type RentalSpace struct {
-	ID                        int64    `json:"id"`
-	CadastralMunicipalityCode *int32   `json:"cadastralMunicipalityCode"`
-	BuildingNumber            *string  `json:"buildingNumber"`
-	BuildingPartNumber        *string  `json:"buildingPartNumber"`
-	RentedSpaceType           *int32   `json:"rentedSpaceType"`
-	Furnishing                *int32   `json:"furnishing"`
-	Area                      *float64 `json:"area"`
-	UsableArea                *float64 `json:"usableArea"`
-	ContractualRent           *float64 `json:"contractualRent"`
-	ConstructionYear          *int32   `json:"constructionYear"`
-	Settlement                *string  `json:"settlement"`
-	Street                    *string  `json:"street"`
-	HouseNumber               *string  `json:"houseNumber"`
+	ID                         int64    `json:"id"`
+	CadastralMunicipalityCode  *int32   `json:"cadastralMunicipalityCode"`
+	BuildingNumber             *string  `json:"buildingNumber"`
+	BuildingPartNumber         *string  `json:"buildingPartNumber"`
+	RentedSpaceType            *int32   `json:"rentedSpaceType"`
+	RentedSpaceTypeDescription *string  `json:"rentedSpaceTypeDescription"`
+	Furnishing                 *int32   `json:"furnishing"`
+	Area                       *float64 `json:"area"`
+	UsableArea                 *float64 `json:"usableArea"`
+	ContractualRent            *float64 `json:"contractualRent"`
+	ConstructionYear           *int32   `json:"constructionYear"`
+	Settlement                 *string  `json:"settlement"`
+	Street                     *string  `json:"street"`
+	HouseNumber                *string  `json:"houseNumber"`
 }
 
 type RentalTransactionDetail struct {
@@ -126,6 +128,7 @@ type RentalTransactionDetail struct {
 type TransactionDetailStore interface {
 	SaleTransaction(context.Context, int64) (SaleTransactionDetail, error)
 	RentalTransaction(context.Context, int64) (RentalTransactionDetail, error)
+	TransactionContext(context.Context, string, int64) (TransactionContext, error)
 }
 
 func (r *StatisticsRepository) SaleTransaction(
@@ -283,12 +286,20 @@ func loadGeographies(
 
 func loadSaleBuildingParts(ctx context.Context, tx pgx.Tx, id int64) ([]SaleBuildingPart, error) {
 	rows, err := tx.Query(ctx, `
-		SELECT id,cadastral_municipality_code,building_number,building_part_number,
-		  building_part_type,construction_year,floor,position_in_building,
-		  apartment_or_business_unit_number,room_count::float8,sold_area::float8,
+		SELECT part.id,part.cadastral_municipality_code,part.building_number,
+		  part.building_part_number,part.building_part_type,code.description,
+		  part.construction_year,part.floor,part.position_in_building,
+		  room_count::float8,sold_area::float8,
 		  sold_usable_area::float8,building_part_area::float8,usable_area::float8,
 		  outdoor_parking_spaces,contractual_price::float8,settlement,street,house_number
-		FROM building_parts WHERE transaction_id=$1 ORDER BY id`, id)
+		FROM building_parts part
+		LEFT JOIN LATERAL (
+		  SELECT description FROM codebook_values
+		  WHERE codebook_name='Vrsta dela stavbe'
+		    AND numeric_value=part.building_part_type
+		  ORDER BY codebook_id DESC LIMIT 1
+		) code ON true
+		WHERE transaction_id=$1 ORDER BY part.id`, id)
 	if err != nil {
 		return nil, fmt.Errorf("load sale building parts: %w", err)
 	}
@@ -298,8 +309,8 @@ func loadSaleBuildingParts(ctx context.Context, tx pgx.Tx, id int64) ([]SaleBuil
 		var item SaleBuildingPart
 		if err := rows.Scan(&item.ID, &item.CadastralMunicipalityCode,
 			&item.BuildingNumber, &item.BuildingPartNumber, &item.BuildingPartType,
-			&item.ConstructionYear, &item.Floor, &item.PositionInBuilding,
-			&item.UnitNumber, &item.RoomCount, &item.SoldArea,
+			&item.BuildingPartTypeDescription, &item.ConstructionYear,
+			&item.Floor, &item.PositionInBuilding, &item.RoomCount, &item.SoldArea,
 			&item.SoldUsableArea, &item.BuildingPartArea, &item.UsableArea,
 			&item.OutdoorParkingSpaces, &item.ContractualPrice,
 			&item.Settlement, &item.Street, &item.HouseNumber); err != nil {
@@ -312,9 +323,17 @@ func loadSaleBuildingParts(ctx context.Context, tx pgx.Tx, id int64) ([]SaleBuil
 
 func loadSaleLandParcels(ctx context.Context, tx pgx.Tx, id int64) ([]SaleLandParcel, error) {
 	rows, err := tx.Query(ctx, `
-		SELECT id,cadastral_municipality_code,parcel_number,land_type,
-		  parcel_area::float8,contractual_price::float8
-		FROM land_parcels WHERE transaction_id=$1 ORDER BY id`, id)
+		SELECT parcel.id,parcel.cadastral_municipality_code,parcel.parcel_number,
+		  parcel.land_type,code.description,parcel.parcel_area::float8,
+		  parcel.contractual_price::float8
+		FROM land_parcels parcel
+		LEFT JOIN LATERAL (
+		  SELECT description FROM codebook_values
+		  WHERE codebook_name='Vrsta zemljišča'
+		    AND numeric_value=parcel.land_type
+		  ORDER BY codebook_id DESC LIMIT 1
+		) code ON true
+		WHERE transaction_id=$1 ORDER BY parcel.id`, id)
 	if err != nil {
 		return nil, fmt.Errorf("load sale land parcels: %w", err)
 	}
@@ -323,8 +342,8 @@ func loadSaleLandParcels(ctx context.Context, tx pgx.Tx, id int64) ([]SaleLandPa
 	for rows.Next() {
 		var item SaleLandParcel
 		if err := rows.Scan(&item.ID, &item.CadastralMunicipalityCode,
-			&item.ParcelNumber, &item.LandType, &item.ParcelArea,
-			&item.ContractualPrice); err != nil {
+			&item.ParcelNumber, &item.LandType, &item.LandTypeDescription,
+			&item.ParcelArea, &item.ContractualPrice); err != nil {
 			return nil, fmt.Errorf("scan sale land parcel: %w", err)
 		}
 		items = append(items, item)
@@ -334,11 +353,19 @@ func loadSaleLandParcels(ctx context.Context, tx pgx.Tx, id int64) ([]SaleLandPa
 
 func loadRentalSpaces(ctx context.Context, tx pgx.Tx, id int64) ([]RentalSpace, error) {
 	rows, err := tx.Query(ctx, `
-		SELECT id,cadastral_municipality_code,building_number,building_part_number,
-		  rented_spaces_type,furnishing,rented_spaces_area::float8,
+		SELECT space.id,space.cadastral_municipality_code,space.building_number,
+		  space.building_part_number,space.rented_spaces_type,code.description,
+		  space.furnishing,space.rented_spaces_area::float8,
 		  rented_usable_area::float8,contractual_rent::float8,construction_year,
 		  settlement,street,house_number
-		FROM rental_building_parts WHERE transaction_id=$1 ORDER BY id`, id)
+		FROM rental_building_parts space
+		LEFT JOIN LATERAL (
+		  SELECT description FROM codebook_values
+		  WHERE codebook_name='Vrsta oddanih prostorov'
+		    AND numeric_value=space.rented_spaces_type
+		  ORDER BY codebook_id DESC LIMIT 1
+		) code ON true
+		WHERE transaction_id=$1 ORDER BY space.id`, id)
 	if err != nil {
 		return nil, fmt.Errorf("load rental spaces: %w", err)
 	}
@@ -348,7 +375,8 @@ func loadRentalSpaces(ctx context.Context, tx pgx.Tx, id int64) ([]RentalSpace, 
 		var item RentalSpace
 		if err := rows.Scan(&item.ID, &item.CadastralMunicipalityCode,
 			&item.BuildingNumber, &item.BuildingPartNumber, &item.RentedSpaceType,
-			&item.Furnishing, &item.Area, &item.UsableArea, &item.ContractualRent,
+			&item.RentedSpaceTypeDescription, &item.Furnishing, &item.Area,
+			&item.UsableArea, &item.ContractualRent,
 			&item.ConstructionYear, &item.Settlement, &item.Street,
 			&item.HouseNumber); err != nil {
 			return nil, fmt.Errorf("scan rental space: %w", err)

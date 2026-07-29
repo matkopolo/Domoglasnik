@@ -390,6 +390,23 @@ paths:
           $ref: "#/components/responses/Error"
         "404":
           $ref: "#/components/responses/Error"
+  /api/v1/sales/transactions/{id}/context:
+    get:
+      operationId: getSaleTransactionContext
+      tags: [Transactions]
+      parameters:
+        - $ref: "#/components/parameters/TransactionId"
+      responses:
+        "200":
+          description: Same-year representative sale benchmarks, quality evidence, and valuation context.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransactionContext"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
   /api/v1/rentals/transactions/{id}:
     get:
       operationId: getRentalTransaction
@@ -403,6 +420,23 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RentalTransactionDetail"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /api/v1/rentals/transactions/{id}/context:
+    get:
+      operationId: getRentalTransactionContext
+      tags: [Transactions]
+      parameters:
+        - $ref: "#/components/parameters/TransactionId"
+      responses:
+        "200":
+          description: Same-year representative rental benchmarks, quality evidence, and valuation context.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransactionContext"
         "400":
           $ref: "#/components/responses/Error"
         "404":
@@ -496,6 +530,9 @@ paths:
           in: path
           required: true
           schema: {type: string, maxLength: 100}
+        - $ref: "#/components/parameters/FromDate"
+        - $ref: "#/components/parameters/ToDate"
+        - $ref: "#/components/parameters/PropertyGroup"
       responses:
         "200":
           description: Sale and rental history for one cadastral building identity.
@@ -1242,10 +1279,46 @@ components:
             $ref: "#/components/schemas/TransactionGeography"
         buildingParts:
           type: array
-          items: {type: object, additionalProperties: true}
+          items:
+            $ref: "#/components/schemas/SaleBuildingPart"
         landParcels:
           type: array
-          items: {type: object, additionalProperties: true}
+          items:
+            $ref: "#/components/schemas/SaleLandParcel"
+    SaleBuildingPart:
+      type: object
+      required: [id]
+      properties:
+        id: {type: integer, format: int64}
+        cadastralMunicipalityCode: {type: [integer, "null"]}
+        buildingNumber: {type: [string, "null"]}
+        buildingPartNumber: {type: [string, "null"]}
+        buildingPartType: {type: [integer, "null"]}
+        buildingPartTypeDescription: {type: [string, "null"]}
+        constructionYear: {type: [integer, "null"]}
+        floor: {type: [string, "null"]}
+        positionInBuilding: {type: [string, "null"]}
+        roomCount: {type: [number, "null"]}
+        soldArea: {type: [number, "null"]}
+        soldUsableArea: {type: [number, "null"]}
+        buildingPartArea: {type: [number, "null"]}
+        usableArea: {type: [number, "null"]}
+        outdoorParkingSpaces: {type: [integer, "null"]}
+        contractualPrice: {type: [number, "null"]}
+        settlement: {type: [string, "null"]}
+        street: {type: [string, "null"]}
+        houseNumber: {type: [string, "null"]}
+    SaleLandParcel:
+      type: object
+      required: [id]
+      properties:
+        id: {type: integer, format: int64}
+        cadastralMunicipalityCode: {type: [integer, "null"]}
+        parcelNumber: {type: [string, "null"]}
+        landType: {type: [integer, "null"]}
+        landTypeDescription: {type: [string, "null"]}
+        parcelArea: {type: [number, "null"]}
+        contractualPrice: {type: [number, "null"]}
     RentalTransactionDetail:
       type: object
       required:
@@ -1287,7 +1360,26 @@ components:
             $ref: "#/components/schemas/TransactionGeography"
         spaces:
           type: array
-          items: {type: object, additionalProperties: true}
+          items:
+            $ref: "#/components/schemas/RentalSpace"
+    RentalSpace:
+      type: object
+      required: [id]
+      properties:
+        id: {type: integer, format: int64}
+        cadastralMunicipalityCode: {type: [integer, "null"]}
+        buildingNumber: {type: [string, "null"]}
+        buildingPartNumber: {type: [string, "null"]}
+        rentedSpaceType: {type: [integer, "null"]}
+        rentedSpaceTypeDescription: {type: [string, "null"]}
+        furnishing: {type: [integer, "null"]}
+        area: {type: [number, "null"]}
+        usableArea: {type: [number, "null"]}
+        contractualRent: {type: [number, "null"]}
+        constructionYear: {type: [integer, "null"]}
+        settlement: {type: [string, "null"]}
+        street: {type: [string, "null"]}
+        houseNumber: {type: [string, "null"]}
     Outlier:
       type: object
       required:
@@ -1477,6 +1569,7 @@ components:
         - saleHistory
         - rentalHistory
         - saleTransactions
+        - rentalTransactions
       properties:
         cadastralMunicipalityCode: {type: integer}
         buildingNumber: {type: string}
@@ -1497,6 +1590,19 @@ components:
           items:
             $ref: "#/components/schemas/BuildingYearPoint"
         saleTransactions:
+          type: array
+          items:
+            type: object
+            required: [transactionId, propertyGroup]
+            properties:
+              transactionId: {type: integer, format: int64}
+              contractDate: {type: [string, "null"], format: date}
+              propertyGroup:
+                $ref: "#/components/schemas/PropertyGroup"
+              area: {type: [number, "null"]}
+              amount: {type: [number, "null"]}
+              amountPerSqm: {type: [number, "null"]}
+        rentalTransactions:
           type: array
           items:
             type: object
@@ -1605,6 +1711,86 @@ components:
         modelType: {type: string}
         trainingRows: {type: integer}
         metrics: {type: object, additionalProperties: true}
+        reliability: {type: string, enum: [moderate, low, very_low]}
+        warnings:
+          type: array
+          items: {type: string}
+    ContextBenchmark:
+      type: object
+      required:
+        - scope
+        - label
+        - medianAmountPerSqm
+        - sampleSize
+        - differencePercent
+        - percentile
+        - period
+        - reliability
+        - isPublishable
+      properties:
+        scope: {type: string}
+        label: {type: string}
+        geographyId: {type: integer, format: int64}
+        medianAmountPerSqm: {type: number}
+        sampleSize: {type: integer, format: int64}
+        differencePercent: {type: number}
+        percentile: {type: number}
+        period: {type: integer}
+        radiusMeters: {type: integer}
+        reliability: {type: string, enum: [very_low, low, moderate]}
+        isPublishable: {type: boolean}
+    TransactionContext:
+      type: object
+      required:
+        - transactionKind
+        - transactionId
+        - contractYear
+        - incompletePeriod
+        - propertyGroup
+        - actualAmountPerSqm
+        - benchmarks
+        - quality
+        - methodologyVersion
+      properties:
+        transactionKind: {type: string, enum: [sale, rent]}
+        transactionId: {type: integer, format: int64}
+        contractYear: {type: integer}
+        incompletePeriod: {type: boolean}
+        propertyGroup:
+          $ref: "#/components/schemas/PropertyGroup"
+        actualAmountPerSqm: {type: number}
+        benchmarks:
+          type: array
+          items:
+            $ref: "#/components/schemas/ContextBenchmark"
+        valuation:
+          oneOf:
+            - $ref: "#/components/schemas/ContextValuation"
+            - {type: "null"}
+        quality:
+          $ref: "#/components/schemas/QualityDecision"
+        outlierStatus: {type: [string, "null"]}
+        methodologyVersion: {type: string}
+    ContextValuation:
+      type: object
+      required:
+        - predictedAmountPerSqm
+        - lowerAmountPerSqm
+        - upperAmountPerSqm
+        - predictedTotal
+        - lowerTotal
+        - upperTotal
+        - modelVersion
+        - reliability
+        - warnings
+      properties:
+        predictedAmountPerSqm: {type: number}
+        lowerAmountPerSqm: {type: number}
+        upperAmountPerSqm: {type: number}
+        predictedTotal: {type: number}
+        lowerTotal: {type: number}
+        upperTotal: {type: number}
+        modelVersion: {type: string}
         reliability: {type: string, enum: [moderate, low, very_low]}
         warnings:
           type: array

@@ -197,6 +197,8 @@ func TestTransactionDetailEndpoints(t *testing.T) {
 	for _, path := range []string{
 		"/api/v1/sales/transactions/1",
 		"/api/v1/rentals/transactions/1",
+		"/api/v1/sales/transactions/1/context",
+		"/api/v1/rentals/transactions/1/context",
 	} {
 		response := httptest.NewRecorder()
 		newTestHandler(nil, fakeGeographies{}).ServeHTTP(
@@ -382,6 +384,21 @@ func TestBuildingStatisticsRejectsInvalidIdentity(t *testing.T) {
 			"/api/v1/buildings/nope/123/statistics", nil))
 	if response.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestBuildingStatisticsRejectsInvalidFilter(t *testing.T) {
+	for _, path := range []string{
+		"/api/v1/buildings/657/123/statistics?from=2024-01-01&to=2023-01-01",
+		"/api/v1/buildings/657/123/statistics?propertyGroup=castle",
+	} {
+		response := httptest.NewRecorder()
+		newTestHandler(nil, fakeGeographies{}).ServeHTTP(
+			response, httptest.NewRequest(http.MethodGet, path, nil))
+		if response.Code != http.StatusBadRequest {
+			t.Fatalf("path=%s status=%d body=%s",
+				path, response.Code, response.Body.String())
+		}
 	}
 }
 

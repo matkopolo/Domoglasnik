@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -59,10 +60,17 @@ type BuildingStatistics struct {
 	SaleHistory               []BuildingYearPoint   `json:"saleHistory"`
 	RentalHistory             []BuildingYearPoint   `json:"rentalHistory"`
 	SaleTransactions          []BuildingTransaction `json:"saleTransactions"`
+	RentalTransactions        []BuildingTransaction `json:"rentalTransactions"`
+}
+
+type BuildingFilter struct {
+	PropertyGroup string
+	FromDate      *time.Time
+	ToDate        *time.Time
 }
 
 type BuildingStore interface {
-	BuildingStatistics(context.Context, int32, string) (BuildingStatistics, error)
+	BuildingStatistics(context.Context, int32, string, BuildingFilter) (BuildingStatistics, error)
 	SearchBuildings(context.Context, string, int) ([]BuildingSearchResult, error)
 }
 
@@ -116,6 +124,7 @@ func (r *StatisticsRepository) SearchBuildings(
 
 func (r *StatisticsRepository) BuildingStatistics(
 	ctx context.Context, cadastralCode int32, buildingNumber string,
+	filter BuildingFilter,
 ) (BuildingStatistics, error) {
 	result := BuildingStatistics{
 		CadastralMunicipalityCode: cadastralCode,
@@ -123,6 +132,7 @@ func (r *StatisticsRepository) BuildingStatistics(
 		SaleHistory:               []BuildingYearPoint{},
 		RentalHistory:             []BuildingYearPoint{},
 		SaleTransactions:          []BuildingTransaction{},
+		RentalTransactions:        []BuildingTransaction{},
 	}
 	err := r.pool.QueryRow(ctx, `
 		WITH parts AS (
@@ -147,31 +157,36 @@ func (r *StatisticsRepository) BuildingStatistics(
 	if err != nil {
 		return BuildingStatistics{}, fmt.Errorf("load building identity: %w", err)
 	}
-	if err := r.loadBuildingSummary(ctx, "analytics.sale_facts", "price",
-		"price_per_sqm", cadastralCode, buildingNumber, &result.Sales); err != nil {
+	if err := r.loadBuildingSummary(ctx, "analytics.sale_facts_strict_land", "price",
+		"price_per_sqm", cadastralCode, buildingNumber, filter, &result.Sales); err != nil {
 		return BuildingStatistics{}, err
 	}
 	if err := r.loadBuildingSummary(ctx, "analytics.rental_facts",
 		"monthly_rent_ex_vat", "monthly_rent_per_sqm", cadastralCode,
-		buildingNumber, &result.Rentals); err != nil {
+		buildingNumber, filter, &result.Rentals); err != nil {
 		return BuildingStatistics{}, err
 	}
-	result.SaleHistory, err = r.loadBuildingHistory(ctx, "analytics.sale_facts",
-		"price_per_sqm", cadastralCode, buildingNumber)
+	result.SaleHistory, err = r.loadBuildingHistory(ctx, "analytics.sale_facts_strict_land",
+		"price_per_sqm", cadastralCode, buildingNumber, filter)
 	if err != nil {
 		return BuildingStatistics{}, err
 	}
 	result.RentalHistory, err = r.loadBuildingHistory(ctx, "analytics.rental_facts",
-		"monthly_rent_per_sqm", cadastralCode, buildingNumber)
+		"monthly_rent_per_sqm", cadastralCode, buildingNumber, filter)
 	if err != nil {
 		return BuildingStatistics{}, err
 	}
 	rows, err := r.pool.Query(ctx, `
 		SELECT transaction_id,contract_date::text,property_group,area::float8,
 		  price::float8,price_per_sqm::float8
-		FROM analytics.sale_facts
+		FROM analytics.sale_facts_strict_land
 		WHERE cadastral_municipality_code=$1 AND building_number=$2
-		ORDER BY contract_date DESC NULLS LAST,transaction_id`, cadastralCode, buildingNumber)
+		  AND ($3='' OR property_group=$3)
+		  AND ($4::date IS NULL OR contract_date>=$4)
+		  AND ($5::date IS NULL OR contract_date<=$5)
+		ORDER BY contract_date DESC NULLS LAST,transaction_id`,
+		cadastralCode, buildingNumber, filter.PropertyGroup,
+		filter.FromDate, filter.ToDate)
 	if err != nil {
 		return BuildingStatistics{}, fmt.Errorf("load building sale transactions: %w", err)
 	}
@@ -185,12 +200,40 @@ func (r *StatisticsRepository) BuildingStatistics(
 		}
 		result.SaleTransactions = append(result.SaleTransactions, item)
 	}
-	return result, rows.Err()
+	if err := rows.Err(); err != nil {
+		return BuildingStatistics{}, err
+	}
+	rows.Close()
+	rentalRows, err := r.pool.Query(ctx, `
+		SELECT transaction_id,contract_date::text,property_group,area::float8,
+		  monthly_rent_ex_vat::float8,monthly_rent_per_sqm::float8
+		FROM analytics.rental_facts
+		WHERE cadastral_municipality_code=$1 AND building_number=$2
+		  AND ($3='' OR property_group=$3)
+		  AND ($4::date IS NULL OR contract_date>=$4)
+		  AND ($5::date IS NULL OR contract_date<=$5)
+		ORDER BY contract_date DESC NULLS LAST,transaction_id`,
+		cadastralCode, buildingNumber, filter.PropertyGroup,
+		filter.FromDate, filter.ToDate)
+	if err != nil {
+		return BuildingStatistics{}, fmt.Errorf("load building rental transactions: %w", err)
+	}
+	defer rentalRows.Close()
+	for rentalRows.Next() {
+		var item BuildingTransaction
+		if err := rentalRows.Scan(&item.TransactionID, &item.ContractDate,
+			&item.PropertyGroup, &item.Area, &item.Amount,
+			&item.AmountPerSQM); err != nil {
+			return BuildingStatistics{}, fmt.Errorf("scan building rental transaction: %w", err)
+		}
+		result.RentalTransactions = append(result.RentalTransactions, item)
+	}
+	return result, rentalRows.Err()
 }
 
 func (r *StatisticsRepository) loadBuildingSummary(
 	ctx context.Context, table, amount, perSQM string, code int32,
-	number string, result *BuildingMarketSummary,
+	number string, filter BuildingFilter, result *BuildingMarketSummary,
 ) error {
 	query := fmt.Sprintf(`
 		SELECT count(*)::bigint,
@@ -200,9 +243,13 @@ func (r *StatisticsRepository) loadBuildingSummary(
 		  percentile_cont(.5) WITHIN GROUP(ORDER BY %s)
 		    FILTER(WHERE representative_eligible)::float8,
 		  min(contract_date)::text,max(contract_date)::text
-		FROM %s WHERE cadastral_municipality_code=$1 AND building_number=$2`,
+		FROM %s WHERE cadastral_municipality_code=$1 AND building_number=$2
+		  AND ($3='' OR property_group=$3)
+		  AND ($4::date IS NULL OR contract_date>=$4)
+		  AND ($5::date IS NULL OR contract_date<=$5)`,
 		amount, perSQM, table)
-	if err := r.pool.QueryRow(ctx, query, code, number).Scan(
+	if err := r.pool.QueryRow(ctx, query, code, number, filter.PropertyGroup,
+		filter.FromDate, filter.ToDate).Scan(
 		&result.TransactionCount, &result.RepresentativeCount,
 		&result.MedianAmount, &result.MedianAmountPerSQM,
 		&result.FirstContractDate, &result.LastContractDate); err != nil {
@@ -213,6 +260,7 @@ func (r *StatisticsRepository) loadBuildingSummary(
 
 func (r *StatisticsRepository) loadBuildingHistory(
 	ctx context.Context, table, perSQM string, code int32, number string,
+	filter BuildingFilter,
 ) ([]BuildingYearPoint, error) {
 	query := fmt.Sprintf(`
 		SELECT extract(year FROM contract_date)::integer,count(*)::bigint,
@@ -222,8 +270,12 @@ func (r *StatisticsRepository) loadBuildingHistory(
 		FROM %s
 		WHERE cadastral_municipality_code=$1 AND building_number=$2
 		  AND contract_date IS NOT NULL
+		  AND ($3='' OR property_group=$3)
+		  AND ($4::date IS NULL OR contract_date>=$4)
+		  AND ($5::date IS NULL OR contract_date<=$5)
 		GROUP BY 1 ORDER BY 1`, perSQM, table)
-	rows, err := r.pool.Query(ctx, query, code, number)
+	rows, err := r.pool.Query(ctx, query, code, number, filter.PropertyGroup,
+		filter.FromDate, filter.ToDate)
 	if err != nil {
 		return nil, fmt.Errorf("load building history: %w", err)
 	}

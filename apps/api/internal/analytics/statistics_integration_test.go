@@ -115,6 +115,33 @@ func TestStatisticsRepositoryIntegration(t *testing.T) {
 		len(rentalDetail.Spaces) == 0 {
 		t.Fatalf("RentalTransaction()=%+v error=%v", rentalDetail, err)
 	}
+	var contextID int64
+	if err := pool.QueryRow(ctx, `
+		SELECT subject.transaction_id
+		FROM analytics.sale_facts subject
+		WHERE subject.property_group='apartment'
+		  AND subject.price_per_sqm>0
+		  AND (SELECT count(*) FROM analytics.sale_facts_strict_land cohort
+		    WHERE cohort.transaction_id<>subject.transaction_id
+		      AND cohort.property_group=subject.property_group
+		      AND extract(year FROM cohort.contract_date)=
+		        extract(year FROM subject.contract_date)
+		      AND cohort.representative_eligible
+		      AND cohort.price_per_sqm>0)>=5
+		LIMIT 1`).Scan(&contextID); err != nil {
+		t.Fatalf("select transaction context fixture: %v", err)
+	}
+	transactionContext, err := repository.TransactionContext(ctx, "sale", contextID)
+	if err != nil || transactionContext.TransactionID != contextID ||
+		len(transactionContext.Benchmarks) == 0 {
+		t.Fatalf("TransactionContext()=%+v error=%v", transactionContext, err)
+	}
+	for _, benchmark := range transactionContext.Benchmarks {
+		if benchmark.Period != transactionContext.ContractYear ||
+			benchmark.SampleSize < 5 || benchmark.MedianAmountPerSQM <= 0 {
+			t.Fatalf("invalid context benchmark: %+v", benchmark)
+		}
+	}
 	if _, err := repository.SaleTransaction(ctx, 999999999999); err != ErrTransactionNotFound {
 		t.Fatalf("missing sale transaction error=%v", err)
 	}
@@ -142,12 +169,28 @@ func TestStatisticsRepositoryIntegration(t *testing.T) {
 		&cadastralCode, &buildingNumber); err != nil {
 		t.Fatalf("select building fixture: %v", err)
 	}
-	building, err := repository.BuildingStatistics(ctx, cadastralCode, buildingNumber)
+	building, err := repository.BuildingStatistics(
+		ctx, cadastralCode, buildingNumber, BuildingFilter{})
 	if err != nil || building.BuildingNumber != buildingNumber ||
 		building.Sales.TransactionCount == 0 {
 		t.Fatalf("BuildingStatistics()=%+v error=%v", building, err)
 	}
-	if _, err := repository.BuildingStatistics(ctx, 999999, "missing"); err != ErrBuildingNotFound {
+	filteredBuilding, err := repository.BuildingStatistics(
+		ctx, cadastralCode, buildingNumber,
+		BuildingFilter{PropertyGroup: "apartment", FromDate: &from, ToDate: &to})
+	if err != nil {
+		t.Fatalf("filtered BuildingStatistics(): %v", err)
+	}
+	for _, transaction := range filteredBuilding.SaleTransactions {
+		if transaction.PropertyGroup != "apartment" ||
+			transaction.ContractDate == nil ||
+			*transaction.ContractDate < "2023-01-01" ||
+			*transaction.ContractDate > "2023-12-31" {
+			t.Fatalf("building filter leaked transaction: %+v", transaction)
+		}
+	}
+	if _, err := repository.BuildingStatistics(
+		ctx, 999999, "missing", BuildingFilter{}); err != ErrBuildingNotFound {
 		t.Fatalf("missing building error=%v", err)
 	}
 	anomalies, anomalyTotal, err := repository.Anomalies(ctx, AnomalyFilter{

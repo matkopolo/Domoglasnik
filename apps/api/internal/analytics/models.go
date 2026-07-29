@@ -127,15 +127,21 @@ func (r *StatisticsRepository) ValuationPrediction(
 		  prediction.upper_amount_per_sqm::float8,
 		  prediction.log_residual::float8,model.model_version,model.model_type,
 		  model.training_rows,model.metrics,
-		  (model.metrics->'property_groups'->fact.property_group
-		    ->>'median_absolute_percentage_error')::float8
+		  COALESCE(
+		    (model.metrics->'property_groups'->fact.property_group->'temporal'
+		      ->>'median_absolute_percentage_error')::float8,
+		    (model.metrics->'property_groups'->fact.property_group->'spatial'
+		      ->>'median_absolute_percentage_error')::float8,
+		    (model.metrics->'property_groups'->fact.property_group
+		      ->>'median_absolute_percentage_error')::float8,
+		    (model.metrics->>'median_absolute_percentage_error')::float8)
 		FROM analytics.valuation_predictions prediction
 		JOIN %s fact ON fact.transaction_id=prediction.transaction_id
 		JOIN analytics.model_runs model ON model.id=prediction.model_run_id
 		WHERE prediction.transaction_kind=$1 AND prediction.transaction_id=$2`,
 		factTable)
 	var result ValuationPrediction
-	var medianAPE float64
+	var medianAPE *float64
 	err := r.pool.QueryRow(ctx, query, kind, id).Scan(
 		&result.TransactionKind, &result.TransactionID, &result.PropertyGroup,
 		&result.Area, &result.ActualAmountPerSQM,
@@ -156,9 +162,13 @@ func (r *StatisticsRepository) ValuationPrediction(
 		"range is empirical and does not include every property-specific condition",
 	}
 	switch {
-	case medianAPE <= 0.25:
+	case medianAPE == nil:
+		result.Reliability = "very_low"
+		result.Warnings = append(result.Warnings,
+			"model error is unavailable for this property group")
+	case *medianAPE <= 0.25:
 		result.Reliability = "moderate"
-	case medianAPE <= 0.45:
+	case *medianAPE <= 0.45:
 		result.Reliability = "low"
 	default:
 		result.Reliability = "very_low"
