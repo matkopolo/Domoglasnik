@@ -180,3 +180,17 @@ def test_national_sales_and_rent_snapshots(database_connection, tmp_path):
     assert 45.0 < latitude < 47.0
     assert connection.execute("SELECT contract_rent FROM rental_transactions WHERE transaction_id=800").fetchone()[0] == 500
     assert connection.execute("SELECT municipality_name FROM rental_building_parts").fetchone()[0] == "TEST TOWN"
+
+
+def test_import_streams_zip_members_without_zipfile_read(
+    database_connection, tmp_path, monkeypatch
+):
+    archive = tmp_path / "ETN_SLO_2010_KPP_test.zip"
+    create_national_sales_archive(archive)
+
+    def forbid_materializing_member(*_args, **_kwargs):
+        raise AssertionError("ZipFile.read materializes the complete member")
+
+    monkeypatch.setattr(zipfile.ZipFile, "read", forbid_materializing_member)
+    stats = import_zip(database_connection, archive)
+    assert stats.rows == 3

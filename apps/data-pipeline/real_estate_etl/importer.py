@@ -13,6 +13,7 @@ from pathlib import Path
 
 from psycopg import sql
 
+from .conversion import converted
 from .models import ImportStats
 
 TABLES = {
@@ -102,42 +103,10 @@ RENT_TABLES = {
     }, ["transaction_id"]),
 }
 
-INT_FIELDS = {"transaction_id", "transaction_type", "deed_type", "marketability", "dataset_year",
-              "municipality_code", "cadastral_municipality_code", "recorded_status", "building_part_type",
-              "construction_year", "construction_phase", "outdoor_parking_spaces", "land_type",
-              "permanent_crop_type", "permanent_crop_age", "rental_transaction_type",
-              "rented_spaces_type", "furnishing", "microlocation"}
-BOOL_FIELDS = {"vat_included", "agency_brokered", "building_completed", "new_construction", "atrium"}
-BOOL_FIELDS.update({"operating_costs_included", "storefront", "shopping_center",
-                    "rented_area_equals_building_part", "hospitality_garden", "garden_included_in_rent"})
-DATE_FIELDS = {"effective_date", "contract_date", "lease_expiry_date", "lease_termination_date",
-               "last_changed_date", "last_effective_date", "rental_start_date", "rental_end_date",
-               "closure_or_early_termination_date"}
-NULL_DATE_SENTINELS = {"00.00.0000", "0.0.0000", "00.00.00"}
-NUMERIC_FIELDS = {"contract_price", "vat_rate", "sold_area", "sold_building_part_area", "sold_usable_area",
-                  "atrium_area", "room_count", "building_part_area", "usable_area", "contractual_price",
-                  "centroid_e", "centroid_n", "parcel_area", "contract_rent", "rented_spaces_area",
-                  "usable_building_part_area", "rented_usable_area", "hospitality_garden_area"}
-
-
-def converted(field: str, value: str):
-    value = value.strip()
-    if not value:
-        return None
-    if field in INT_FIELDS:
-        return int(value)
-    if field in BOOL_FIELDS:
-        return value in {"1", "true", "TRUE"}
-    if field in DATE_FIELDS:
-        if value in NULL_DATE_SENTINELS:
-            return None
-        return datetime.strptime(value, "%d.%m.%Y").date()
-    if field in NUMERIC_FIELDS:
-        return value.replace(",", ".")
-    return value
-
-
-def copy_rows(cur, table: str, mapping: dict[str, str], rows, source_file_id: int) -> int:
+def copy_rows(
+    cur, table: str, mapping: dict[str, str], rows, source_file_id: int,
+    *, archive_name: str = "<unknown archive>", member: str = "<unknown member>",
+) -> int:
     preserve_source_rows = table in {"building_parts", "land_parcels", "rental_building_parts"}
     columns = list(mapping.values()) + ["source_file_id"]
     if preserve_source_rows:
@@ -145,11 +114,85 @@ def copy_rows(cur, table: str, mapping: dict[str, str], rows, source_file_id: in
     statement = sql.SQL("COPY {} ({}) FROM STDIN").format(
         sql.Identifier(table), sql.SQL(",").join(map(sql.Identifier, columns)),
     )
+    count = 0
     with cur.copy(statement) as copy:
         for row_number, row in enumerate(rows, start=2):
-            value = tuple(converted(mapping[source], row.get(source, "")) for source in mapping) + (source_file_id,)
+            value = tuple(
+                converted(
+                    mapping[source], row.get(source, ""),
+                    archive=archive_name, member=member, row_number=row_number,
+                    source_field=source,
+                )
+                for source in mapping
+            ) + (source_file_id,)
             copy.write_row(value + (row_number,) if preserve_source_rows else value)
-    return len(rows)
+            count += 1
+    return count
+
+
+def _reader(archive: zipfile.ZipFile, member: str):
+    binary = archive.open(member)
+    text = io.TextIOWrapper(binary, encoding="utf-8-sig", newline="")
+    return text, csv.DictReader(text)
+
+
+def _member_checksum(archive: zipfile.ZipFile, member: str) -> str:
+    hasher = hashlib.sha256()
+    with archive.open(member) as source:
+        while chunk := source.read(1024 * 1024):
+            hasher.update(chunk)
+    return hasher.hexdigest()
+
+
+def _historical_cadastral_units(
+    archive: zipfile.ZipFile, member: str,
+) -> set[tuple[int, str]]:
+    text, rows = _reader(archive, member)
+    try:
+        return {
+            (int(row["SIFRA_KO"]), row.get("IME_KO", "").strip())
+            for row in rows
+            if row.get("SIFRA_KO", "").strip()
+        }
+    finally:
+        text.close()
+
+
+def _import_codebook(
+    cur, archive: zipfile.ZipFile, member: str, source_file_id: int,
+) -> int:
+    count = 0
+    batch = []
+    text, rows = _reader(archive, member)
+    try:
+        for row in rows:
+            batch.append((
+                int(row["ID"]), row["SIFRANT"], int(row["NUMERICNA_VREDNOST"]),
+                row["OPIS"], source_file_id,
+            ))
+            if len(batch) == 500:
+                _write_codebook_batch(cur, batch)
+                count += len(batch)
+                batch.clear()
+        if batch:
+            _write_codebook_batch(cur, batch)
+            count += len(batch)
+    finally:
+        text.close()
+    return count
+
+
+def _write_codebook_batch(cur, values) -> None:
+    cur.executemany(
+        """INSERT INTO codebook_values(
+               codebook_id,codebook_name,numeric_value,description,source_file_id
+           ) VALUES (%s,%s,%s,%s,%s)
+           ON CONFLICT(codebook_id,numeric_value) DO UPDATE SET
+             codebook_name=excluded.codebook_name,
+             description=excluded.description,
+             source_file_id=excluded.source_file_id""",
+        values,
+    )
 
 
 def import_zip(connection, path: Path, verbose: bool = False) -> ImportStats:
@@ -193,11 +236,8 @@ def import_zip(connection, path: Path, verbose: bool = False) -> ImportStats:
             ordered = sorted(members, key=lambda n: 0 if "_POSLI_" in n else 1)
             for member in ordered:
                 parsing_started = time.monotonic()
-                payload = archive.read(member)
-                rows = list(csv.DictReader(io.StringIO(payload.decode("utf-8-sig"), newline="")))
-                stats.parsing_seconds += time.monotonic() - parsing_started
                 if "_sifranti_" in member:
-                    checksum = hashlib.sha256(payload).hexdigest()
+                    checksum = _member_checksum(archive, member)
                     cur.execute(
                         """INSERT INTO codebook_imports(checksum,source_file_id) VALUES (%s,%s)
                            ON CONFLICT(checksum) DO NOTHING RETURNING checksum""",
@@ -206,34 +246,39 @@ def import_zip(connection, path: Path, verbose: bool = False) -> ImportStats:
                     if cur.fetchone() is None:
                         stats.codebook_skipped = True
                         if verbose:
-                            print(f"Skipped unchanged codebook ({len(rows)} rows)")
+                            print("Skipped unchanged codebook")
                         continue
-                    values = [(int(r["ID"]), r["SIFRANT"], int(r["NUMERICNA_VREDNOST"]), r["OPIS"], source_file_id) for r in rows]
-                    cur.executemany("""INSERT INTO codebook_values(codebook_id,codebook_name,numeric_value,description,source_file_id)
-                                       VALUES (%s,%s,%s,%s,%s) ON CONFLICT(codebook_id,numeric_value) DO UPDATE SET
-                                       codebook_name=excluded.codebook_name,description=excluded.description,source_file_id=excluded.source_file_id""", values)
-                    stats.codebook_rows += len(rows)
+                    imported = _import_codebook(cur, archive, member, source_file_id)
+                    stats.codebook_rows += imported
+                    stats.parsing_seconds += time.monotonic() - parsing_started
                     if verbose:
-                        print(f"Imported {len(rows)} rows into codebook_values")
+                        print(f"Imported {imported} rows into codebook_values")
                     continue
                 kind = next((key for key in selected_tables if f"_{key}_" in member), None)
                 if not kind:
                     raise ValueError(f"Unknown CSV member: {member}")
                 table, mapping, _ = selected_tables[kind]
-                unknown = set(rows[0] if rows else ()) - set(mapping)
-                if unknown:
-                    raise ValueError(f"Unmapped columns in {member}: {sorted(unknown)}")
                 if "SIFRA_KO" in mapping:
-                    historical_cadastral = {
-                        (int(row["SIFRA_KO"]), row["IME_KO"].strip())
-                        for row in rows if row.get("SIFRA_KO", "").strip()
-                    }
+                    historical_cadastral = _historical_cadastral_units(archive, member)
                     cur.executemany(
                         """INSERT INTO cadastral_municipalities(code,name) VALUES (%s,%s)
                            ON CONFLICT(code) DO UPDATE SET name=excluded.name""",
                         historical_cadastral,
                     )
-                copied = copy_rows(cur, table, mapping, rows, source_file_id)
+                text, rows = _reader(archive, member)
+                try:
+                    unknown = set(rows.fieldnames or ()) - set(mapping)
+                    if unknown:
+                        raise ValueError(
+                            f"Unmapped columns in {member}: {sorted(unknown)}"
+                        )
+                    copied = copy_rows(
+                        cur, table, mapping, rows, source_file_id,
+                        archive_name=path.name, member=member,
+                    )
+                finally:
+                    text.close()
+                stats.parsing_seconds += time.monotonic() - parsing_started
                 stats.rows += copied
                 if verbose:
                     print(f"Copied {copied} rows into {table}")

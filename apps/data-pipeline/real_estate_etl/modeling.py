@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import math
 import os
 import time
 import uuid
@@ -12,28 +11,22 @@ from datetime import date, datetime, timezone
 
 import numpy as np
 import psycopg
-from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import IsolationForest
-from sklearn.impute import SimpleImputer
-from sklearn.linear_model import Ridge
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.metrics import mean_absolute_error
 from sklearn.model_selection import GroupShuffleSplit
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
+
+from .model_features import MODEL_FEATURES, hedonic_pipeline, preprocessor
+from .model_validation import (
+    NOMINAL_INTERVAL_COVERAGE,
+    interval_half_width,
+    percentile_scores,
+    regression_metrics,
+    temporal_split_indices,
+)
 
 RANDOM_SEED = 20260723
-NOMINAL_INTERVAL_COVERAGE = 0.90
 ISOLATION_TRAINING_LIMIT = 50_000
-MODEL_FEATURES = [
-    "log_area",
-    "construction_year",
-    "contract_year",
-    "contract_month",
-    "centroid_e",
-    "centroid_n",
-    "property_group",
-    "municipality_id",
-]
 
 
 @dataclass(frozen=True)
@@ -43,123 +36,6 @@ class ModelResult:
     model_version: str
     elapsed_seconds: float
     metrics: dict[str, object]
-
-
-def _preprocessor(numeric_columns: list[int], categorical_columns: list[int]) -> ColumnTransformer:
-    return ColumnTransformer(
-        [
-            (
-                "numeric",
-                Pipeline(
-                    [
-                        ("impute", SimpleImputer(strategy="median", keep_empty_features=True)),
-                        ("scale", StandardScaler()),
-                    ]
-                ),
-                numeric_columns,
-            ),
-            (
-                "categorical",
-                OneHotEncoder(handle_unknown="ignore", min_frequency=10),
-                categorical_columns,
-            ),
-        ]
-    )
-
-
-def _hedonic_pipeline() -> Pipeline:
-    return Pipeline(
-        [
-            ("features", _preprocessor(list(range(6)), [6, 7])),
-            ("regression", Ridge(alpha=2.0)),
-        ]
-    )
-
-
-def percentile_scores(values: np.ndarray) -> np.ndarray:
-    """Map higher raw anomaly values to deterministic empirical scores in [0,1]."""
-    if len(values) == 0:
-        return np.array([], dtype=float)
-    ordered = np.sort(values)
-    return np.searchsorted(ordered, values, side="right") / len(values)
-
-
-def temporal_split_indices(
-    contract_dates: list[date],
-    as_of: date | None = None,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Return latest-complete-year splits, or a chronological sparse fallback."""
-    if len(contract_dates) < 30:
-        raise ValueError("temporal validation requires at least 30 rows")
-    as_of = as_of or date.today()
-    complete_years = sorted(
-        {value.year for value in contract_dates if value.year < as_of.year}
-    )
-    if len(complete_years) >= 2:
-        test_year, calibration_year = complete_years[-1], complete_years[-2]
-        training = np.asarray(
-            [
-                index
-                for index, value in enumerate(contract_dates)
-                if value.year < calibration_year
-            ],
-            dtype=int,
-        )
-        calibration = np.asarray(
-            [
-                index
-                for index, value in enumerate(contract_dates)
-                if value.year == calibration_year
-            ],
-            dtype=int,
-        )
-        test = np.asarray(
-            [
-                index
-                for index, value in enumerate(contract_dates)
-                if value.year == test_year
-            ],
-            dtype=int,
-        )
-        if min(len(training), len(calibration), len(test)) >= 10:
-            return training, calibration, test
-
-    order = np.argsort(np.asarray(contract_dates, dtype="datetime64[D]"), kind="stable")
-    test_size = max(10, len(order) // 5)
-    calibration_size = max(10, len(order) // 5)
-    if test_size + calibration_size >= len(order):
-        raise ValueError("not enough rows for disjoint temporal splits")
-    return (
-        order[: -(test_size + calibration_size)],
-        order[-(test_size + calibration_size) : -test_size],
-        order[-test_size:],
-    )
-
-
-def interval_half_width(
-    actual_log: np.ndarray,
-    predicted_log: np.ndarray,
-    coverage: float = NOMINAL_INTERVAL_COVERAGE,
-) -> float:
-    """Split-conformal absolute-log residual quantile."""
-    if len(actual_log) == 0 or len(actual_log) != len(predicted_log):
-        raise ValueError("calibration arrays must be non-empty and equal length")
-    rank = min(len(actual_log) - 1, math.ceil((len(actual_log) + 1) * coverage) - 1)
-    return float(np.sort(np.abs(actual_log - predicted_log))[rank])
-
-
-def regression_metrics(actual_log: np.ndarray, predicted_log: np.ndarray) -> dict[str, float]:
-    actual = np.exp(actual_log)
-    predicted = np.exp(predicted_log)
-    return {
-        "rows": int(len(actual_log)),
-        "mae_amount_per_sqm": float(mean_absolute_error(actual, predicted)),
-        "median_absolute_percentage_error": float(
-            np.median(np.abs(actual - predicted) / actual)
-        ),
-        "rmse_log": float(math.sqrt(mean_squared_error(actual_log, predicted_log))),
-        "r2_log": float(r2_score(actual_log, predicted_log)),
-    }
 
 
 def _query(kind: str) -> str:
@@ -243,7 +119,7 @@ def _refresh_kind(
         group_target = target[group_indices]
         group_dates = [contract_dates[index] for index in group_indices]
         training, calibration, test = temporal_split_indices(group_dates)
-        validation_model = _hedonic_pipeline()
+        validation_model = hedonic_pipeline()
         validation_model.fit(group_features[training], group_target[training])
         calibration_predictions = validation_model.predict(group_features[calibration])
         group_interval = interval_half_width(
@@ -270,7 +146,7 @@ def _refresh_kind(
             spatial_training, spatial_test = next(
                 spatial_split.split(group_features, groups=municipalities)
             )
-            spatial_model = _hedonic_pipeline()
+            spatial_model = hedonic_pipeline()
             spatial_model.fit(
                 group_features[spatial_training], group_target[spatial_training]
             )
@@ -287,7 +163,7 @@ def _refresh_kind(
                 "status": "insufficient_distinct_municipalities",
             }
 
-        final_model = _hedonic_pipeline()
+        final_model = hedonic_pipeline()
         final_model.fit(group_features, group_target)
         final_models[str(group)] = final_model
         fitted_predictions[group_indices] = final_model.predict(group_features)
@@ -319,7 +195,7 @@ def _refresh_kind(
         }
 
     isolation_features = np.column_stack([target, features])
-    isolation_transformer = _preprocessor(list(range(7)), [7, 8])
+    isolation_transformer = preprocessor(list(range(7)), [7, 8])
     transformed = isolation_transformer.fit_transform(isolation_features)
     generator = np.random.default_rng(RANDOM_SEED)
     training_size = min(ISOLATION_TRAINING_LIMIT, len(rows))

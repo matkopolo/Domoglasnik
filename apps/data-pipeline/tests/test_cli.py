@@ -1,5 +1,6 @@
 import zipfile
 from datetime import date
+from decimal import Decimal
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -25,7 +26,7 @@ from real_estate_etl.pipeline import (
         ("vat_included", "0", False),
         ("contract_date", "09.01.2026", date(2026, 1, 9)),
         ("rental_start_date", "00.00.0000", None),
-        ("contract_price", "12,50", "12.50"),
+        ("contract_price", "12,50", Decimal("12.50")),
         ("parcel_number", " 10/2 ", "10/2"),
         ("cadastral_municipality_code", "", None),
     ],
