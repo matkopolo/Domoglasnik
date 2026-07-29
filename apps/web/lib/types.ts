@@ -168,6 +168,8 @@ export interface SaleTransactionDetail {
   price?: number | null;
   pricePerSqm?: number | null;
   priceDerivation: string;
+  longitude?: number | null;
+  latitude?: number | null;
   quality: QualityDecision;
   outlier?: OutlierEvidence | null;
   geographies: TransactionGeography[];
@@ -208,6 +210,8 @@ export interface RentalTransactionDetail {
   durationMonths?: number | null;
   operatingCostsIncluded?: boolean | null;
   isMarketRent: boolean;
+  longitude?: number | null;
+  latitude?: number | null;
   quality: QualityDecision;
   outlier?: OutlierEvidence | null;
   geographies: TransactionGeography[];

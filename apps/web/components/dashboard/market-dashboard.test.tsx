@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MarketDashboard } from "./market-dashboard";
 
@@ -12,11 +12,41 @@ vi.mock("@/lib/api", async () => {
     loadAnomalySummary: vi.fn(async () => ({ total: 0, flagged: 0, unreviewed: 0, highPriority: 0 })),
     loadTransactionExtremes: vi.fn(async () => ({ items: [], population: "representative" })),
     loadGeographyRankings: vi.fn(async () => []),
+    loadGeography: vi.fn(async (id: number) => ({
+      id, name: "Podravska", level: "statistical_region",
+    })),
+    loadGeographyChildren: vi.fn(async () => ({ items: [] })),
+    loadGeographyComparisons: vi.fn(async () => []),
+    loadTransaction: vi.fn(async () => ({
+      transactionId: 501, datasetYear: 2023, propertyGroup: "apartment",
+      priceDerivation: "transaction", quality: {
+        isQualityEligible: true, isRepresentative: true, reasons: [],
+      }, geographies: [], buildingParts: [], landParcels: [],
+    })),
+    loadTransactionContext: vi.fn(async () => ({
+      transactionKind: "sale", transactionId: 501, contractYear: 2023,
+      incompletePeriod: false, propertyGroup: "apartment", actualAmountPerSqm: 2500,
+      benchmarks: [], quality: {
+        isQualityEligible: true, isRepresentative: true, reasons: [],
+      }, methodologyVersion: "test",
+    })),
+    loadFullValuation: vi.fn(async () => undefined),
   };
 });
 
 vi.mock("./slovenia-map", () => ({
-  SloveniaMap: () => <div role="application" aria-label="Interaktivni zemljevid nepremičninskih poslov v Sloveniji" />,
+  SloveniaMap: ({ onContextChange }: {
+    onContextChange: (context: {
+      kind: "geography"; id: number; level: "statistical_region"; name: string;
+    } | { kind: "transaction"; mode: "sale"; id: number }) => void;
+  }) => <div role="application" aria-label="Interaktivni zemljevid nepremičninskih poslov v Sloveniji">
+    <button type="button" onClick={() => onContextChange({
+      kind: "geography", id: 12, level: "statistical_region", name: "Podravska",
+    })}>Izberi Podravsko</button>
+    <button type="button" onClick={() => onContextChange({
+      kind: "transaction", mode: "sale", id: 501,
+    })}>Odpri posel</button>
+  </div>,
 }));
 
 afterEach(cleanup);
@@ -26,6 +56,7 @@ describe("MarketDashboard", () => {
     const { demoDashboard } = await import("@/lib/demo-data");
     loadDashboardMock.mockReset();
     loadDashboardMock.mockImplementation(async (mode: "sale" | "rent") => demoDashboard(mode));
+    Element.prototype.scrollIntoView = vi.fn();
     window.history.replaceState(null, "", "/");
   });
 
@@ -67,5 +98,17 @@ describe("MarketDashboard", () => {
     await screen.findByText("Srednja najemnina / m²");
     await act(async () => resolveFirst(demoDashboard("sale")));
     expect(screen.getByText("Srednja najemnina / m²")).toBeInTheDocument();
+  });
+
+  it("keeps the selected geography while opening a transaction", async () => {
+    render(<MarketDashboard />);
+    fireEvent.click(screen.getByRole("button", { name: "Izberi Podravsko" }));
+    await screen.findAllByRole("heading", { name: "Podravska" });
+    fireEvent.click(screen.getByRole("button", { name: "Odpri posel" }));
+    expect(window.location.search).toContain("context=transaction");
+    expect(window.location.search).toContain("geographyId=12");
+    expect(screen.getAllByRole("heading", { name: "Podravska" }).length).toBeGreaterThan(0);
+    await waitFor(() => expect(Element.prototype.scrollIntoView).toHaveBeenCalled());
+    expect(loadDashboardMock.mock.calls.at(-1)?.[2]).toBe(12);
   });
 });

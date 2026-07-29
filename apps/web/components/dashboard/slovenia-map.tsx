@@ -3,7 +3,7 @@
 import { Layers3, LocateFixed, Mountain, Search, X } from "lucide-react";
 import maplibregl, { type GeoJSONSource, type LngLatBoundsLike } from "maplibre-gl";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { loadMapFeatures, loadRegionBoundaries, searchBuildings } from "@/lib/api";
+import { loadMapFeatures, loadRegionBoundaries, loadTransaction, searchBuildings } from "@/lib/api";
 import { decimal, euro } from "@/lib/display-values";
 import { mapStyle, type MapStyleId } from "@/lib/map-styles";
 import type {
@@ -17,6 +17,8 @@ import type {
   MarketContext,
   MarketMode,
   PropertyGroup,
+  RentalTransactionDetail,
+  SaleTransactionDetail,
   YearRange,
 } from "@/lib/types";
 
@@ -108,6 +110,7 @@ function zoomToSemanticFeature(map: maplibregl.Map, feature: MapPointFeature) {
 
 interface SloveniaMapProps {
   mode: MarketMode;
+  context: MarketContext;
   propertyGroup: PropertyGroup;
   clusters: Cluster[];
   regions: Geography[];
@@ -118,6 +121,7 @@ interface SloveniaMapProps {
 
 export function SloveniaMap({
   mode,
+  context,
   propertyGroup,
   clusters,
   regions,
@@ -132,6 +136,7 @@ export function SloveniaMap({
   const regionsRef = useRef(regions);
   const markersRef = useRef<maplibregl.Marker[]>([]);
   const popupRef = useRef<maplibregl.Popup | null>(null);
+  const selectionMarkerRef = useRef<maplibregl.Marker | null>(null);
   const contextRef = useRef(onContextChange);
   const modeRef = useRef(mode);
   const [styleId, setStyleId] = useState<MapStyleId>("street");
@@ -139,6 +144,7 @@ export function SloveniaMap({
   const [visiblePointCount, setVisiblePointCount] = useState(clusters.length);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<BuildingSearchResult[]>([]);
+  const [locationNotice, setLocationNotice] = useState<string>();
 
   useEffect(() => { contextRef.current = onContextChange; }, [onContextChange]);
   useEffect(() => { modeRef.current = mode; }, [mode]);
@@ -309,6 +315,65 @@ export function SloveniaMap({
   }, [clusters]);
 
   useEffect(() => {
+    selectionMarkerRef.current?.remove();
+    selectionMarkerRef.current = null;
+    queueMicrotask(() => setLocationNotice(undefined));
+    if (context.kind !== "transaction") return;
+    const map = mapRef.current;
+    if (!map) return;
+    const controller = new AbortController();
+    loadTransaction(context.mode, context.id, controller.signal).then((detail) => {
+      if (controller.signal.aborted) return;
+      if (detail.longitude == null || detail.latitude == null) {
+        setLocationNotice(`Posel #${context.id} nima uporabnih koordinat.`);
+        return;
+      }
+      const coordinates: [number, number] = [detail.longitude, detail.latitude];
+      const marker = document.createElement("button");
+      marker.type = "button";
+      marker.className = `market-map-marker ${context.mode} property transaction-focus`;
+      marker.ariaLabel = `Izbrani ${context.mode === "sale" ? "prodajni" : "najemni"} posel ${context.id}`;
+      marker.textContent = "●";
+      selectionMarkerRef.current = new maplibregl.Marker({ element: marker, anchor: "center" })
+        .setLngLat(coordinates)
+        .addTo(map);
+      const properties = context.mode === "sale"
+        ? (() => {
+            const sale = detail as SaleTransactionDetail;
+            return {
+              featureKind: "property", transactionId: sale.transactionId,
+              area: sale.area ?? null, price: sale.price ?? null,
+              pricePerSqm: sale.pricePerSqm ?? null,
+            };
+          })()
+        : (() => {
+            const rental = detail as RentalTransactionDetail;
+            return {
+              featureKind: "property", transactionId: rental.transactionId,
+              area: rental.area ?? null,
+              monthlyRentPerSqm: rental.monthlyRentPerSqm ?? null,
+            };
+          })();
+      const feature: MapPointFeature = {
+        type: "Feature",
+        geometry: { type: "Point", coordinates },
+        properties,
+      };
+      popupRef.current?.remove();
+      popupRef.current = new maplibregl.Popup({ offset: 18, closeButton: false })
+        .setLngLat(coordinates)
+        .setDOMContent(popupContent(feature, context.mode))
+        .addTo(map);
+      map.easeTo({ center: coordinates, zoom: 17, duration: 850 });
+    }).catch(() => {
+      if (!controller.signal.aborted) {
+        setLocationNotice(`Lokacije posla #${context.id} ni bilo mogoče naložiti.`);
+      }
+    });
+    return () => controller.abort();
+  }, [context]);
+
+  useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
     let controller = new AbortController();
@@ -377,6 +442,7 @@ export function SloveniaMap({
         </div>
       </header>
       <div ref={containerRef} className="maplibre-canvas" aria-label="Interaktivni zemljevid nepremičninskih poslov v Sloveniji" />
+      {locationNotice && <div className="map-location-notice" role="status">{locationNotice}</div>}
       <div className="building-search">
         <label><Search size={16} /><span className="sr-only">Poišči stavbo</span>
           <input value={searchQuery} onChange={(event) => {

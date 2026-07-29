@@ -41,11 +41,14 @@ const EMPTY_DATA: DashboardData = {
   source: "live",
 };
 
+type GeographyContext = Extract<MarketContext, { kind: "geography" }>;
+
 function initialState(): {
   mode: MarketMode;
   propertyGroup: PropertyGroup;
   years: YearRange;
   context: MarketContext;
+  geographyContext?: GeographyContext;
 } {
   if (typeof window === "undefined") {
     return {
@@ -53,6 +56,7 @@ function initialState(): {
       propertyGroup: "apartment" as PropertyGroup,
       years: { from: 2018, to: 2025 },
       context: { kind: "country" } as MarketContext,
+      geographyContext: undefined,
     };
   }
   const query = new URLSearchParams(window.location.search);
@@ -63,14 +67,17 @@ function initialState(): {
   const from = Number(query.get("from")) || 2018;
   const to = Number(query.get("to")) || 2025;
   const contextKind = query.get("context");
+  const geographyContext = Number(query.get("geographyId"))
+    ? {
+        kind: "geography" as const,
+        id: Number(query.get("geographyId")),
+        level: (query.get("geographyLevel") ?? "statistical_region") as GeographyLevel,
+        name: query.get("geographyName") ?? "Izbrano območje",
+      }
+    : undefined;
   let context: MarketContext = { kind: "country" };
-  if (contextKind === "geography" && Number(query.get("geographyId"))) {
-    context = {
-      kind: "geography",
-      id: Number(query.get("geographyId")),
-      level: (query.get("geographyLevel") ?? "statistical_region") as GeographyLevel,
-      name: query.get("geographyName") ?? "Izbrano območje",
-    } as MarketContext;
+  if (contextKind === "geography" && geographyContext) {
+    context = geographyContext;
   } else if (contextKind === "building" && Number(query.get("cadastralCode")) && query.get("buildingNumber")) {
     context = {
       kind: "building",
@@ -84,7 +91,7 @@ function initialState(): {
       id: Number(query.get("transactionId")),
     };
   }
-  return { mode, propertyGroup, years: { from, to }, context };
+  return { mode, propertyGroup, years: { from, to }, context, geographyContext };
 }
 
 export function MarketDashboard() {
@@ -93,11 +100,14 @@ export function MarketDashboard() {
   const [propertyGroup, setPropertyGroup] = useState(initial.propertyGroup);
   const [years, setYears] = useState<YearRange>(initial.years);
   const [context, setContext] = useState<MarketContext>(initial.context);
+  const [geographyContext, setGeographyContext] = useState<GeographyContext | undefined>(
+    initial.geographyContext,
+  );
   const [data, setData] = useState<DashboardData>(EMPTY_DATA);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
   const generation = useRef(0);
-  const geographyId = context.kind === "geography" ? context.id : undefined;
+  const geographyId = geographyContext?.id;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -132,11 +142,12 @@ export function MarketDashboard() {
     query.set("from", String(years.from));
     query.set("to", String(years.to));
     query.set("context", context.kind);
-    if (context.kind === "geography") {
-      query.set("geographyId", String(context.id));
-      query.set("geographyLevel", context.level);
-      query.set("geographyName", context.name);
-    } else if (context.kind === "building") {
+    if (geographyContext) {
+      query.set("geographyId", String(geographyContext.id));
+      query.set("geographyLevel", geographyContext.level);
+      query.set("geographyName", geographyContext.name);
+    }
+    if (context.kind === "building") {
       query.set("cadastralCode", String(context.cadastralCode));
       query.set("buildingNumber", context.buildingNumber);
     } else if (context.kind === "transaction") {
@@ -144,12 +155,29 @@ export function MarketDashboard() {
       query.set("transactionId", String(context.id));
     }
     window.history.replaceState(null, "", `?${query}`);
-  }, [context, mode, propertyGroup, years]);
+  }, [context, geographyContext, mode, propertyGroup, years]);
 
-  const selectedName = context.kind === "geography" ? context.name : "Slovenija";
+  const selectedName = geographyContext?.name ?? "Slovenija";
+  const analysisContext: MarketContext = geographyContext ?? { kind: "country" };
   const handleContext = (next: MarketContext) => {
+    if (next.kind === "geography") setGeographyContext(next);
+    if (next.kind === "country") setGeographyContext(undefined);
     setContext(next);
-    if (next.kind === "transaction" && next.mode !== mode) setMode(next.mode);
+    if (next.kind === "transaction") {
+      if (next.mode !== mode) setMode(next.mode);
+      window.setTimeout(() => {
+        document.getElementById("market-context")?.scrollIntoView({
+          behavior: "smooth", block: "start",
+        });
+      }, 80);
+    }
+  };
+  const handlePanelContext = (next: MarketContext) => {
+    if (next.kind === "country" && geographyContext) {
+      setContext(geographyContext);
+      return;
+    }
+    handleContext(next);
   };
 
   return (
@@ -192,7 +220,7 @@ export function MarketDashboard() {
           geographyId={geographyId}
           onGeographyChange={(id) => {
             const geography = data.geographies.find((item) => item.id === id);
-            setContext(geography
+            handleContext(geography
               ? { kind: "geography", id: geography.id, level: geography.level, name: geography.name }
               : { kind: "country" });
           }}
@@ -203,6 +231,7 @@ export function MarketDashboard() {
         <div className="primary-grid contextual">
           <SloveniaMap
             mode={mode}
+            context={context}
             propertyGroup={propertyGroup}
             clusters={data.clusters}
             regions={data.geographies}
@@ -210,7 +239,7 @@ export function MarketDashboard() {
             years={years}
             onContextChange={handleContext}
           />
-          <div className="context-column">
+          <div className="context-column" id="market-context">
             <SummaryPanel title={selectedName} mode={mode} overview={data.overview} series={data.timeSeries} />
             <ContextPanel
               context={context}
@@ -218,7 +247,7 @@ export function MarketDashboard() {
               propertyGroup={propertyGroup}
               years={years}
               overview={data.overview}
-              onChange={handleContext}
+              onChange={handlePanelContext}
             />
           </div>
         </div>
@@ -230,7 +259,7 @@ export function MarketDashboard() {
           mode={mode}
           propertyGroup={propertyGroup}
           years={years}
-          context={context}
+          context={analysisContext}
           overview={data.overview}
           onContextChange={handleContext}
         />

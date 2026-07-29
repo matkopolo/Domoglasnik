@@ -113,9 +113,9 @@ main { width: min(1480px, calc(100% - 48px)); margin: 0 auto; padding: 25px 0 30
 
 .primary-grid { display: grid; grid-template-columns: minmax(0, 3.2fr) minmax(360px, .9fr); gap: 14px; }
 .primary-grid.contextual { height: 610px; align-items: stretch; }
-.context-column { display: grid; gap: 10px; align-content: start; min-width: 0; }
+.context-column { display: flex; flex-direction: column; gap: 10px; align-items: stretch; min-width: 0; }
 .primary-grid.contextual .context-column { height: 610px; overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; scrollbar-gutter: stable; }
-.context-column .summary-panel { min-height: 0; }
+.context-column .summary-panel { min-height: 0; flex: 0 0 auto; }
 .map-panel, .summary-panel, .chart-panel, .insight-strip {
   background: var(--surface);
   border: 1px solid var(--line);
@@ -317,6 +317,36 @@ main { width: min(1480px, calc(100% - 48px)); margin: 0 auto; padding: 25px 0 30
   color: #fff;
   font-size: 9px;
 }
+.market-map-marker.transaction-focus {
+  width: 24px;
+  height: 24px;
+  border: 4px solid #fff;
+  color: #fff;
+  font-size: 8px;
+  box-shadow: 0 0 0 5px rgba(13, 92, 61, .28), 0 3px 10px rgba(16, 43, 31, .35);
+  animation: focus-pulse 1.8s ease-out infinite;
+}
+.market-map-marker.transaction-focus.rent {
+  box-shadow: 0 0 0 5px rgba(193, 95, 60, .28), 0 3px 10px rgba(60, 30, 20, .3);
+}
+@keyframes focus-pulse {
+  50% { box-shadow: 0 0 0 9px rgba(13, 92, 61, .08), 0 3px 10px rgba(16, 43, 31, .3); }
+}
+.map-location-notice {
+  position: absolute;
+  z-index: 22;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  max-width: calc(100% - 130px);
+  padding: 7px 10px;
+  border: 1px solid #e6b9aa;
+  border-radius: 6px;
+  background: rgba(255, 242, 237, .96);
+  color: #8a3e28;
+  font-size: 10px;
+  box-shadow: var(--shadow);
+}
 .map-popup .popup-transaction {
   display: block;
   width: 100%;
@@ -383,6 +413,7 @@ main { width: min(1480px, calc(100% - 48px)); margin: 0 auto; padding: 25px 0 30
   box-shadow: 0 1px 0 rgba(30, 50, 38, .02);
   overflow: hidden;
   min-width: 0;
+  flex: 0 0 auto;
 }
 .context-panel > header {
   display: flex;
@@ -448,7 +479,7 @@ main { width: min(1480px, calc(100% - 48px)); margin: 0 auto; padding: 25px 0 30
 .analytics-tabs button { min-height: 39px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 0; border-right: 1px solid var(--line); background: #fafbfa; color: #526057; cursor: pointer; font-size: 10px; font-weight: 650; }
 .analytics-tabs button:last-child { border-right: 0; }
 .analytics-tabs button.active { background: #fff; color: var(--green); box-shadow: inset 0 -3px var(--green); }
-.analytics-body { padding: 14px 16px 17px; min-height: 280px; }
+.analytics-body { padding: 14px 16px 17px; min-height: 280px; max-height: 620px; overflow-y: auto; overscroll-behavior: contain; }
 .interval-switch { display: flex; justify-content: flex-end; margin-bottom: 9px; }
 .interval-switch button { padding: 6px 10px; border: 1px solid var(--line); border-right: 0; background: #fff; color: var(--muted); cursor: pointer; font-size: 10px; }
 .interval-switch button:first-child { border-radius: 5px 0 0 5px; }
@@ -586,6 +617,7 @@ footer a { color: var(--green); }
   .more-filters span { display: none; }
   .primary-grid { display: flex; flex-direction: column; gap: 10px; }
   .primary-grid.contextual { height: auto; }
+  .primary-grid.contextual .map-panel { height: 360px; }
   .primary-grid.contextual .context-column { height: auto; overflow: visible; padding-right: 0; }
   .map-panel, .map-canvas, .map-canvas svg, .maplibre-canvas { min-height: 360px; }
   .map-heading { left: 8px; right: 8px; top: 8px; min-height: 50px; }
@@ -611,6 +643,7 @@ footer a { color: var(--green); }
   .analytics-context { display: none; }
   .analytics-tabs { grid-template-columns: 1fr 1fr; }
   .analytics-tabs button:nth-child(2) { border-right: 0; }
+  .analytics-body { max-height: none; overflow-y: visible; }
   .analytics-kpis { grid-template-columns: 1fr 1fr; }
   .average-comparison { grid-template-columns: 1fr; }
   .average-comparison div { border-right: 0; border-bottom: 1px solid #cfddd3; padding-bottom: 8px; }
