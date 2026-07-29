@@ -302,7 +302,7 @@ func (r *StatisticsRepository) geographyClause(
 	geographyID *int64,
 ) (string, *int64, error) {
 	if geographyID == nil {
-		return "($4::bigint IS NULL OR true)", nil, nil
+		return "$4::bigint IS NULL", nil, nil
 	}
 	var level string
 	err := r.pool.QueryRow(ctx,
@@ -314,21 +314,27 @@ func (r *StatisticsRepository) geographyClause(
 	if err != nil {
 		return "", nil, fmt.Errorf("resolve statistics geography: %w", err)
 	}
+	column, ok := geographyFactColumn(level)
+	if !ok {
+		return "", nil, fmt.Errorf("unsupported geography level %q", level)
+	}
+	if column == "" {
+		return "$4::bigint IS NOT NULL", geographyID, nil
+	}
+	return column + " = $4", geographyID, nil
+}
+
+func geographyFactColumn(level string) (string, bool) {
 	columns := map[string]string{
+		"country":            "",
 		"statistical_region": "statistical_region_id",
 		"municipality":       "municipality_id",
 		"city_district":      "city_district_id",
 		"local_community":    "local_community_id",
 		"settlement":         "settlement_id",
 	}
-	if level == "country" {
-		return "($4::bigint IS NOT NULL OR true)", geographyID, nil
-	}
 	column, ok := columns[level]
-	if !ok {
-		return "", nil, fmt.Errorf("unsupported geography level %q", level)
-	}
-	return column + " = $4", geographyID, nil
+	return column, ok
 }
 
 func intervalSQL(interval string) (string, string) {

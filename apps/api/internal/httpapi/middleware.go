@@ -22,6 +22,9 @@ type statusRecorder struct {
 }
 
 func (w *statusRecorder) WriteHeader(status int) {
+	if w.status != 0 {
+		return
+	}
 	w.status = status
 	w.ResponseWriter.WriteHeader(status)
 }
@@ -89,12 +92,15 @@ func securityHeaders(next http.Handler) http.Handler {
 
 func cors(allowedOrigins []string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Add("Vary", "Origin")
+		w.Header().Add("Vary", "Access-Control-Request-Method")
+		w.Header().Add("Vary", "Access-Control-Request-Headers")
 		origin := r.Header.Get("Origin")
 		if origin != "" && slices.Contains(allowedOrigins, origin) {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
-			w.Header().Set("Vary", "Origin")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, X-Request-ID")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers",
+				"Authorization, Accept, Content-Type, X-Request-ID")
 		}
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)

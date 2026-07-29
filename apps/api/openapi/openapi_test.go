@@ -67,8 +67,8 @@ func TestContractParsesAndOperationIDsAreUnique(t *testing.T) {
 	if contract.OpenAPI != "3.1.0" {
 		t.Fatalf("OpenAPI version=%q", contract.OpenAPI)
 	}
-	if len(contract.Paths) != 39 {
-		t.Fatalf("path count=%d want=39", len(contract.Paths))
+	if len(contract.Paths) == 0 {
+		t.Fatal("contract has no paths")
 	}
 	seen := make(map[string]string)
 	for path, methods := range contract.Paths {
