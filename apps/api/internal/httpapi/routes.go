@@ -17,6 +17,7 @@ func (s *server) routes() *http.ServeMux {
 	router.HandleFunc("GET /api/v1/statistics/overview", s.statisticsOverview)
 	router.HandleFunc("GET /api/v1/statistics/timeseries", s.statisticsTimeSeries)
 	router.HandleFunc("GET /api/v1/statistics/outliers", s.statisticsOutliers)
+	router.HandleFunc("GET /api/v1/transactions/extremes", s.transactionExtremes)
 	router.HandleFunc("GET /api/v1/rentals/statistics/overview", s.rentalOverview)
 	router.HandleFunc("GET /api/v1/rentals/statistics/timeseries", s.rentalTimeSeries)
 	router.HandleFunc("GET /api/v1/rentals/statistics/outliers", s.rentalOutliers)

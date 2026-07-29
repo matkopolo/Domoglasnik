@@ -202,6 +202,18 @@ func (store fakeStatistics) Outliers(
 	return []analytics.OutlierRecord{{TransactionID: 1, PropertyGroup: "apartment"}}, 1, store.err
 }
 
+func (store fakeStatistics) TransactionExtremes(
+	context.Context,
+	string,
+	analytics.StatisticsFilter,
+	int,
+) ([]analytics.TransactionExtreme, error) {
+	return []analytics.TransactionExtreme{{
+		Direction: "highest", TransactionID: 1, PropertyGroup: "apartment",
+		AmountPerSQM: 5000,
+	}}, store.err
+}
+
 func (store fakeStatistics) RentalOverview(
 	context.Context,
 	analytics.StatisticsFilter,

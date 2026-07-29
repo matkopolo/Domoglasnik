@@ -86,6 +86,40 @@ func (s *server) statisticsOutliers(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *server) transactionExtremes(w http.ResponseWriter, r *http.Request) {
+	filter, ok := statisticsFilter(w, r)
+	if !ok {
+		return
+	}
+	kind := r.URL.Query().Get("transactionKind")
+	if kind == "" {
+		kind = "sale"
+	}
+	if kind != "sale" && kind != "rent" {
+		writeError(w, r, http.StatusBadRequest, "invalid_transaction_kind",
+			"transactionKind must be sale or rent")
+		return
+	}
+	limit, ok := boundedInteger(w, r, "limit", 3, 1, 10)
+	if !ok {
+		return
+	}
+	items, err := s.statistics.TransactionExtremes(r.Context(), kind, filter, limit)
+	if errors.Is(err, analytics.ErrGeographyNotFound) {
+		writeError(w, r, http.StatusNotFound, "geography_not_found", "geography was not found")
+		return
+	}
+	if err != nil {
+		s.logger.Error("transaction extremes", "error", err)
+		writeError(w, r, http.StatusInternalServerError, "query_failed",
+			"could not calculate transaction extremes")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"items": items, "count": len(items), "population": "representative",
+	})
+}
+
 func statisticsFilter(w http.ResponseWriter, r *http.Request) (analytics.StatisticsFilter, bool) {
 	var filter analytics.StatisticsFilter
 	var ok bool

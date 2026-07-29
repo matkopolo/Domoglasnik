@@ -75,6 +75,7 @@ type StatisticsStore interface {
 	Overview(context.Context, StatisticsFilter) (Overview, error)
 	TimeSeries(context.Context, StatisticsFilter, string) ([]TimeSeriesPoint, error)
 	Outliers(context.Context, StatisticsFilter, int, int) ([]OutlierRecord, int64, error)
+	TransactionExtremes(context.Context, string, StatisticsFilter, int) ([]TransactionExtreme, error)
 }
 
 type OutlierRecord struct {

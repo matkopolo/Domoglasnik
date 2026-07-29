@@ -58,6 +58,7 @@ The development container has a 512 MB ceiling. It does not load transactions or
 - `GET /api/v1/statistics/overview`: sale medians, averages, and explicit usable sample sizes.
 - `GET /api/v1/statistics/timeseries`: monthly, quarterly, or yearly sale statistics.
 - `GET /api/v1/statistics/outliers`: paginated, auditable statistical outlier evaluations.
+- `GET /api/v1/transactions/extremes`: highest and lowest representative sale/rental transactions for the active market filters.
 - `GET /api/v1/rentals/statistics/overview`: cleaned/raw monthly-rent and rent-per-m² metrics.
 - `GET /api/v1/rentals/statistics/timeseries`: rental trends with same-period year-over-year changes.
 - `GET /api/v1/rentals/statistics/outliers`: paginated, auditable rental outliers.

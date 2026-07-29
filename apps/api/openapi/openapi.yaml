@@ -221,6 +221,40 @@ paths:
           $ref: "#/components/responses/Error"
         "404":
           $ref: "#/components/responses/Error"
+  /api/v1/transactions/extremes:
+    get:
+      operationId: listTransactionExtremes
+      tags: [Statistics]
+      parameters:
+        - name: transactionKind
+          in: query
+          schema:
+            type: string
+            enum: [sale, rent]
+            default: sale
+        - $ref: "#/components/parameters/FromDate"
+        - $ref: "#/components/parameters/ToDate"
+        - $ref: "#/components/parameters/PropertyGroup"
+        - $ref: "#/components/parameters/LandScope"
+        - $ref: "#/components/parameters/StatisticsGeographyId"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 10
+            default: 3
+      responses:
+        "200":
+          description: Lowest and highest representative transactions for the selected population.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransactionExtremeList"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
   /api/v1/rentals/statistics/overview:
     get:
       operationId: getRentalStatisticsOverview
@@ -1625,6 +1659,32 @@ components:
         medianAmountPerSqm: {type: [number, "null"]}
         firstContractDate: {type: [string, "null"], format: date}
         lastContractDate: {type: [string, "null"], format: date}
+    TransactionExtreme:
+      type: object
+      required: [direction, transactionId, propertyGroup, amountPerSqm]
+      properties:
+        direction:
+          type: string
+          enum: [lowest, highest]
+        transactionId: {type: integer, format: int64}
+        contractDate: {type: [string, "null"], format: date}
+        propertyGroup:
+          $ref: "#/components/schemas/PropertyGroup"
+        area: {type: [number, "null"]}
+        amount: {type: [number, "null"]}
+        amountPerSqm: {type: number}
+    TransactionExtremeList:
+      type: object
+      required: [items, count, population]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/TransactionExtreme"
+        count: {type: integer, minimum: 0}
+        population:
+          type: string
+          enum: [representative]
     BuildingYearPoint:
       type: object
       required: [year, transactionCount, representativeCount]

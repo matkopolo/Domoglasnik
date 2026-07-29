@@ -58,6 +58,20 @@ func TestStatisticsRepositoryIntegration(t *testing.T) {
 	if err != nil || total == 0 || len(outliers) != 2 {
 		t.Fatalf("Outliers() total=%d items=%d error=%v", total, len(outliers), err)
 	}
+	extremes, err := repository.TransactionExtremes(ctx, "sale", StatisticsFilter{
+		FromDate: &from, ToDate: &to, PropertyGroup: "apartment",
+	}, 2)
+	if err != nil || len(extremes) != 4 {
+		t.Fatalf("TransactionExtremes() items=%d error=%v", len(extremes), err)
+	}
+	if extremes[0].Direction != "highest" || extremes[1].Direction != "highest" ||
+		extremes[2].Direction != "lowest" || extremes[3].Direction != "lowest" ||
+		extremes[0].Amount == nil || extremes[1].Amount == nil ||
+		*extremes[0].Amount < *extremes[1].Amount ||
+		extremes[2].Amount == nil || extremes[3].Amount == nil ||
+		*extremes[2].Amount > *extremes[3].Amount {
+		t.Fatalf("TransactionExtremes() ordering=%+v", extremes)
+	}
 
 	rentalOverview, err := repository.RentalOverview(ctx, StatisticsFilter{
 		FromDate: &from, ToDate: &to, PropertyGroup: "apartment",

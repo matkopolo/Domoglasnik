@@ -175,6 +175,19 @@ func TestStatisticsOutliers(t *testing.T) {
 	}
 }
 
+func TestTransactionExtremes(t *testing.T) {
+	response := httptest.NewRecorder()
+	newTestHandler(nil, fakeGeographies{}).ServeHTTP(
+		response,
+		httptest.NewRequest(http.MethodGet,
+			"/api/v1/transactions/extremes?transactionKind=sale&propertyGroup=apartment&limit=1", nil),
+	)
+	if response.Code != http.StatusOK ||
+		!strings.Contains(response.Body.String(), `"population":"representative"`) {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
 func TestRentalStatisticsEndpoints(t *testing.T) {
 	for _, path := range []string{
 		"/api/v1/rentals/statistics/overview?propertyGroup=room",
