@@ -95,8 +95,9 @@ describe("AnalyticsWorkspace", () => {
     expect(screen.getByText("#502")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /Indeksi in modeli/ }));
-    expect((await screen.findAllByText("121")).length).toBeGreaterThan(0);
-    expect(screen.getAllByText("118").length).toBeGreaterThan(0);
+    expect((await screen.findAllByText("121 indeksnih točk")).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("118 indeksnih točk").length).toBeGreaterThan(0);
+    expect(screen.getByText(/\+21 % glede na bazno obdobje/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /Primerjava območij/ }));
     expect(screen.getByText("Podravska")).toBeInTheDocument();

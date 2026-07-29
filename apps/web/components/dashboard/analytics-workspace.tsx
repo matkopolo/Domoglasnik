@@ -200,10 +200,12 @@ function IndexExplorer({ items }: { items: MarketIndex[] }) {
         {[...groups.entries()].map(([method, points]) => {
           const latest = points.filter((point) => point.isPublishable).at(-1);
           if (!latest) return null;
+          const changeFromBase = latest.indexValue - 100;
           return <article key={method}>
             <span>{method === "hedonic" ? "Hedonski" : "Ponovne prodaje"}</span>
-            <strong>{decimal.format(latest.indexValue)}</strong>
-            <small>{latest.period.slice(0, 7)} · n={latest.sampleSize}
+            <strong>{decimal.format(latest.indexValue)} indeksnih točk</strong>
+            <small>{changeFromBase >= 0 ? "+" : ""}{decimal.format(changeFromBase)} % glede na bazno obdobje
+              {" · "}{latest.period.slice(0, 7)} · n={latest.sampleSize}
               {latest.lowerIndexValue != null && latest.upperIndexValue != null
                 ? ` · interval ${decimal.format(latest.lowerIndexValue)}–${decimal.format(latest.upperIndexValue)}`
                 : ""}</small>
