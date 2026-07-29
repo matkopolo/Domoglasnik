@@ -4,6 +4,13 @@ This document describes the PostgreSQL schema populated from the Slovenian Surve
 
 ## Conventions
 
+The importer streams each ZIP member through `TextIOWrapper` and PostgreSQL
+`COPY`; it does not materialize a complete source CSV. Monetary and area-like
+inputs are parsed as exact `Decimal` values. Empty values and the GURS zero-date
+sentinel become null. Unsupported non-empty boolean, numeric, integer, or date
+values stop that source-file transaction with an error naming the archive,
+member, row, source field, destination field, and raw value.
+
 - Source field names are the original Slovenian CSV headers.
 - Monetary values are stored as `numeric` and are normally euros, as supplied by GURS.
 - Areas are square metres unless stated otherwise.

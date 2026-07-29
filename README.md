@@ -37,10 +37,12 @@ Run a task with **Terminal → Run Task**, run tests from VS Code's Testing pane
 Inside the data pipeline:
 
 - `api.py`: `JGPClient`, pooled HTTP connections, atomic ZIP downloads, and retry policy
-- `importer.py`: declarative CSV mappings, conversion, and transactional PostgreSQL `COPY`
+- `importer.py`: streaming ZIP/CSV orchestration and transactional PostgreSQL `COPY`
+- `conversion.py`: strict typed source conversion with row-level diagnostics
 - `pipeline.py`: reference synchronization and bounded concurrent download orchestration
 - `geography.py`: official GURS RPE boundary ingestion
-- `modeling.py`: offline hedonic and Isolation Forest refreshes
+- `model_features.py` / `model_validation.py`: tested model construction and validation policy
+- `modeling.py`: offline model persistence and refresh orchestration
 - `settings.py`: immutable API/product metadata and machine defaults
 - `models.py`: typed results passed between download, parsing, and loading stages
 - `cli.py`: argument parsing and command dispatch
@@ -53,7 +55,10 @@ The PostgreSQL tables remain in `database/migrations`, not Python. CSV mappings 
 
 - **[HTTPX](https://www.python-httpx.org/)** provides connection pooling, streaming downloads, and explicit timeout/status handling.
 - **[Tenacity](https://tenacity.readthedocs.io/en/stable/)** provides bounded exponential retry behavior for transient transport and server failures.
-- **psycopg 3** streams rows through PostgreSQL `COPY`; SQLAlchemy and pandas are intentionally not used because they would add memory and abstraction overhead to the bulk-loading path.
+- **psycopg 3** streams rows through PostgreSQL `COPY`; ZIP members and
+  codebooks are processed as streams or bounded batches. SQLAlchemy and pandas
+  are intentionally not used because they would add memory and abstraction
+  overhead to the bulk-loading path.
 - **pytest** covers conversion, retry, resume, historical edge cases, and isolated PostgreSQL integration.
 - **[Ruff](https://docs.astral.sh/ruff/)** enforces imports, correctness rules, modernization, and style locally and in GitHub Actions.
 
@@ -162,6 +167,29 @@ Root `make lint` and `make test` run checks for the Python pipeline, Go API,
 and TypeScript frontend. The root `package.json` is a deployment entrypoint
 for monorepo-aware hosting; Docker, development dependencies, and
 application-specific npm commands remain isolated in `apps/web`.
+
+`make web-typecheck` covers production and test TypeScript.
+`make web-generate-api-types` regenerates the checked-in transport schema from
+OpenAPI, and `make web-contract-drift` fails if it has drifted.
+
+## Next operational phase
+
+The next phase targets a Docker-first `data-pipeline-worker`, so Windows,
+macOS, and Linux hosts need only Docker/Compose for normal operation:
+
+- one command starts the database, applies migrations, incrementally imports
+  sources, refreshes analytics/models, and starts the API and web application;
+- an explicitly named destructive command clears imported and derived data,
+  then repopulates from source;
+- a scheduled job runs every two months, compares available national
+  product-years with successful imports, downloads only missing or changed
+  archives, and refreshes dependent analytics;
+- Python, Go, Node, and their packages remain inside containers; local language
+  installations are optional developer conveniences;
+- refreshes remain idempotent and must not publish partially refreshed data.
+
+This is future Phase 4 scope; the current virtual-environment workflow remains
+supported until the container worker replaces it.
 
 ## Start the web dashboard
 

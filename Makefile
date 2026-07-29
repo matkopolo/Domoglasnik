@@ -11,9 +11,10 @@ GO_RUN := docker run --rm -v "$(CURDIR)/$(API_DIR):/src" -v real_estate_go_mod_c
 WEB_DIR := apps/web
 NODE_IMAGE ?= node:22-bookworm-slim
 WEB_NODE_MODULES := real_estate_web_node_modules_debian
-NODE_RUN := docker run --rm -v "$(CURDIR)/$(WEB_DIR):/app" -v $(WEB_NODE_MODULES):/app/node_modules -w /app $(NODE_IMAGE)
+NODE_RUN := docker run --rm -v "$(CURDIR):/repo" -v $(WEB_NODE_MODULES):/repo/$(WEB_DIR)/node_modules -w /repo/$(WEB_DIR) $(NODE_IMAGE)
+MIGRATION_FILES := $(notdir $(wildcard database/migrations/0[0][7-9]_*.sql database/migrations/01*.sql database/migrations/02*.sql))
 
-.PHONY: setup db-up db-migrate db-down db-status analytics-refresh models-refresh api-up api-down api-logs api-fmt api-vet api-test api-build web-setup web-up web-down web-logs web-lint web-test web-build lint pipeline-lint test pipeline-test test-unit import-data import-data-verbose
+.PHONY: setup db-up db-migrate db-down db-status analytics-refresh models-refresh api-up api-down api-logs api-fmt api-vet api-test api-build web-setup web-up web-down web-logs web-generate-api-types web-contract-drift web-lint web-typecheck web-test web-build lint pipeline-lint test pipeline-test test-unit import-data import-data-verbose
 
 setup:
 	python3 -m venv .venv
@@ -22,40 +23,13 @@ setup:
 
 db-up:
 	docker compose up -d --wait db
-	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/007_postgis.sql
-	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/008_api_foundation.sql
-	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/009_geographic_hierarchy.sql
-	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/010_sale_package_classification.sql
-	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/011_sale_facts.sql
-	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/012_sale_outliers.sql
-	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/013_api_read_only_role.sql
-	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/014_rental_facts.sql
-	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/015_rental_outliers.sql
-	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/016_anomaly_signals.sql
-	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/017_identity_and_preferences.sql
-	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/018_valuation_models.sql
-	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/019_market_indices.sql
-	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/020_land_methodology.sql
-	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/021_index_vintages.sql
-	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/022_quality_observability.sql
+	$(MAKE) db-migrate
 
 db-migrate:
-	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/007_postgis.sql
-	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/008_api_foundation.sql
-	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/009_geographic_hierarchy.sql
-	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/010_sale_package_classification.sql
-	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/011_sale_facts.sql
-	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/012_sale_outliers.sql
-	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/013_api_read_only_role.sql
-	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/014_rental_facts.sql
-	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/015_rental_outliers.sql
-	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/016_anomaly_signals.sql
-	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/017_identity_and_preferences.sql
-	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/018_valuation_models.sql
-	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/019_market_indices.sql
-	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/020_land_methodology.sql
-	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/021_index_vintages.sql
-	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/022_quality_observability.sql
+	@set -e; for migration in $(MIGRATION_FILES); do \
+		echo "Applying $$migration"; \
+		docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f "/docker-entrypoint-initdb.d/$$migration"; \
+	done
 
 analytics-refresh: db-up
 	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -c "SELECT analytics.refresh_sale_facts();"
@@ -110,8 +84,17 @@ web-down:
 web-logs:
 	docker compose logs -f web
 
+web-generate-api-types:
+	$(NODE_RUN) sh -lc "npm ci --prefer-offline >/dev/null && npm run generate:api-types"
+
+web-contract-drift: web-generate-api-types
+	git diff --exit-code -- $(WEB_DIR)/lib/generated/api-schema.d.ts
+
 web-lint:
 	$(NODE_RUN) sh -lc "npm ci --prefer-offline >/dev/null && npm run lint"
+
+web-typecheck:
+	$(NODE_RUN) sh -lc "npm ci --prefer-offline >/dev/null && npm run typecheck"
 
 web-test:
 	$(NODE_RUN) sh -lc "npm ci --prefer-offline >/dev/null && npm test"
@@ -119,7 +102,7 @@ web-test:
 web-build:
 	docker compose build web
 
-lint: pipeline-lint api-vet web-lint
+lint: pipeline-lint api-vet web-lint web-typecheck
 
 pipeline-lint:
 	cd $(PIPELINE_DIR) && ../../.venv/bin/ruff check .

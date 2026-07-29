@@ -5,6 +5,29 @@ are immutable. Published representative statistics exclude a row only through
 a versioned, documented quality policy; anomaly rankings remain separately
 queryable.
 
+## Data populations and published measures
+
+The source population is the national GURS ETN purchase archive series from
+2007 onward and rental archive series from 2013 onward. Source agreements and
+their components are retained unchanged. PostgreSQL creates one analytical
+fact per agreement, so a house with land and a garage is not counted three
+times. `contract_date`, not archive year, determines the market period.
+
+Published descriptive statistics use eligible facts and always report sample
+size. Medians and percentiles are primary because they resist skew; means are
+supplementary. Price/m² is published only where an agreement amount can be
+attributed without pretending that a package total belongs to one component.
+Missing target prices and rents are never imputed.
+
+PostGIS assigns current GURS RPE national, region, municipality, district,
+community, and settlement geography. Missing coordinates remain in coverage
+diagnostics but cannot contribute to point maps or spatial validation.
+
+Land is never discarded. Default building-land measures use only land-only
+contracts composed exclusively of verified-buildable ETN codes 1 and 2. Code
+3 is available through broad scope; mixed, unknown, and other classes require
+explicit all-land scope.
+
 ## Signal layers
 
 1. **Hard validation:** impossible dates, non-positive or implausible area and
@@ -76,6 +99,19 @@ At minimum: `invalid_area`, `invalid_amount`, `invalid_date`,
   model or uncertainty interval is incomplete.
 - Prefer interpretable hedonic/GAM baselines before more complex models.
 - Never describe an anomaly as fraud based only on transaction data.
+
+## Trends, indices, and uncertainty
+
+- Monthly, quarterly, and annual series expose sample sizes; thin cells are
+  suppressed under the versioned publication policy.
+- The matched-pair index uses consecutive eligible sales of the same cadastral
+  building part at least 180 days apart and compounds median annualized log
+  returns. It is not a repeat-sales regression.
+- The constant-quality hedonic series is tied to a versioned Ridge model,
+  feature schema, training window, samples, and base period.
+- Prediction ranges use split-conformal absolute log residuals calibrated on
+  the year before the test year. Observed held-out coverage is persisted; the
+  range is uncertainty information, not a guaranteed valuation.
 
 ## Research basis
 
