@@ -137,3 +137,31 @@ Required backend extensions:
 
 No browser aggregation of currently loaded markers will be used as a market
 benchmark.
+
+## Implemented disposition
+
+The endpoint matrix remains the before/decision audit. The resulting Phase 2
+frontend uses 24 operations, including the two new context operations:
+
+- geography identity, children, boundaries, and batched geography summaries
+  drive region, municipality, and supported local-area contexts;
+- both sale and rental transaction detail endpoints drive one shared panel;
+- filtered building statistics and building search drive the building context;
+- the national hedonic index is shown for country context;
+- valuation fields are delivered by the transaction-context composite. The
+  standalone valuation route remains available, but is deliberately not called
+  a second time because that would duplicate work and could combine different
+  model vintages in one panel;
+- public sale/rental outlier lists remain deliberately unused; the selected
+  transaction's quality and outlier evidence is shown instead;
+- the authenticated anomaly queue, identity, and preferences operations remain
+  analyst-only or backend-only as classified;
+- `/api/v1/meta` remains intentionally unused. Its current response is a static
+  capability list and contains no source-refresh timestamp. The UI therefore
+  shows the actual ETN/RPE source and active coverage period without presenting
+  a false refresh time. Adding import freshness requires a future API contract
+  backed by `source_files`, not a browser guess.
+
+No endpoint is unclassified. Operations described as missing in the **Before**
+column are either integrated above or retain the explicit audience/deferral in
+the matrix.
