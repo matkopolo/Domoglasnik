@@ -239,3 +239,53 @@ func TestGeographySummariesIntegration(t *testing.T) {
 		}
 	}
 }
+
+func TestStrictLandPopulationIntegration(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is not set")
+	}
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer pool.Close()
+
+	var allLand, strictLand, violations int64
+	if err := pool.QueryRow(ctx, `
+		SELECT
+		  (SELECT count(*) FROM analytics.sale_facts_all_land
+		    WHERE property_group='land'),
+		  (SELECT count(*) FROM analytics.sale_facts_strict_land
+		    WHERE property_group='land'),
+		  (SELECT count(*) FROM analytics.sale_facts_strict_land fact
+		    JOIN analytics.land_transaction_facts land USING(transaction_id)
+		    WHERE fact.property_group='land'
+		      AND (NOT land.is_strict_buildable
+		        OR land.land_type_codes && ARRAY[3,4,5,6,7,8,9,10]))
+	`).Scan(&allLand, &strictLand, &violations); err != nil {
+		t.Fatalf("inspect land populations: %v", err)
+	}
+	if strictLand == 0 || allLand <= strictLand || violations != 0 {
+		t.Fatalf("all=%d strict=%d violations=%d", allLand, strictLand, violations)
+	}
+
+	repository := NewStatisticsRepository(pool)
+	strictOverview, err := repository.Overview(
+		ctx, StatisticsFilter{PropertyGroup: "land"})
+	if err != nil {
+		t.Fatalf("strict Overview(): %v", err)
+	}
+	allOverview, err := repository.Overview(
+		ctx, StatisticsFilter{PropertyGroup: "land", LandScope: "all"})
+	if err != nil {
+		t.Fatalf("all Overview(): %v", err)
+	}
+	if strictOverview.TransactionCount != strictLand ||
+		allOverview.TransactionCount != allLand {
+		t.Fatalf("repository strict=%d/%d all=%d/%d",
+			strictOverview.TransactionCount, strictLand,
+			allOverview.TransactionCount, allLand)
+	}
+}

@@ -16,13 +16,13 @@ from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import IsolationForest
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import Ridge
-from sklearn.metrics import mean_absolute_error, mean_squared_error
-from sklearn.model_selection import KFold
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.model_selection import GroupShuffleSplit
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 RANDOM_SEED = 20260723
-MODEL_FOLDS = 5
+NOMINAL_INTERVAL_COVERAGE = 0.90
 ISOLATION_TRAINING_LIMIT = 50_000
 MODEL_FEATURES = [
     "log_area",
@@ -84,8 +84,90 @@ def percentile_scores(values: np.ndarray) -> np.ndarray:
     return np.searchsorted(ordered, values, side="right") / len(values)
 
 
+def temporal_split_indices(
+    contract_dates: list[date],
+    as_of: date | None = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Return latest-complete-year splits, or a chronological sparse fallback."""
+    if len(contract_dates) < 30:
+        raise ValueError("temporal validation requires at least 30 rows")
+    as_of = as_of or date.today()
+    complete_years = sorted(
+        {value.year for value in contract_dates if value.year < as_of.year}
+    )
+    if len(complete_years) >= 2:
+        test_year, calibration_year = complete_years[-1], complete_years[-2]
+        training = np.asarray(
+            [
+                index
+                for index, value in enumerate(contract_dates)
+                if value.year < calibration_year
+            ],
+            dtype=int,
+        )
+        calibration = np.asarray(
+            [
+                index
+                for index, value in enumerate(contract_dates)
+                if value.year == calibration_year
+            ],
+            dtype=int,
+        )
+        test = np.asarray(
+            [
+                index
+                for index, value in enumerate(contract_dates)
+                if value.year == test_year
+            ],
+            dtype=int,
+        )
+        if min(len(training), len(calibration), len(test)) >= 10:
+            return training, calibration, test
+
+    order = np.argsort(np.asarray(contract_dates, dtype="datetime64[D]"), kind="stable")
+    test_size = max(10, len(order) // 5)
+    calibration_size = max(10, len(order) // 5)
+    if test_size + calibration_size >= len(order):
+        raise ValueError("not enough rows for disjoint temporal splits")
+    return (
+        order[: -(test_size + calibration_size)],
+        order[-(test_size + calibration_size) : -test_size],
+        order[-test_size:],
+    )
+
+
+def interval_half_width(
+    actual_log: np.ndarray,
+    predicted_log: np.ndarray,
+    coverage: float = NOMINAL_INTERVAL_COVERAGE,
+) -> float:
+    """Split-conformal absolute-log residual quantile."""
+    if len(actual_log) == 0 or len(actual_log) != len(predicted_log):
+        raise ValueError("calibration arrays must be non-empty and equal length")
+    rank = min(len(actual_log) - 1, math.ceil((len(actual_log) + 1) * coverage) - 1)
+    return float(np.sort(np.abs(actual_log - predicted_log))[rank])
+
+
+def regression_metrics(actual_log: np.ndarray, predicted_log: np.ndarray) -> dict[str, float]:
+    actual = np.exp(actual_log)
+    predicted = np.exp(predicted_log)
+    return {
+        "rows": int(len(actual_log)),
+        "mae_amount_per_sqm": float(mean_absolute_error(actual, predicted)),
+        "median_absolute_percentage_error": float(
+            np.median(np.abs(actual - predicted) / actual)
+        ),
+        "rmse_log": float(math.sqrt(mean_squared_error(actual_log, predicted_log))),
+        "r2_log": float(r2_score(actual_log, predicted_log)),
+    }
+
+
 def _query(kind: str) -> str:
-    table = "analytics.sale_facts" if kind == "sale" else "analytics.rental_facts"
+    table = (
+        "analytics.sale_facts_strict_land"
+        if kind == "sale"
+        else "analytics.rental_facts"
+    )
     target = "price_per_sqm" if kind == "sale" else "monthly_rent_per_sqm"
     minimum_date = "2007-01-01" if kind == "sale" else "2013-01-01"
     return f"""
@@ -99,7 +181,7 @@ def _query(kind: str) -> str:
         WHERE is_quality_eligible AND {target}>0 AND area>0
           AND contract_date IS NOT NULL
           AND contract_date>=DATE '{minimum_date}'
-        ORDER BY transaction_id
+        ORDER BY contract_date,transaction_id
     """
 
 
@@ -146,41 +228,94 @@ def _refresh_kind(
     )
     contract_dates = [row[10] for row in rows]
 
-    predictions = np.empty(len(rows), dtype=float)
     fitted_predictions = np.empty(len(rows), dtype=float)
     interval_widths = np.empty(len(rows), dtype=float)
-    residual_scores = np.empty(len(rows), dtype=float)
+    residual_scores = np.zeros(len(rows), dtype=float)
     property_groups = features[:, 6]
-    group_metrics: dict[str, dict[str, float]] = {}
+    group_metrics: dict[str, dict[str, object]] = {}
     final_models: dict[str, Pipeline] = {}
+    temporal_actual: list[np.ndarray] = []
+    temporal_estimated: list[np.ndarray] = []
+    temporal_covered: list[np.ndarray] = []
     for group in sorted(set(property_groups)):
         group_indices = np.flatnonzero(property_groups == group)
         group_features = features[group_indices]
         group_target = target[group_indices]
-        group_predictions = np.empty(len(group_indices), dtype=float)
-        folds = KFold(n_splits=MODEL_FOLDS, shuffle=True, random_state=RANDOM_SEED)
-        for training, validation in folds.split(group_features):
-            model = _hedonic_pipeline()
-            model.fit(group_features[training], group_target[training])
-            group_predictions[validation] = model.predict(group_features[validation])
-        predictions[group_indices] = group_predictions
-        group_residuals = np.abs(group_target - group_predictions)
-        residual_scores[group_indices] = percentile_scores(group_residuals)
-        group_interval = float(np.quantile(group_residuals, 0.90))
+        group_dates = [contract_dates[index] for index in group_indices]
+        training, calibration, test = temporal_split_indices(group_dates)
+        validation_model = _hedonic_pipeline()
+        validation_model.fit(group_features[training], group_target[training])
+        calibration_predictions = validation_model.predict(group_features[calibration])
+        group_interval = interval_half_width(
+            group_target[calibration], calibration_predictions
+        )
+        test_predictions = validation_model.predict(group_features[test])
+        test_covered = (
+            np.abs(group_target[test] - test_predictions) <= group_interval
+        )
+        temporal_actual.append(group_target[test])
+        temporal_estimated.append(test_predictions)
+        temporal_covered.append(test_covered)
+        residual_scores[group_indices[test]] = percentile_scores(
+            np.abs(group_target[test] - test_predictions)
+        )
         interval_widths[group_indices] = group_interval
+
+        spatial_metrics: dict[str, object]
+        municipalities = group_features[:, 7]
+        if len(set(municipalities)) >= 2:
+            spatial_split = GroupShuffleSplit(
+                n_splits=1, test_size=0.20, random_state=RANDOM_SEED
+            )
+            spatial_training, spatial_test = next(
+                spatial_split.split(group_features, groups=municipalities)
+            )
+            spatial_model = _hedonic_pipeline()
+            spatial_model.fit(
+                group_features[spatial_training], group_target[spatial_training]
+            )
+            spatial_metrics = regression_metrics(
+                group_target[spatial_test],
+                spatial_model.predict(group_features[spatial_test]),
+            )
+            spatial_metrics["held_out_municipalities"] = int(
+                len(set(municipalities[spatial_test]))
+            )
+        else:
+            spatial_metrics = {
+                "rows": 0,
+                "status": "insufficient_distinct_municipalities",
+            }
+
         final_model = _hedonic_pipeline()
         final_model.fit(group_features, group_target)
         final_models[str(group)] = final_model
         fitted_predictions[group_indices] = final_model.predict(group_features)
-        group_actual = np.exp(group_target)
-        group_estimated = np.exp(group_predictions)
+        local_median = float(np.median(group_target[training]))
         group_metrics[str(group)] = {
-            "rows": int(len(group_indices)),
-            "median_absolute_percentage_error": float(
-                np.median(np.abs(group_actual - group_estimated) / group_actual)
-            ),
-            "rmse_log": float(math.sqrt(mean_squared_error(group_target, group_predictions))),
-            "empirical_log_half_width": group_interval,
+            "population_rows": int(len(group_indices)),
+            "temporal": {
+                **regression_metrics(group_target[test], test_predictions),
+                "train_from": min(group_dates[index] for index in training).isoformat(),
+                "train_to": max(group_dates[index] for index in training).isoformat(),
+                "calibration_from": min(
+                    group_dates[index] for index in calibration
+                ).isoformat(),
+                "calibration_to": max(
+                    group_dates[index] for index in calibration
+                ).isoformat(),
+                "test_from": min(group_dates[index] for index in test).isoformat(),
+                "test_to": max(group_dates[index] for index in test).isoformat(),
+                "empirical_interval_coverage": float(np.mean(test_covered)),
+                "mean_interval_width_log": 2 * group_interval,
+                "local_median_baseline_mae": float(
+                    mean_absolute_error(
+                        np.exp(group_target[test]),
+                        np.full(len(test), np.exp(local_median)),
+                    )
+                ),
+            },
+            "spatial": spatial_metrics,
         }
 
     isolation_features = np.column_stack([target, features])
@@ -207,18 +342,19 @@ def _refresh_kind(
     lower = np.exp(fitted_predictions - interval_widths)
     upper = np.exp(fitted_predictions + interval_widths)
     actual = np.exp(target)
-    coverage = float(np.mean((actual >= lower) & (actual <= upper)))
+    validation_actual = np.concatenate(temporal_actual)
+    validation_estimated = np.concatenate(temporal_estimated)
+    coverage = float(np.mean(np.concatenate(temporal_covered)))
     metrics: dict[str, object] = {
-        "mae_amount_per_sqm": float(mean_absolute_error(actual, np.exp(predictions))),
-        "median_absolute_percentage_error": float(
-            np.median(np.abs(actual - np.exp(predictions)) / actual)
-        ),
-        "rmse_log": float(math.sqrt(mean_squared_error(target, predictions))),
+        **regression_metrics(validation_actual, validation_estimated),
         "empirical_interval_coverage": coverage,
+        "nominal_interval_coverage": NOMINAL_INTERVAL_COVERAGE,
+        "interval_method": "split_conformal_absolute_log_residual",
+        "validation_method": "latest_complete_year_with_prior_year_calibration",
         "property_groups": group_metrics,
     }
     now = datetime.now(timezone.utc)
-    version = f"{kind}-hedonic-ridge-iforest-v1-{now:%Y%m%dT%H%M%SZ}"
+    version = f"{kind}-hedonic-ridge-iforest-v2-{now:%Y%m%dT%H%M%SZ}"
     model_run_id = uuid.uuid4()
 
     with connection.transaction():  # noqa: SIM117 - transaction and cursor have distinct cleanup semantics
@@ -239,9 +375,17 @@ def _refresh_kind(
                         {
                             "hedonic": MODEL_FEATURES,
                             "isolationForest": ["log_amount_per_sqm", *MODEL_FEATURES],
-                            "crossFittingFolds": MODEL_FOLDS,
                             "separateModelPerPropertyGroup": True,
                             "isolationTrainingLimit": ISOLATION_TRAINING_LIMIT,
+                            "validation": {
+                                "temporal": "latest_complete_year_with_prior_year_calibration",
+                                "spatial": "municipality_group_shuffle_holdout",
+                                "interval": "split_conformal_absolute_log_residual",
+                                "nominalCoverage": NOMINAL_INTERVAL_COVERAGE,
+                            },
+                            "landPopulation": (
+                                "strict_etn_codes_1_2" if kind == "sale" else None
+                            ),
                         }
                     ),
                     len(rows),
@@ -282,7 +426,7 @@ def _refresh_kind(
                             float(lower[index]),
                             float(upper[index]),
                             float(actual[index]),
-                            float(target[index] - predictions[index]),
+                            float(target[index] - fitted_predictions[index]),
                             float(residual_scores[index]),
                             float(isolation_scores[index]),
                         )
@@ -372,11 +516,29 @@ def _refresh_kind(
             )
             cursor.execute(
                 """
-                DELETE FROM analytics.market_indices
-                WHERE transaction_kind=%s AND method='hedonic'
+                INSERT INTO analytics.index_calculation_runs(
+                    transaction_kind,method,methodology_version,data_from,data_to,
+                    parameters
+                ) VALUES(%s,'hedonic','constant-quality-ridge-v2',%s,%s,%s)
+                RETURNING id
                 """,
-                (kind,),
+                (
+                    kind,
+                    min(contract_dates),
+                    max(contract_dates),
+                    json.dumps(
+                        {
+                            "minimumPeriodObservations": 30,
+                            "bootstrapReplicates": 100,
+                            "nominalCoverage": 0.95,
+                            "landPopulation": (
+                                "strict_etn_codes_1_2" if kind == "sale" else None
+                            ),
+                        }
+                    ),
+                ),
             )
+            index_run_id = cursor.fetchone()[0]
             hedonic_indices = _hedonic_indices(
                 property_groups,
                 features,
@@ -389,8 +551,14 @@ def _refresh_kind(
                 INSERT INTO analytics.market_indices(
                     transaction_kind,method,property_group,geography_id,period,
                     index_value,sample_size,base_period,model_run_id,
-                    methodology_version
-                ) VALUES(%s,'hedonic',%s,NULL,%s,%s,%s,%s,%s,%s)
+                    methodology_version,calculation_run_id,observed_sample_size,
+                    reference_sample_size,lower_index_value,upper_index_value,
+                    nominal_coverage,uncertainty_method,is_publishable,
+                    suppression_reason
+                ) VALUES(
+                    %s,'hedonic',%s,NULL,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
+                    %s,.95,'deterministic_reference_bootstrap',%s,%s
+                )
                 """,
                 [
                     (
@@ -398,12 +566,30 @@ def _refresh_kind(
                         group,
                         period,
                         index_value,
-                        sample_size,
+                        observed_size,
                         base_period,
                         model_run_id,
-                        "constant-quality-ridge-v1",
+                        "constant-quality-ridge-v2",
+                        index_run_id,
+                        observed_size,
+                        reference_size,
+                        lower_value,
+                        upper_value,
+                        observed_size >= 30,
+                        None
+                        if observed_size >= 30
+                        else "below_minimum_period_observations_30",
                     )
-                    for group, period, index_value, sample_size, base_period in hedonic_indices
+                    for (
+                        group,
+                        period,
+                        index_value,
+                        observed_size,
+                        reference_size,
+                        base_period,
+                        lower_value,
+                        upper_value,
+                    ) in hedonic_indices
                 ],
             )
     return ModelResult(
@@ -421,8 +607,8 @@ def _hedonic_indices(
     contract_dates: list[date],
     models: dict[str, Pipeline],
     generator: np.random.Generator,
-) -> list[tuple[str, date, float, int, date]]:
-    rows: list[tuple[str, date, float, int, date]] = []
+) -> list[tuple[str, date, float, int, int, date, float, float]]:
+    rows: list[tuple[str, date, float, int, int, date, float, float]] = []
     date_values = np.asarray(contract_dates, dtype=object)
     for group, model in models.items():
         indices = np.flatnonzero(property_groups == group)
@@ -433,23 +619,40 @@ def _hedonic_indices(
         first = min(group_dates)
         last = max(group_dates)
         periods = list(_month_range(first, last))
-        predicted_medians = []
+        predicted_medians: list[float] = []
+        bootstrap_medians: list[np.ndarray] = []
+        bootstrap_indices = generator.integers(
+            0, reference_size, size=(100, reference_size)
+        )
         for period in periods:
             counterfactual = reference.copy()
             counterfactual[:, 2] = float(period.year)
             counterfactual[:, 3] = float(period.month)
-            predicted_medians.append(float(np.median(np.exp(model.predict(counterfactual)))))
+            values = np.exp(model.predict(counterfactual))
+            predicted_medians.append(float(np.median(values)))
+            bootstrap_medians.append(np.median(values[bootstrap_indices], axis=1))
         base = predicted_medians[0]
-        rows.extend(
-            (
-                str(group),
-                period,
-                100.0 * predicted_median / base,
-                reference_size,
-                periods[0],
+        bootstrap_base = bootstrap_medians[0]
+        for period, predicted_median, bootstraps in zip(
+            periods, predicted_medians, bootstrap_medians
+        ):
+            bootstrap_index = 100.0 * bootstraps / bootstrap_base
+            observed_size = sum(
+                value.year == period.year and value.month == period.month
+                for value in group_dates
             )
-            for period, predicted_median in zip(periods, predicted_medians)
-        )
+            rows.append(
+                (
+                    str(group),
+                    period,
+                    100.0 * predicted_median / base,
+                    observed_size,
+                    reference_size,
+                    periods[0],
+                    float(np.quantile(bootstrap_index, 0.025)),
+                    float(np.quantile(bootstrap_index, 0.975)),
+                )
+            )
     return rows
 
 

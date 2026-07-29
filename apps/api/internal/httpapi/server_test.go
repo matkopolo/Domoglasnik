@@ -127,6 +127,7 @@ func TestStatisticsRejectInvalidFilters(t *testing.T) {
 		"/api/v1/statistics/overview?from=2024-13-01",
 		"/api/v1/statistics/overview?from=2025-01-01&to=2024-01-01",
 		"/api/v1/statistics/overview?propertyGroup=castle",
+		"/api/v1/statistics/overview?propertyGroup=land&landScope=speculative",
 		"/api/v1/statistics/overview?geographyId=-1",
 		"/api/v1/statistics/timeseries?interval=week",
 	}
@@ -138,6 +139,17 @@ func TestStatisticsRejectInvalidFilters(t *testing.T) {
 		if response.Code != http.StatusBadRequest {
 			t.Fatalf("path=%s status=%d body=%s", path, response.Code, response.Body.String())
 		}
+	}
+}
+
+func TestStatisticsFilterDefaultsFrontendLandRequestsToStrict(t *testing.T) {
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(
+		http.MethodGet, "/api/v1/statistics/overview?propertyGroup=land", nil)
+	filter, ok := statisticsFilter(response, request)
+	if !ok || filter.LandScope != "strict" {
+		t.Fatalf("ok=%v landScope=%q body=%s",
+			ok, filter.LandScope, response.Body.String())
 	}
 }
 

@@ -147,6 +147,7 @@ paths:
         - $ref: "#/components/parameters/FromDate"
         - $ref: "#/components/parameters/ToDate"
         - $ref: "#/components/parameters/PropertyGroup"
+        - $ref: "#/components/parameters/LandScope"
         - $ref: "#/components/parameters/StatisticsGeographyId"
       responses:
         "200":
@@ -167,6 +168,7 @@ paths:
         - $ref: "#/components/parameters/FromDate"
         - $ref: "#/components/parameters/ToDate"
         - $ref: "#/components/parameters/PropertyGroup"
+        - $ref: "#/components/parameters/LandScope"
         - $ref: "#/components/parameters/StatisticsGeographyId"
         - name: interval
           in: query
@@ -193,6 +195,7 @@ paths:
         - $ref: "#/components/parameters/FromDate"
         - $ref: "#/components/parameters/ToDate"
         - $ref: "#/components/parameters/PropertyGroup"
+        - $ref: "#/components/parameters/LandScope"
         - $ref: "#/components/parameters/StatisticsGeographyId"
         - name: limit
           in: query
@@ -412,6 +415,7 @@ paths:
         - $ref: "#/components/parameters/FromDate"
         - $ref: "#/components/parameters/ToDate"
         - $ref: "#/components/parameters/PropertyGroup"
+        - $ref: "#/components/parameters/LandScope"
         - $ref: "#/components/parameters/StatisticsGeographyId"
         - name: metric
           in: query
@@ -512,6 +516,7 @@ paths:
         - $ref: "#/components/parameters/FromDate"
         - $ref: "#/components/parameters/ToDate"
         - $ref: "#/components/parameters/PropertyGroup"
+        - $ref: "#/components/parameters/LandScope"
         - $ref: "#/components/parameters/StatisticsGeographyId"
         - name: zoom
           in: query
@@ -540,6 +545,7 @@ paths:
         - $ref: "#/components/parameters/FromDate"
         - $ref: "#/components/parameters/ToDate"
         - $ref: "#/components/parameters/PropertyGroup"
+        - $ref: "#/components/parameters/LandScope"
         - $ref: "#/components/parameters/StatisticsGeographyId"
         - name: limit
           in: query
@@ -568,6 +574,7 @@ paths:
         - $ref: "#/components/parameters/FromDate"
         - $ref: "#/components/parameters/ToDate"
         - $ref: "#/components/parameters/PropertyGroup"
+        - $ref: "#/components/parameters/LandScope"
         - $ref: "#/components/parameters/StatisticsGeographyId"
         - name: level
           in: query
@@ -770,17 +777,20 @@ paths:
           schema: {type: string, enum: [sale, rent]}
         - name: method
           in: query
-          schema: {type: string, enum: [repeat_sales, hedonic]}
+          schema: {type: string, enum: [matched_pair_median, hedonic]}
         - name: propertyGroup
           in: query
           schema:
             $ref: "#/components/schemas/PropertyGroup"
       responses:
         "200":
-          description: National repeat-sales and constant-quality hedonic indices.
+          description: >
+            Latest national matched-pair median and constant-quality hedonic
+            index vintages, including samples, uncertainty, and publication status.
           content:
             application/json:
-              schema: {type: object, additionalProperties: true}
+              schema:
+                $ref: "#/components/schemas/MarketIndexList"
         "400":
           $ref: "#/components/responses/Error"
   /api/v1/valuations/{kind}/{id}:
@@ -856,6 +866,17 @@ components:
       in: query
       schema:
         $ref: "#/components/schemas/PropertyGroup"
+    LandScope:
+      name: landScope
+      in: query
+      description: >
+        Land readiness population. Defaults to verified-buildable ETN codes
+        1 and 2; broad allows only codes 1-3 and all is explicit audit access.
+        It has no effect unless propertyGroup is land.
+      schema:
+        type: string
+        enum: [strict, broad, all]
+        default: strict
     StatisticsGeographyId:
       name: geographyId
       in: query
@@ -998,6 +1019,7 @@ components:
         - excludedOutlierCount
         - priceSampleSize
         - pricePerSqmSampleSize
+        - isPublishable
       properties:
         transactionCount:
           type: integer
@@ -1031,6 +1053,8 @@ components:
           type: [number, "null"]
         medianArea:
           type: [number, "null"]
+        isPublishable: {type: boolean}
+        suppressionReason: {type: [string, "null"]}
     StatisticsTimeSeriesPoint:
       allOf:
         - $ref: "#/components/schemas/StatisticsOverview"
@@ -1065,6 +1089,7 @@ components:
         - excludedOutlierCount
         - monthlyRentSampleSize
         - rentPerSqmSampleSize
+        - isPublishable
       properties:
         transactionCount: {type: integer, format: int64}
         eligibleCount: {type: integer, format: int64}
@@ -1079,6 +1104,8 @@ components:
         cleanedAverageMonthlyRentPerSqm: {type: [number, "null"]}
         rawAverageMonthlyRentPerSqm: {type: [number, "null"]}
         medianArea: {type: [number, "null"]}
+        isPublishable: {type: boolean}
+        suppressionReason: {type: [string, "null"]}
     RentalStatisticsTimeSeriesPoint:
       type: object
       required:
@@ -1087,6 +1114,7 @@ components:
         - transactionCount
         - includedSampleSize
         - weakComparisonSample
+        - isPublishable
       properties:
         period: {type: string, format: date}
         incomplete: {type: boolean}
@@ -1100,6 +1128,8 @@ components:
         monthlyRentYoYPercent: {type: [number, "null"]}
         rentPerSqmYoYPercent: {type: [number, "null"]}
         weakComparisonSample: {type: boolean}
+        isPublishable: {type: boolean}
+        suppressionReason: {type: [string, "null"]}
     RentalStatisticsTimeSeries:
       type: object
       required: [interval, items, count]
@@ -1362,7 +1392,7 @@ components:
           minimum: 0
     Distribution:
       type: object
-      required: [metric, sampleSize, belowBoundCount, aboveBoundCount, buckets]
+      required: [metric, sampleSize, belowBoundCount, aboveBoundCount, buckets, isPublishable]
       properties:
         metric: {type: string}
         sampleSize: {type: integer, format: int64}
@@ -1380,6 +1410,8 @@ components:
         histogramUpperBound: {type: [number, "null"]}
         belowBoundCount: {type: integer, format: int64}
         aboveBoundCount: {type: integer, format: int64}
+        isPublishable: {type: boolean}
+        suppressionReason: {type: [string, "null"]}
         buckets:
           type: array
           items:
@@ -1390,6 +1422,50 @@ components:
               from: {type: number}
               to: {type: number}
               count: {type: integer, format: int64}
+    MarketIndex:
+      type: object
+      required:
+        - transactionKind
+        - method
+        - propertyGroup
+        - period
+        - indexValue
+        - sampleSize
+        - basePeriod
+        - methodologyVersion
+        - calculationRunId
+        - observedSampleSize
+        - isPublishable
+      properties:
+        transactionKind: {type: string, enum: [sale, rent]}
+        method: {type: string, enum: [matched_pair_median, hedonic]}
+        propertyGroup:
+          $ref: "#/components/schemas/PropertyGroup"
+        period: {type: string, format: date}
+        indexValue: {type: number}
+        sampleSize: {type: integer}
+        basePeriod: {type: string, format: date}
+        methodologyVersion: {type: string}
+        modelVersion: {type: [string, "null"]}
+        calculationRunId: {type: string, format: uuid}
+        observedSampleSize: {type: integer}
+        referenceSampleSize: {type: [integer, "null"]}
+        lowerIndexValue: {type: [number, "null"]}
+        upperIndexValue: {type: [number, "null"]}
+        nominalCoverage: {type: [number, "null"]}
+        uncertaintyMethod: {type: [string, "null"]}
+        isPublishable: {type: boolean}
+        suppressionReason: {type: [string, "null"]}
+    MarketIndexList:
+      type: object
+      required: [items, count, scope]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/MarketIndex"
+        count: {type: integer, minimum: 0}
+        scope: {type: string}
     BuildingStatistics:
       type: object
       required:

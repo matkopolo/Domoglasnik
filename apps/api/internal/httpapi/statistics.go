@@ -104,6 +104,16 @@ func statisticsFilter(w http.ResponseWriter, r *http.Request) (analytics.Statist
 		writeError(w, r, http.StatusBadRequest, "invalid_property_group", "unsupported propertyGroup")
 		return filter, false
 	}
+	filter.LandScope = r.URL.Query().Get("landScope")
+	if filter.LandScope == "" {
+		filter.LandScope = "strict"
+	}
+	if filter.LandScope != "strict" && filter.LandScope != "broad" &&
+		filter.LandScope != "all" {
+		writeError(w, r, http.StatusBadRequest, "invalid_land_scope",
+			"landScope must be strict, broad, or all")
+		return filter, false
+	}
 	if value := r.URL.Query().Get("geographyId"); value != "" {
 		parsed, err := strconv.ParseInt(value, 10, 64)
 		if err != nil || parsed < 1 {

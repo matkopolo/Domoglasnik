@@ -18,15 +18,24 @@ type MarketIndexFilter struct {
 }
 
 type MarketIndexPoint struct {
-	TransactionKind    string  `json:"transactionKind"`
-	Method             string  `json:"method"`
-	PropertyGroup      string  `json:"propertyGroup"`
-	Period             string  `json:"period"`
-	IndexValue         float64 `json:"indexValue"`
-	SampleSize         int     `json:"sampleSize"`
-	BasePeriod         string  `json:"basePeriod"`
-	MethodologyVersion string  `json:"methodologyVersion"`
-	ModelVersion       *string `json:"modelVersion"`
+	TransactionKind     string   `json:"transactionKind"`
+	Method              string   `json:"method"`
+	PropertyGroup       string   `json:"propertyGroup"`
+	Period              string   `json:"period"`
+	IndexValue          float64  `json:"indexValue"`
+	SampleSize          int      `json:"sampleSize"`
+	BasePeriod          string   `json:"basePeriod"`
+	MethodologyVersion  string   `json:"methodologyVersion"`
+	ModelVersion        *string  `json:"modelVersion"`
+	CalculationRunID    string   `json:"calculationRunId"`
+	ObservedSampleSize  int      `json:"observedSampleSize"`
+	ReferenceSampleSize *int     `json:"referenceSampleSize"`
+	LowerIndexValue     *float64 `json:"lowerIndexValue"`
+	UpperIndexValue     *float64 `json:"upperIndexValue"`
+	NominalCoverage     *float64 `json:"nominalCoverage"`
+	UncertaintyMethod   *string  `json:"uncertaintyMethod"`
+	IsPublishable       bool     `json:"isPublishable"`
+	SuppressionReason   *string  `json:"suppressionReason"`
 }
 
 type ValuationPrediction struct {
@@ -62,8 +71,13 @@ func (r *StatisticsRepository) MarketIndices(
 		SELECT index_data.transaction_kind,index_data.method,index_data.property_group,
 		  index_data.period::text,index_data.index_value::float8,
 		  index_data.sample_size,index_data.base_period::text,
-		  index_data.methodology_version,model.model_version
-		FROM analytics.market_indices index_data
+		  index_data.methodology_version,model.model_version,
+		  index_data.calculation_run_id::text,index_data.observed_sample_size,
+		  index_data.reference_sample_size,index_data.lower_index_value::float8,
+		  index_data.upper_index_value::float8,index_data.nominal_coverage::float8,
+		  index_data.uncertainty_method,index_data.is_publishable,
+		  index_data.suppression_reason
+		FROM analytics.current_market_indices index_data
 		LEFT JOIN analytics.model_runs model ON model.id=index_data.model_run_id
 		WHERE index_data.geography_id IS NULL
 		  AND ($1='' OR index_data.transaction_kind=$1)
@@ -81,8 +95,12 @@ func (r *StatisticsRepository) MarketIndices(
 		var item MarketIndexPoint
 		if err := rows.Scan(&item.TransactionKind, &item.Method,
 			&item.PropertyGroup, &item.Period, &item.IndexValue, &item.SampleSize,
-			&item.BasePeriod, &item.MethodologyVersion,
-			&item.ModelVersion); err != nil {
+			&item.BasePeriod, &item.MethodologyVersion, &item.ModelVersion,
+			&item.CalculationRunID, &item.ObservedSampleSize,
+			&item.ReferenceSampleSize, &item.LowerIndexValue,
+			&item.UpperIndexValue, &item.NominalCoverage,
+			&item.UncertaintyMethod, &item.IsPublishable,
+			&item.SuppressionReason); err != nil {
 			return nil, fmt.Errorf("scan market index: %w", err)
 		}
 		items = append(items, item)

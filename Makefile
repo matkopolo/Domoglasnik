@@ -35,6 +35,9 @@ db-up:
 	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/017_identity_and_preferences.sql
 	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/018_valuation_models.sql
 	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/019_market_indices.sql
+	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/020_land_methodology.sql
+	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/021_index_vintages.sql
+	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/022_quality_observability.sql
 
 db-migrate:
 	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/007_postgis.sql
@@ -50,13 +53,19 @@ db-migrate:
 	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/017_identity_and_preferences.sql
 	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/018_valuation_models.sql
 	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/019_market_indices.sql
+	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/020_land_methodology.sql
+	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/021_index_vintages.sql
+	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f /docker-entrypoint-initdb.d/022_quality_observability.sql
 
 analytics-refresh: db-up
 	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -c "SELECT analytics.refresh_sale_facts();"
+	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -c "SELECT analytics.refresh_land_transaction_facts();"
 	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -c "SELECT analytics.refresh_sale_outliers();"
 	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -c "SELECT analytics.refresh_rental_facts();"
 	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -c "SELECT analytics.refresh_rental_outliers();"
 	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -c "SELECT analytics.refresh_anomaly_signals();"
+	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -c "SELECT analytics.refresh_near_duplicate_candidates();"
+	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -c "SELECT analytics.refresh_missingness_profiles();"
 	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -c "SELECT analytics.refresh_repeat_sales_indices();"
 
 models-refresh: db-up

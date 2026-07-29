@@ -1,6 +1,12 @@
+from datetime import date, timedelta
+
 import numpy as np
 
-from real_estate_etl.modeling import percentile_scores
+from real_estate_etl.modeling import (
+    interval_half_width,
+    percentile_scores,
+    temporal_split_indices,
+)
 
 
 def test_percentile_scores_are_bounded_and_ranked():
@@ -10,3 +16,54 @@ def test_percentile_scores_are_bounded_and_ranked():
 
 def test_percentile_scores_handle_empty_input():
     assert percentile_scores(np.asarray([])).size == 0
+
+
+def test_temporal_split_is_deterministic_disjoint_and_has_no_future_leakage():
+    dates = [date(2018, 1, 1) + timedelta(days=index) for index in range(100)]
+    first = temporal_split_indices(dates)
+    second = temporal_split_indices(dates)
+    assert all(np.array_equal(left, right) for left, right in zip(first, second))
+    training, calibration, test = first
+    assert set(training).isdisjoint(calibration)
+    assert set(training).isdisjoint(test)
+    assert set(calibration).isdisjoint(test)
+    assert max(dates[index] for index in training) < min(
+        dates[index] for index in calibration
+    )
+    assert max(dates[index] for index in calibration) < min(
+        dates[index] for index in test
+    )
+
+
+def test_temporal_split_rejects_small_population():
+    with np.testing.assert_raises_regex(ValueError, "at least 30"):
+        temporal_split_indices([date(2025, 1, 1)] * 29)
+
+
+def test_temporal_split_uses_latest_complete_year_and_prior_calibration_year():
+    dates = [
+        *[date(2023, 6, 1)] * 20,
+        *[date(2024, 6, 1)] * 10,
+        *[date(2025, 6, 1)] * 10,
+        *[date(2026, 1, 1)] * 10,
+    ]
+    training, calibration, test = temporal_split_indices(
+        dates, as_of=date(2026, 7, 1)
+    )
+    assert {dates[index].year for index in training} == {2023}
+    assert {dates[index].year for index in calibration} == {2024}
+    assert {dates[index].year for index in test} == {2025}
+
+
+def test_interval_half_width_uses_finite_sample_conformal_rank():
+    actual = np.asarray([0.0, 1.0, 2.0, 3.0])
+    predicted = np.zeros(4)
+    assert interval_half_width(actual, predicted, coverage=0.5) == 2.0
+
+
+def test_interval_coverage_is_evaluated_on_separate_test_values():
+    calibration_actual = np.asarray([0.0, 0.1, -0.1, 0.2, -0.2] * 10)
+    width = interval_half_width(calibration_actual, np.zeros(50), coverage=0.9)
+    test_actual = np.asarray([0.0, 0.1, 1.0, -1.0])
+    covered = np.abs(test_actual) <= width
+    assert covered.tolist() == [True, True, False, False]

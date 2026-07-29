@@ -12,11 +12,25 @@ import (
 
 var ErrGeographyNotFound = errors.New("geography not found")
 
+const descriptivePublicationThreshold int64 = 30
+
 type StatisticsFilter struct {
 	FromDate      *time.Time
 	ToDate        *time.Time
 	PropertyGroup string
 	GeographyID   *int64
+	LandScope     string
+}
+
+func saleFactsTable(filter StatisticsFilter) string {
+	switch filter.LandScope {
+	case "broad":
+		return "analytics.sale_facts_broad_land"
+	case "all":
+		return "analytics.sale_facts_all_land"
+	default:
+		return "analytics.sale_facts_strict_land"
+	}
 }
 
 type Overview struct {
@@ -33,6 +47,8 @@ type Overview struct {
 	CleanedAveragePerSQM  *float64 `json:"cleanedAveragePricePerSqm"`
 	RawAveragePerSQM      *float64 `json:"rawAveragePricePerSqm"`
 	MedianArea            *float64 `json:"medianArea"`
+	IsPublishable         bool     `json:"isPublishable"`
+	SuppressionReason     *string  `json:"suppressionReason"`
 }
 
 type TimeSeriesPoint struct {
@@ -51,6 +67,8 @@ type TimeSeriesPoint struct {
 	CleanedAveragePerSQM  *float64 `json:"cleanedAveragePricePerSqm"`
 	RawAveragePerSQM      *float64 `json:"rawAveragePricePerSqm"`
 	MedianArea            *float64 `json:"medianArea"`
+	IsPublishable         bool     `json:"isPublishable"`
+	SuppressionReason     *string  `json:"suppressionReason"`
 }
 
 type StatisticsStore interface {
@@ -109,11 +127,11 @@ func (r *StatisticsRepository) Overview(ctx context.Context, filter StatisticsFi
 			avg(price_per_sqm) FILTER (WHERE is_quality_eligible)::float8,
 			percentile_cont(0.5) WITHIN GROUP (ORDER BY area)
 				FILTER (WHERE representative_eligible)::float8
-		FROM analytics.sale_facts
+		FROM %s
 		WHERE ($1::date IS NULL OR contract_date >= $1)
 		  AND ($2::date IS NULL OR contract_date <= $2)
 		  AND ($3 = '' OR property_group = $3)
-		  AND %s`, geographyClause)
+		  AND %s`, saleFactsTable(filter), geographyClause)
 	var result Overview
 	err = r.pool.QueryRow(ctx, query,
 		filter.FromDate, filter.ToDate, filter.PropertyGroup, geographyID,
@@ -128,6 +146,8 @@ func (r *StatisticsRepository) Overview(ctx context.Context, filter StatisticsFi
 	if err != nil {
 		return Overview{}, fmt.Errorf("overview statistics: %w", err)
 	}
+	applyPublicationPolicy(result.IncludedSampleSize,
+		&result.IsPublishable, &result.SuppressionReason)
 	return result, nil
 }
 
@@ -161,13 +181,14 @@ func (r *StatisticsRepository) TimeSeries(
 			avg(price_per_sqm) FILTER (WHERE is_quality_eligible)::float8,
 			percentile_cont(0.5) WITHIN GROUP (ORDER BY area)
 				FILTER (WHERE representative_eligible)::float8
-		FROM analytics.sale_facts
+		FROM %s
 		WHERE contract_date IS NOT NULL
 		  AND ($1::date IS NULL OR contract_date >= $1)
 		  AND ($2::date IS NULL OR contract_date <= $2)
 		  AND ($3 = '' OR property_group = $3)
 		  AND %s
-		GROUP BY 1,2 ORDER BY 1`, truncUnit, truncUnit, step, geographyClause)
+		GROUP BY 1,2 ORDER BY 1`, truncUnit, truncUnit, step,
+		saleFactsTable(filter), geographyClause)
 	rows, err := r.pool.Query(ctx, query,
 		filter.FromDate, filter.ToDate, filter.PropertyGroup, geographyID,
 	)
@@ -190,12 +211,24 @@ func (r *StatisticsRepository) TimeSeries(
 			return nil, fmt.Errorf("scan time-series statistics: %w", err)
 		}
 		point.Period = period.Format("2006-01-02")
+		applyPublicationPolicy(point.IncludedSampleSize,
+			&point.IsPublishable, &point.SuppressionReason)
 		points = append(points, point)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate time-series statistics: %w", err)
 	}
 	return points, nil
+}
+
+func applyPublicationPolicy(sampleSize int64, publishable *bool, reason **string) {
+	*publishable = sampleSize >= descriptivePublicationThreshold
+	if *publishable {
+		*reason = nil
+		return
+	}
+	value := "below_minimum_sample_30"
+	*reason = &value
 }
 
 func (r *StatisticsRepository) Outliers(
@@ -226,7 +259,7 @@ func (r *StatisticsRepository) Outliers(
 			evaluation.upper_bound::float8,
 			evaluation.modified_z_score::float8,
 			evaluation.rule_version
-		FROM analytics.sale_facts fact
+		FROM %s fact
 		JOIN analytics.sale_outlier_evaluations evaluation USING (transaction_id)
 		WHERE evaluation.status='outlier'
 		  AND ($1::date IS NULL OR fact.contract_date >= $1)
@@ -234,7 +267,7 @@ func (r *StatisticsRepository) Outliers(
 		  AND ($3 = '' OR fact.property_group = $3)
 		  AND %s
 		ORDER BY evaluation.modified_z_score DESC NULLS LAST,fact.transaction_id
-		LIMIT $5 OFFSET $6`, geographyClause)
+		LIMIT $5 OFFSET $6`, saleFactsTable(filter), geographyClause)
 	rows, err := r.pool.Query(ctx, query,
 		filter.FromDate, filter.ToDate, filter.PropertyGroup, geographyID, limit, offset,
 	)

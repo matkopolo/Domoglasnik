@@ -22,6 +22,8 @@ type RentalOverview struct {
 	CleanedAveragePerSQM    *float64 `json:"cleanedAverageMonthlyRentPerSqm"`
 	RawAveragePerSQM        *float64 `json:"rawAverageMonthlyRentPerSqm"`
 	MedianArea              *float64 `json:"medianArea"`
+	IsPublishable           bool     `json:"isPublishable"`
+	SuppressionReason       *string  `json:"suppressionReason"`
 }
 
 type RentalTimeSeriesPoint struct {
@@ -37,6 +39,8 @@ type RentalTimeSeriesPoint struct {
 	MonthlyRentYoYPercent    *float64 `json:"monthlyRentYoYPercent"`
 	RentPerSQMYoYPercent     *float64 `json:"rentPerSqmYoYPercent"`
 	WeakComparisonSample     bool     `json:"weakComparisonSample"`
+	IsPublishable            bool     `json:"isPublishable"`
+	SuppressionReason        *string  `json:"suppressionReason"`
 }
 
 type RentalOutlierRecord struct {
@@ -201,6 +205,8 @@ func (r *StatisticsRepository) RentalOverview(
 	if err != nil {
 		return RentalOverview{}, fmt.Errorf("rental overview statistics: %w", err)
 	}
+	applyPublicationPolicy(result.IncludedSampleSize,
+		&result.IsPublishable, &result.SuppressionReason)
 	return result, nil
 }
 
@@ -269,6 +275,8 @@ func (r *StatisticsRepository) RentalTimeSeries(
 		item.WeakComparisonSample = item.IncludedSampleSize < rentalWeakSampleThreshold ||
 			item.PreviousYearSampleSize == nil ||
 			*item.PreviousYearSampleSize < rentalWeakSampleThreshold
+		applyPublicationPolicy(item.IncludedSampleSize,
+			&item.IsPublishable, &item.SuppressionReason)
 		items = append(items, item)
 	}
 	return items, rows.Err()

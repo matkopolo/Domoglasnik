@@ -64,7 +64,7 @@ func (r *StatisticsRepository) GeographySummaries(
 	level string,
 	kind string,
 ) ([]GeographySummary, error) {
-	table, metric := "analytics.sale_facts", "price_per_sqm"
+	table, metric := saleFactsTable(filter), "price_per_sqm"
 	if kind == "rent" {
 		table, metric = "analytics.rental_facts", "monthly_rent_per_sqm"
 	}
@@ -139,7 +139,7 @@ func (r *StatisticsRepository) Clusters(
 			SELECT
 				ST_SnapToGrid(ST_Transform(location,4326),$9,$9) AS grid_point,
 				price_per_sqm,representative_eligible
-			FROM analytics.sale_facts
+			FROM %s
 			WHERE location IS NOT NULL
 			  AND location && ST_Transform(ST_MakeEnvelope($5,$6,$7,$8,4326),3794)
 			  AND ($1::date IS NULL OR contract_date >= $1)
@@ -154,7 +154,7 @@ func (r *StatisticsRepository) Clusters(
 		FROM bounded
 		GROUP BY grid_point
 		ORDER BY count(*) DESC
-		LIMIT 5000`, geographyClause)
+		LIMIT 5000`, saleFactsTable(filter), geographyClause)
 	rows, err := r.pool.Query(ctx, query,
 		filter.FromDate, filter.ToDate, filter.PropertyGroup, geographyID,
 		bounds.West, bounds.South, bounds.East, bounds.North, gridSize,
@@ -196,7 +196,7 @@ func (r *StatisticsRepository) PropertyPoints(
 		       ST_Y(ST_Transform(location,4326)),contract_date::text,
 		       property_group,area::float8,price::float8,price_per_sqm::float8,
 		       representative_eligible
-		FROM analytics.sale_facts
+		FROM %s
 		WHERE location IS NOT NULL
 		  AND location && ST_Transform(ST_MakeEnvelope($5,$6,$7,$8,4326),3794)
 		  AND ($1::date IS NULL OR contract_date >= $1)
@@ -204,7 +204,7 @@ func (r *StatisticsRepository) PropertyPoints(
 		  AND ($3 = '' OR property_group = $3)
 		  AND %s
 		ORDER BY contract_date DESC NULLS LAST,transaction_id
-		LIMIT $9`, geographyClause)
+		LIMIT $9`, saleFactsTable(filter), geographyClause)
 	rows, err := r.pool.Query(ctx, query,
 		filter.FromDate, filter.ToDate, filter.PropertyGroup, geographyID,
 		bounds.West, bounds.South, bounds.East, bounds.North, limit,

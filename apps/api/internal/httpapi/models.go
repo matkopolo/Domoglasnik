@@ -19,10 +19,10 @@ func (s *server) marketIndices(w http.ResponseWriter, r *http.Request) {
 			"transactionKind must be sale or rent")
 		return
 	}
-	if filter.Method != "" && filter.Method != "repeat_sales" &&
+	if filter.Method != "" && filter.Method != "matched_pair_median" &&
 		filter.Method != "hedonic" {
 		writeError(w, r, http.StatusBadRequest, "invalid_method",
-			"method must be repeat_sales or hedonic")
+			"method must be matched_pair_median or hedonic")
 		return
 	}
 	if filter.PropertyGroup != "" && !validPropertyGroup(filter.PropertyGroup) {

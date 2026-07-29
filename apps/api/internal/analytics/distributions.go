@@ -31,6 +31,8 @@ type Distribution struct {
 	BelowBoundCount     int64             `json:"belowBoundCount"`
 	AboveBoundCount     int64             `json:"aboveBoundCount"`
 	Buckets             []HistogramBucket `json:"buckets"`
+	IsPublishable       bool              `json:"isPublishable"`
+	SuppressionReason   *string           `json:"suppressionReason"`
 }
 
 type DistributionStore interface {
@@ -42,7 +44,7 @@ func (r *StatisticsRepository) SaleDistribution(
 	ctx context.Context, filter StatisticsFilter, metric string, bins int,
 ) (Distribution, error) {
 	column := map[string]string{"price": "price", "pricePerSqm": "price_per_sqm"}[metric]
-	return r.distribution(ctx, filter, "analytics.sale_facts", column, metric, bins)
+	return r.distribution(ctx, filter, saleFactsTable(filter), column, metric, bins)
 }
 
 func (r *StatisticsRepository) RentalDistribution(
@@ -142,5 +144,7 @@ func (r *StatisticsRepository) distribution(
 		result.Percentiles = nil
 		result.Buckets = []HistogramBucket{}
 	}
+	applyPublicationPolicy(result.SampleSize,
+		&result.IsPublishable, &result.SuppressionReason)
 	return result, nil
 }
