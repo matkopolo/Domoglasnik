@@ -19,6 +19,7 @@ import type {
   SaleTransactionDetail,
   StatisticalOutlier,
   TimePoint,
+  InflationPoint,
   TransactionExtreme,
   TransactionContextResponse,
   YearRange,
@@ -209,13 +210,29 @@ export function loadDetailedTimeSeries(
   years: YearRange,
   interval: "month" | "quarter" | "year",
   signal: AbortSignal,
+  area: AreaRange = {},
 ) {
-  const query = marketQuery(propertyGroup, years, geographyId);
+  const query = marketQuery(propertyGroup, years, geographyId, area);
   query.set("interval", interval);
   const prefix = mode === "sale" ? "" : "/rentals";
   return getJSON<{ items: TimePoint[] }>(
     `/api/v1${prefix}/statistics/timeseries?${query}`,
     signal,
+  );
+}
+
+export function loadInflation(
+  years: YearRange,
+  interval: "month" | "quarter" | "year",
+  signal: AbortSignal,
+) {
+  const query = new URLSearchParams({
+    from: `${years.from}-01-01`,
+    to: `${years.to}-12-31`,
+    interval,
+  });
+  return getJSON<{ items: InflationPoint[]; source: string }>(
+    `/api/v1/economy/inflation?${query}`, signal,
   );
 }
 

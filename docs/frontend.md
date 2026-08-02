@@ -20,6 +20,8 @@ The dashboard provides:
   and building-grouped transactions;
 - overview metrics with cleaned/raw sample sizes and publication warnings;
 - price/rent trends, year-over-year context, distributions and percentiles;
+- a shared trend card with tabs for median amount per m², transaction volume,
+  and official Slovenian inflation, selectable by month, quarter, or year;
 - geography comparisons, highest/lowest representative transactions,
   anomaly context, indices, and model valuation context;
 - detailed sale/rental package composition and building history.

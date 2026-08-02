@@ -209,6 +209,17 @@ func TestRentalStatisticsEndpoints(t *testing.T) {
 	}
 }
 
+func TestInflationEndpoint(t *testing.T) {
+	response := httptest.NewRecorder()
+	newTestHandler(nil, fakeGeographies{}).ServeHTTP(response, httptest.NewRequest(
+		http.MethodGet,
+		"/api/v1/economy/inflation?from=2024-01-01&to=2024-12-31&interval=year", nil,
+	))
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"annualRatePercent":3.2`) {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
 func TestTransactionDetailEndpoints(t *testing.T) {
 	for _, path := range []string{
 		"/api/v1/sales/transactions/1",

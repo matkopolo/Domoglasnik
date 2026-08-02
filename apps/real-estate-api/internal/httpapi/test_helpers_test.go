@@ -6,13 +6,23 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/matkopolo/NepremicninskiAgent/apps/real-estate-api/internal/analytics"
+	"github.com/matkopolo/NepremicninskiAgent/apps/real-estate-api/internal/economics"
 	"github.com/matkopolo/NepremicninskiAgent/apps/real-estate-api/internal/geography"
 	"github.com/matkopolo/NepremicninskiAgent/apps/real-estate-api/internal/identity"
 )
 
 type fakeDatabase struct{ err error }
+
+type fakeEconomics struct{ err error }
+
+func (store fakeEconomics) Inflation(
+	context.Context, time.Time, time.Time, string,
+) ([]economics.Point, error) {
+	return []economics.Point{{Period: "2024-01-01", AnnualRatePercent: 3.2}}, store.err
+}
 
 func (database fakeDatabase) Ping(context.Context) error { return database.err }
 
@@ -299,6 +309,7 @@ func newTestHandler(databaseError error, store fakeGeographies) http.Handler {
 		Identities:       fakeIdentities{},
 		Models:           fakeModels{},
 		Maps:             fakeMaps{},
+		Economics:        fakeEconomics{},
 		ApplicationName:  "test-api",
 		ApplicationBuild: "test",
 		Environment:      "test",

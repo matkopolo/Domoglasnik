@@ -12,6 +12,7 @@ import (
 	"github.com/matkopolo/NepremicninskiAgent/apps/real-estate-api/internal/analytics"
 	"github.com/matkopolo/NepremicninskiAgent/apps/real-estate-api/internal/config"
 	"github.com/matkopolo/NepremicninskiAgent/apps/real-estate-api/internal/database"
+	"github.com/matkopolo/NepremicninskiAgent/apps/real-estate-api/internal/economics"
 	"github.com/matkopolo/NepremicninskiAgent/apps/real-estate-api/internal/geography"
 	"github.com/matkopolo/NepremicninskiAgent/apps/real-estate-api/internal/httpapi"
 	"github.com/matkopolo/NepremicninskiAgent/apps/real-estate-api/internal/identity"
@@ -45,6 +46,7 @@ func run() error {
 	geographyRepository := geography.NewRepository(pool)
 	statisticsRepository := analytics.NewStatisticsRepository(pool)
 	identityRepository := identity.NewRepository(pool)
+	inflationClient := economics.NewClient(nil, "")
 	handler := httpapi.New(httpapi.Dependencies{
 		Logger:           logger,
 		Database:         pool,
@@ -58,6 +60,7 @@ func run() error {
 		Identities:       identityRepository,
 		Models:           statisticsRepository,
 		Maps:             statisticsRepository,
+		Economics:        inflationClient,
 		AllowedOrigins:   cfg.AllowedOrigins,
 		Environment:      cfg.Environment,
 		ApplicationName:  cfg.ApplicationName,

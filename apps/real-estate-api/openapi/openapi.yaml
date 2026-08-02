@@ -54,6 +54,26 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Metadata"
+  /api/v1/economy/inflation:
+    get:
+      operationId: getSlovenianInflation
+      tags: [Economy]
+      description: Annual CPI inflation rate from the official SURS SiStat H281S monthly table.
+      parameters:
+        - $ref: "#/components/parameters/FromDate"
+        - $ref: "#/components/parameters/ToDate"
+        - $ref: "#/components/parameters/Interval"
+      responses:
+        "200":
+          description: Slovenian annual inflation aggregated to the requested frequency.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InflationSeries"
+        "400":
+          $ref: "#/components/responses/Error"
+        "502":
+          $ref: "#/components/responses/Error"
   /api/v1/geographies:
     get:
       operationId: listGeographies
@@ -964,6 +984,13 @@ components:
       schema:
         type: string
         format: date
+    Interval:
+      name: interval
+      in: query
+      required: true
+      schema:
+        type: string
+        enum: [month, quarter, year]
     PropertyGroup:
       name: propertyGroup
       in: query
@@ -1193,6 +1220,22 @@ components:
         count:
           type: integer
           minimum: 0
+    InflationPoint:
+      type: object
+      required: [period, annualRatePercent]
+      properties:
+        period: {type: string, format: date}
+        annualRatePercent: {type: number}
+    InflationSeries:
+      type: object
+      required: [items, count, source]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/InflationPoint"
+        count: {type: integer, minimum: 0}
+        source: {type: string, const: "SURS SiStat H281S"}
     RentalStatisticsOverview:
       type: object
       required:

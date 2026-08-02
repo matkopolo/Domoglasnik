@@ -78,6 +78,11 @@ export interface TimePoint {
   suppressionReason?: string | null;
 }
 
+export interface InflationPoint {
+  period: string;
+  annualRatePercent: number;
+}
+
 export interface Distribution {
   metric: string;
   sampleSize: number;

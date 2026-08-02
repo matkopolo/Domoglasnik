@@ -552,6 +552,16 @@ button.outlier-row { cursor: pointer; }
 .chart-panel svg { width: 100%; height: 225px; padding: 9px 12px 5px; overflow: visible; }
 .chart-accent { color: var(--green); font-size: 12px; font-weight: 650; }
 .chart-accent.rent { color: var(--orange); }
+.trend-heading { padding-bottom: 7px; }
+.trend-controls { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 0 18px; }
+.chart-tabs, .frequency-picker { display: flex; gap: 3px; padding: 3px; border-radius: 7px; background: #eef2ef; }
+.chart-tabs button, .frequency-picker button { border: 0; border-radius: 5px; padding: 5px 8px; background: transparent; color: var(--muted); font-size: 9px; cursor: pointer; }
+.chart-tabs button.active, .frequency-picker button.active { background: #fff; color: var(--ink); box-shadow: 0 1px 3px #1f38241c; font-weight: 700; }
+.chart-source-error, .chart-empty { margin: 48px 20px; color: var(--muted); text-align: center; font-size: 10px; }
+.trend-line.volume, .trend-dot.volume { stroke: #496d91; }
+.trend-dot.volume { fill: #496d91; }
+.trend-line.inflation, .trend-dot.inflation { stroke: #8c5b9e; }
+.trend-dot.inflation { fill: #8c5b9e; }
 .grid-line { stroke: #e4e8e4; stroke-width: 1; }
 .trend-line { fill: none; stroke: var(--green); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
 .trend-line.rent { stroke: var(--orange); }

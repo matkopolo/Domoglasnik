@@ -63,6 +63,18 @@ No prior compatible observation means no YoY value. Distribution endpoints
 return chart bins plus p10, p25, median, p75, and p90 over the selected eligible
 population.
 
+## Inflation context
+
+The inflation chart uses the Statistical Office of the Republic of Slovenia
+(SURS) SiStat table `H281S`, annual consumer-price index for each month
+(month/same month of the previous year). The displayed rate is `index - 100`.
+Monthly points are shown directly; quarterly and yearly points are arithmetic
+means of the available monthly annual rates in that period. Inflation is a
+national macroeconomic reference, not a property-price deflator and not a
+geography-specific estimate. Transaction-volume points count all GURS
+agreements matching the active sale/rent, property group, geography, area,
+date, and frequency filters.
+
 ## Transaction-level comparable hierarchy
 
 “Primerjava s trgom” separates direct evidence from aggregate market context.

@@ -68,6 +68,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/economy/inflation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Annual CPI inflation rate from the official SURS SiStat H281S monthly table. */
+        get: operations["getSlovenianInflation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/geographies": {
         parameters: {
             query?: never;
@@ -717,6 +734,17 @@ export interface components {
             items: components["schemas"]["StatisticsTimeSeriesPoint"][];
             count: number;
         };
+        InflationPoint: {
+            /** Format: date */
+            period: string;
+            annualRatePercent: number;
+        };
+        InflationSeries: {
+            items: components["schemas"]["InflationPoint"][];
+            count: number;
+            /** @constant */
+            source: "SURS SiStat H281S";
+        };
         RentalStatisticsOverview: {
             /** Format: int64 */
             transactionCount: number;
@@ -1245,6 +1273,7 @@ export interface components {
         FromDate: string;
         /** @description Inclusive contract-date upper bound. */
         ToDate: string;
+        Interval: "month" | "quarter" | "year";
         PropertyGroup: components["schemas"]["PropertyGroup"];
         /** @description Inclusive minimum analytical property area in square metres. */
         MinArea: number;
@@ -1344,6 +1373,34 @@ export interface operations {
                     "application/json": components["schemas"]["Metadata"];
                 };
             };
+        };
+    };
+    getSlovenianInflation: {
+        parameters: {
+            query: {
+                /** @description Inclusive contract-date lower bound. */
+                from?: components["parameters"]["FromDate"];
+                /** @description Inclusive contract-date upper bound. */
+                to?: components["parameters"]["ToDate"];
+                interval: components["parameters"]["Interval"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Slovenian annual inflation aggregated to the requested frequency. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InflationSeries"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
         };
     };
     listGeographies: {

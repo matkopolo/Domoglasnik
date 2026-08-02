@@ -10,6 +10,7 @@ func (s *server) routes() *http.ServeMux {
 	router.HandleFunc("GET /health/ready", s.ready)
 	router.HandleFunc("GET /api/v1/health", s.ready)
 	router.HandleFunc("GET /api/v1/meta", s.meta)
+	router.HandleFunc("GET /api/v1/economy/inflation", s.inflation)
 	router.HandleFunc("GET /api/v1/geographies", s.listGeographies)
 	router.HandleFunc("GET /api/v1/geographies/{id}", s.getGeography)
 	router.HandleFunc("GET /api/v1/geographies/{id}/boundary", s.geographyBoundary)

@@ -40,6 +40,10 @@ timeouts, graceful shutdown, and readiness checks.
 - Quality: anomaly list/summary and authenticated review decisions.
 - Models: market indices and versioned transaction valuation estimates with
   uncertainty and diagnostics.
+- Economy: `/api/v1/economy/inflation` proxies the official SURS SiStat
+  monthly inflation table `H281S`, supports monthly, quarterly, and yearly
+  output, and caches the external response for six hours. Inflation is
+  national context and is never filtered by property or geography.
 - Identity: registration, login/logout, current user, and saved preferences.
 
 The authoritative operation and schema definitions are in

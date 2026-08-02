@@ -263,7 +263,8 @@ export function MarketDashboard() {
           </div>
         </div>
         <div className="chart-grid" id="trends">
-          <TrendChart mode={mode} points={data.timeSeries} years={years} />
+          <TrendChart mode={mode} points={data.timeSeries} years={years}
+            propertyGroup={propertyGroup} geographyId={geographyId} area={area} />
           <DistributionChart mode={mode} data={data.distribution} />
         </div>
         <AnalyticsWorkspace
