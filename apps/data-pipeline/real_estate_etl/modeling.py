@@ -78,7 +78,11 @@ def _refresh_kind(
     workers: int,
 ) -> ModelResult:
     started = time.monotonic()
-    with connection.cursor() as cursor:
+    # Keep the training read in its own completed transaction. Without this
+    # boundary, psycopg starts an implicit outer transaction for the SELECT;
+    # the later persistence block becomes a savepoint and can be rolled back
+    # when the system refresh releases its advisory lock.
+    with connection.transaction(), connection.cursor() as cursor:
         cursor.execute(_query(kind))
         rows = cursor.fetchall()
     if len(rows) < 100:

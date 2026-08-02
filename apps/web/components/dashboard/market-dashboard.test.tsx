@@ -26,6 +26,7 @@ vi.mock("@/lib/api", async () => {
     loadTransactionContext: vi.fn(async () => ({
       transactionKind: "sale", transactionId: 501, contractYear: 2023,
       incompletePeriod: false, propertyGroup: "apartment", actualAmountPerSqm: 2500,
+      directComparables: [],
       benchmarks: [], quality: {
         isQualityEligible: true, isRepresentative: true, reasons: [],
       }, methodologyVersion: "test",

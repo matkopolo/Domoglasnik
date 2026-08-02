@@ -46,6 +46,8 @@ The dashboard uses MapLibre GL JS for a real interactive map:
   selectable sale transactions;
 - street-level sales sharing a cadastral building are consolidated into one
   marker whose popup lists the complete building sale history;
+- transaction context ranks individual same-building transactions by same
+  year and ±15%/±25% area similarity before showing wider market benchmarks;
 - viewport-aware API requests switch to individual properties at street zoom.
 
 Trend charts include formatted price-axis ticks and mouse, focus, and keyboard

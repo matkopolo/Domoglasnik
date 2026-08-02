@@ -1,5 +1,10 @@
 # Data pipeline worker
 
+Detailed definitions for quality populations, robust cohort outliers,
+duplicate signals, hedonic Ridge models, temporal/spatial validation,
+split-conformal ranges, Isolation Forest, and market indices are in
+[../../docs/statistical-methodology.md](../../docs/statistical-methodology.md).
+
 The production-style pipeline runs inside Docker. The image contains Python
 3.11, the GURS downloader/importer, psycopg, NumPy, SciPy, and scikit-learn.
 Host Python is needed only for optional local development.
@@ -67,6 +72,21 @@ Reset is intentionally explicit and destructive. It removes source-file
 ledger rows, imported transactions/components, analytical facts, anomaly
 signals, model runs/predictions, and index vintages. It preserves users,
 sessions, preferences, classification tables, and cached ZIP archives.
+
+Follow model training and validation output with:
+
+```bash
+docker compose logs -f pipeline-worker
+```
+
+Each completed sale/rent model prints overall temporal-holdout metrics,
+90% interval coverage, property-group diagnostics, comparison with a simple
+local-median baseline, municipality-holdout performance, and warnings for low
+coverage or negative R². To rerun only model training:
+
+```bash
+docker compose run --rm pipeline-worker refresh-models --workers 6
+```
 
 ## Optional local development
 

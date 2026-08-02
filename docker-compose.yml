@@ -20,9 +20,9 @@ services:
       timeout: 5s
       retries: 10
 
-  api:
+  real-estate-api:
     build:
-      context: ./apps/api
+      context: ./apps/real-estate-api
       dockerfile: Dockerfile
     image: real-estate-api:development
     environment:
@@ -94,7 +94,7 @@ services:
       - "3000:3000"
     mem_limit: 768m
     depends_on:
-      api:
+      real-estate-api:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3000').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]

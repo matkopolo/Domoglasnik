@@ -1164,6 +1164,29 @@ export interface components {
             /** @enum {string} */
             reliability: "very_low" | "low" | "moderate";
             isPublishable: boolean;
+            /** @enum {string} */
+            comparisonProfile: "area_15_age_10" | "area_25_age_15" | "area_15" | "area_25" | "unadjusted";
+            areaTolerancePercent?: number;
+            constructionYearTolerance?: number;
+        };
+        DirectComparable: {
+            /** Format: int64 */
+            transactionId: number;
+            /** Format: date */
+            contractDate: string;
+            contractYear: number;
+            area: number;
+            amount: number;
+            amountPerSqm: number;
+            areaDifferencePercent: number;
+            amountPerSqmDifferencePercent: number;
+            yearDifference: number;
+            /** @enum {string} */
+            matchTier: "same_building_same_year_area_15" | "same_building_adjacent_year_area_15" | "same_building_same_year" | "same_building_other";
+            constructionYear?: number;
+            buildingPartNumber?: string;
+            isRepresentative: boolean;
+            outlierStatus?: string;
         };
         TransactionContext: {
             /** @enum {string} */
@@ -1174,6 +1197,8 @@ export interface components {
             incompletePeriod: boolean;
             propertyGroup: components["schemas"]["PropertyGroup"];
             actualAmountPerSqm: number;
+            /** @description Ranked individual transactions from the same cadastral building. */
+            directComparables: components["schemas"]["DirectComparable"][];
             benchmarks: components["schemas"]["ContextBenchmark"][];
             valuation?: components["schemas"]["ContextValuation"] | null;
             quality: components["schemas"]["QualityDecision"];
@@ -1824,7 +1849,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Same-year representative sale benchmarks, quality evidence, and valuation context. */
+            /** @description Ranked same-building comparables, same-year market benchmarks, quality evidence, and valuation context. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1872,7 +1897,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Same-year representative rental benchmarks, quality evidence, and valuation context. */
+            /** @description Ranked same-building comparables, same-year market benchmarks, quality evidence, and valuation context. */
             200: {
                 headers: {
                     [name: string]: unknown;

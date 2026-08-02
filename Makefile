@@ -4,7 +4,7 @@ PIPELINE_RUN := docker compose run --rm pipeline-worker
 DATABASE_URL ?= postgresql://real_estate:real_estate@localhost:5432/real_estate
 WORKERS ?= 6
 GO_IMAGE ?= golang:1.26.5-bookworm
-API_DIR := apps/api
+API_DIR := apps/real-estate-api
 API_TEST_DATABASE_URL ?= postgresql://real_estate:real_estate@host.docker.internal:5432/real_estate
 GO_RUN := docker run --rm -v "$(CURDIR)/$(API_DIR):/src" -v real_estate_go_mod_cache:/go/pkg/mod -v real_estate_go_build_cache:/root/.cache/go-build -w /src $(GO_IMAGE)
 WEB_DIR := apps/web
@@ -52,13 +52,13 @@ db-status:
 	docker compose ps
 
 api-up: db-up
-	docker compose up -d --build --wait api
+	docker compose up -d --build --wait real-estate-api
 
 api-down:
-	docker compose stop api
+	docker compose stop real-estate-api
 
 api-logs:
-	docker compose logs -f api
+	docker compose logs -f real-estate-api
 
 api-fmt:
 	$(GO_RUN) gofmt -w .
@@ -70,7 +70,7 @@ api-test:
 	docker run --rm -v "$(CURDIR)/$(API_DIR):/src" -v real_estate_go_mod_cache:/go/pkg/mod -v real_estate_go_build_cache:/root/.cache/go-build -e TEST_DATABASE_URL=$(API_TEST_DATABASE_URL) -w /src $(GO_IMAGE) go test -race ./...
 
 api-build:
-	docker compose build api
+	docker compose build real-estate-api
 
 web-setup:
 	$(NODE_RUN) npm ci

@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "generate:api-types": "openapi-typescript ../api/openapi/openapi.yaml -o lib/generated/api-schema.d.ts",
+    "generate:api-types": "openapi-typescript ../real-estate-api/openapi/openapi.yaml -o lib/generated/api-schema.d.ts",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json",

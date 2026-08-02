@@ -228,6 +228,30 @@ export interface ContextBenchmark {
   radiusMeters?: number;
   reliability: "very_low" | "low" | "moderate";
   isPublishable: boolean;
+  comparisonProfile: "area_15_age_10" | "area_25_age_15" | "area_15" | "area_25" | "unadjusted";
+  areaTolerancePercent?: number;
+  constructionYearTolerance?: number;
+}
+
+export interface DirectComparable {
+  transactionId: number;
+  contractDate: string;
+  contractYear: number;
+  area: number;
+  amount: number;
+  amountPerSqm: number;
+  areaDifferencePercent: number;
+  amountPerSqmDifferencePercent: number;
+  yearDifference: number;
+  matchTier:
+    | "same_building_same_year_area_15"
+    | "same_building_adjacent_year_area_15"
+    | "same_building_same_year"
+    | "same_building_other";
+  constructionYear?: number;
+  buildingPartNumber?: string;
+  isRepresentative: boolean;
+  outlierStatus?: string;
 }
 
 export interface ValuationPrediction {
@@ -327,6 +351,7 @@ export interface TransactionContextResponse {
   incompletePeriod: boolean;
   propertyGroup: PropertyGroup;
   actualAmountPerSqm: number;
+  directComparables: DirectComparable[];
   benchmarks: ContextBenchmark[];
   valuation?: ValuationPrediction | null;
   quality: QualityDecision;

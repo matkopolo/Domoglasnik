@@ -279,7 +279,13 @@ export function MarketDashboard() {
             Vir: GURS ETN in RPE · Mediane in primerjave uporabljajo reprezentativni vzorec;
             statistična odstopanja niso samodejno označena kot napake.
           </span>
-          <a href="/docs/methodology-implementation-report.md">Metodologija</a>
+          <a
+            href="https://github.com/matkopolo/NepremicninskiAgent/blob/main/docs/statistical-methodology.md"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Metodologija
+          </a>
         </footer>
       </main>
     </div>

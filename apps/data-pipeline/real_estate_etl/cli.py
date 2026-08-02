@@ -23,7 +23,6 @@ from .operations import (
 from .pipeline import (
     fetch_national_zip,
     fetch_zip,
-    format_duration,
     refresh_all_national,
     refresh_all_sales,
     sync_reference_data,
@@ -195,14 +194,11 @@ def run(args: argparse.Namespace) -> None:
         elif args.command == "sync-geographies":
             sync_geographies(connection)
         elif args.command == "refresh-models":
+            from .model_reporting import format_model_report
             from .modeling import refresh_models
 
             for result in refresh_models(connection, args.workers):
-                print(
-                    f"Refreshed {result.transaction_kind} model: rows={result.rows}, "
-                    f"version={result.model_version}, elapsed={format_duration(result.elapsed_seconds)}, "
-                    f"metrics={result.metrics}"
-                )
+                print(format_model_report(result))
         elif args.command == "import":
             import_zip(connection, args.zip_file, verbose=args.verbose)
         elif args.command == "refresh":

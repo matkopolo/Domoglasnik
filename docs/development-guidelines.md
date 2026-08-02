@@ -6,7 +6,7 @@ dependency boundary, or independently testable responsibility.
 
 ## Go API
 
-- Keep executable wiring in `cmd/api`; keep server implementation in
+- Keep executable wiring in `cmd/real-estate-api`; keep server implementation in
   `internal` so other modules cannot depend on private application packages.
 - Organize packages by capability (`analytics`, `geography`, `identity`,
   `httpapi`), not by generic layers such as `utils`.

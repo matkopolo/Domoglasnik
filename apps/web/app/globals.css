@@ -451,6 +451,13 @@ main { width: min(1480px, calc(100% - 48px)); margin: 0 auto; padding: 25px 0 30
 .benchmark-card div { display: grid; }
 .benchmark-card div span, .benchmark-card small { color: var(--muted); font-size: 9px; }
 .benchmark-card small { grid-column: 1 / -1; }
+.direct-comparable-card { width: 100%; display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; padding: 9px 0; border: 0; border-top: 1px solid #eef0ee; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.direct-comparable-card:first-of-type { border-top: 0; }
+.direct-comparable-card:hover { background: var(--surface-soft); }
+.direct-comparable-card > span { grid-column: 1 / -1; color: var(--muted); font-size: 9px; }
+.direct-comparable-card > strong { font-size: 13px; }
+.direct-comparable-card > b { color: var(--green-dark); font-size: 11px; }
+.direct-comparable-card > small { grid-column: 1 / -1; color: var(--muted); font-size: 9px; }
 .context-children { display: flex; flex-wrap: wrap; gap: 5px; }
 .context-children button { border: 1px solid var(--line); border-radius: 999px; background: #fff; padding: 5px 8px; font-size: 10px; cursor: pointer; }
 .context-transaction { width: 100%; display: grid; gap: 3px; padding: 8px 0; border: 0; border-top: 1px solid #eef0ee; background: transparent; text-align: left; cursor: pointer; }

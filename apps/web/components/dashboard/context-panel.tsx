@@ -22,6 +22,7 @@ import {
 } from "@/lib/display-values";
 import type {
   BuildingStatistics,
+  ContextBenchmark,
   Geography,
   GeographyComparison,
   FullValuationPrediction,
@@ -67,6 +68,26 @@ function contextKey(context: MarketContext) {
     return `building:${context.cadastralCode}:${context.buildingNumber}`;
   }
   return `transaction:${context.mode}:${context.id}`;
+}
+
+function comparableTierLabel(tier: TransactionContextResponse["directComparables"][number]["matchTier"]) {
+  switch (tier) {
+    case "same_building_same_year_area_15": return "Ista stavba · isto leto · površina ±15 %";
+    case "same_building_adjacent_year_area_15": return "Ista stavba · sosednje leto · površina ±15 %";
+    case "same_building_same_year": return "Ista stavba · isto leto · širša razlika v površini";
+    default: return "Ista stavba · drug primerljiv posel";
+  }
+}
+
+function benchmarkProfileLabel(benchmark: ContextBenchmark) {
+  if (benchmark.comparisonProfile === "unadjusted") return "širši tržni vzorec";
+  const parts = benchmark.areaTolerancePercent
+    ? [`površina ±${benchmark.areaTolerancePercent} %`]
+    : [];
+  if (benchmark.constructionYearTolerance) {
+    parts.push(`leto gradnje ±${benchmark.constructionYearTolerance} let`);
+  }
+  return parts.join(" · ");
 }
 
 function FieldList({ fields }: {
@@ -193,7 +214,41 @@ function TransactionView({
         </article>
       ))}
       <section className="context-section">
-        <h3>Primerjava s trgom</h3>
+        <h3>Neposredno primerljivi posli</h3>
+        <p className="context-note">
+          Prednost imajo posli v isti katastrski stavbi, nato isto leto in najbolj podobna površina.
+        </p>
+        {context.directComparables.length === 0 ? (
+          <p>V isti stavbi v izbranem ali sosednjih letih ni primerljivega posla.</p>
+        ) : context.directComparables.map((comparable) => (
+          <button
+            className="direct-comparable-card"
+            type="button"
+            key={comparable.transactionId}
+            onClick={() => onChange({
+              kind: "transaction",
+              mode: context.transactionKind,
+              id: comparable.transactionId,
+            })}
+          >
+            <span>{comparableTierLabel(comparable.matchTier)}</span>
+            <strong>{euro.format(comparable.amount)}</strong>
+            <b>{decimal.format(comparable.amountPerSqm)} €/m²</b>
+            <small>
+              {comparable.contractDate} · {decimal.format(comparable.area)} m² · površina
+              {comparable.areaDifferencePercent >= 0 ? " +" : " "}
+              {decimal.format(comparable.areaDifferencePercent)} %
+            </small>
+            <small className={comparable.isRepresentative ? "positive" : "negative"}>
+              {comparable.isRepresentative
+                ? "reprezentativen posel"
+                : `preveri kakovost${comparable.outlierStatus ? ` · ${comparable.outlierStatus}` : ""}`}
+            </small>
+          </button>
+        ))}
+      </section>
+      <section className="context-section">
+        <h3>Primerjava z okolico</h3>
         {context.incompletePeriod && (
           <p className="context-warning"><CircleAlert size={14} /> Leto še ni zaključeno.</p>
         )}
@@ -209,6 +264,7 @@ function TransactionView({
               mediana {decimal.format(benchmark.medianAmountPerSqm)} €/m² ·
               zanesljivost {reliabilityLabel(benchmark.reliability)}
             </small>
+            <small>izbor: {benchmarkProfileLabel(benchmark)}</small>
           </article>
         ))}
       </section>

@@ -6,8 +6,8 @@
       "type": "go",
       "request": "launch",
       "mode": "debug",
-      "program": "${workspaceFolder}/apps/api/cmd/api",
-      "cwd": "${workspaceFolder}/apps/api",
+      "program": "${workspaceFolder}/apps/real-estate-api/cmd/real-estate-api",
+      "cwd": "${workspaceFolder}/apps/real-estate-api",
       "env": {
         "API_ENV": "development",
         "DATABASE_URL": "postgresql://real_estate_api:real_estate_api@localhost:5432/real_estate",

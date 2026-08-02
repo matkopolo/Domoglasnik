@@ -179,15 +179,13 @@ def _refresh_system_unlocked(
         )
     )
 
+    from .model_reporting import format_model_report
     from .modeling import refresh_models
 
     model_results = refresh_models(connection, workers)
     model_rows = {result.transaction_kind: result.rows for result in model_results}
     for result in model_results:
-        print(
-            f"Refreshed {result.transaction_kind} model: rows={result.rows}, "
-            f"version={result.model_version}"
-        )
+        print(format_model_report(result))
     return SystemRefreshResult(archives, geography_counts, model_rows)
 
 

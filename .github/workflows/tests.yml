@@ -52,15 +52,15 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version: "1.26.5"
-          cache-dependency-path: apps/api/go.sum
+          cache-dependency-path: apps/real-estate-api/go.sum
       - run: gofmt -w . && git diff --exit-code
-        working-directory: apps/api
+        working-directory: apps/real-estate-api
       - run: go vet ./...
-        working-directory: apps/api
+        working-directory: apps/real-estate-api
       - run: go build ./...
-        working-directory: apps/api
+        working-directory: apps/real-estate-api
       - run: go test -race ./...
-        working-directory: apps/api
+        working-directory: apps/real-estate-api
       - uses: actions/setup-node@v4
         with:
           node-version: "22"

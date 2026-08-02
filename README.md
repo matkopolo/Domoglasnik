@@ -5,10 +5,14 @@ This project downloads national yearly ZIP archives from GURS JGP, preserves the
 ## Project structure
 
 - `apps/data-pipeline/`: Python downloader, transformer, PostgreSQL loader, and tests
-- `apps/api/`: Go analytics API, OpenAPI contract, tests, and architecture plan
+- `apps/real-estate-api/`: Go analytics API, OpenAPI contract, and tests
 - `apps/web/`: Next.js real-estate market dashboard and map
 - `database/migrations/`: shared PostgreSQL schema and incremental migrations
 - `database/documentation/`: shared data-model documentation
+- `docs/database.md`: database architecture, lifecycle, security, and operations
+- `docs/frontend.md`: implemented frontend architecture and user behavior
+- `docs/real-estate-api.md`: API-service architecture and contract overview
+- `docs/statistical-methodology.md`: statistical populations, equations, models, validation, and limitations
 - `docs/development-guidelines.md`: Go/Python conventions and test-layout policy
 - `infrastructure/docker/`: service-specific Docker assets
 - `data/raw/`: local downloaded archives, excluded from Git
@@ -23,6 +27,16 @@ normal workflow on Windows, macOS, and Linux:
 docker compose up -d --build --wait
 ```
 
+When updating a checkout that previously used the Compose service name `api`,
+remove that obsolete container once before starting the renamed service:
+
+```bash
+docker compose down --remove-orphans
+docker compose up -d --build --wait
+```
+
+Named database and pipeline volumes are retained by these commands.
+
 On the first run, `pipeline-worker` downloads and imports the national GURS
 history, synchronizes geographic boundaries, refreshes analytics, and builds
 the valuation/anomaly models. The API waits for that first successful refresh
@@ -35,6 +49,32 @@ docker compose logs -f pipeline-worker
 
 PostgreSQL data and downloaded ZIP archives live in named Docker volumes and
 survive `docker compose down` and application rebuilds.
+
+### Rebuild or start completely fresh
+
+To rebuild all four services—PostGIS, pipeline worker, real-estate API, and
+web—while preserving imported data and downloaded archives:
+
+```bash
+docker compose down --remove-orphans
+docker compose up -d --build --wait
+docker compose logs -f pipeline-worker
+```
+
+For a genuinely empty installation, including an empty database and no cached
+GURS archives, remove the named volumes as well. This permanently deletes
+market data, users, preferences, model history, and cached downloads:
+
+```bash
+docker compose down --volumes --remove-orphans
+docker compose up -d --build --wait
+docker compose logs -f pipeline-worker
+```
+
+The first clean run downloads and imports GURS data, synchronizes geography,
+refreshes deterministic analytics, trains models, starts `real-estate-api`,
+and finally starts the frontend. Keep the log command open until the worker
+prints validation reports for both sale and rent models.
 
 ## Visual Studio Code
 
@@ -92,11 +132,12 @@ to packages while Python tests live in a separate tree are documented in
 
 The complete column-level reference is in [database/documentation/data-dictionary.md](database/documentation/data-dictionary.md). It documents source CSV names, English meanings, PostgreSQL types, units, nullability, codebooks, coordinates, relationships, and analysis cautions.
 
-The backend direction and statistical safeguards are preserved in
-[apps/api/docs/backend-api-plan.md](apps/api/docs/backend-api-plan.md). The Go
-service now provides geographic boundaries, package-aware sale facts,
-overview/time-series statistics, auditable robust outliers, and bounded map
-clusters/points over tested analytical tables.
+The current system references are
+[database architecture](docs/database.md),
+[frontend architecture](docs/frontend.md),
+[real-estate API](docs/real-estate-api.md), and
+[statistical methodology](docs/statistical-methodology.md). They describe the
+implemented system rather than historical phase plans.
 
 ## Start PostgreSQL with PostGIS
 
@@ -172,6 +213,14 @@ on the latest complete year and municipality holdouts, calibrates prediction
 ranges on the preceding year, trains Isolation Forest models, and appends a
 new hedonic-index vintage.
 
+Model refresh logs report temporal holdout MAE, median absolute percentage
+error, log RMSE/R², observed coverage of the 90% prediction interval,
+property-group performance against a local-median baseline, and performance
+on held-out municipalities. They deliberately do not print one generic
+“accuracy” number because this is regression, not classification. Full
+definitions and interpretation are in
+[docs/statistical-methodology.md](docs/statistical-methodology.md).
+
 For `propertyGroup=land`, API statistics and maps default to contracts whose
 parcels are exclusively verified-buildable ETN codes 1 and 2. `landScope=broad`
 opts into codes 1–3 and `landScope=all` explicitly requests every retained land
@@ -182,7 +231,7 @@ complete in milliseconds. The API role cannot mutate imported transactions or
 run refreshes. It has narrowly scoped writes only for users, sessions,
 preferences, and authenticated anomaly review decisions.
 
-The full local contract and developer instructions are in [apps/api/README.md](apps/api/README.md). The API can be built and tested through Docker even when Go is not installed on the host:
+The full local contract and developer instructions are in [apps/real-estate-api/README.md](apps/real-estate-api/README.md). The API can be built and tested through Docker even when Go is not installed on the host:
 
 ```bash
 make api-vet
@@ -243,7 +292,7 @@ retrieved again. Equivalent convenience commands are `make start`,
 
 ## Start the web dashboard
 
-The Stage 3 frontend, **Analitika nepremičnin**, is a responsive Next.js
+The frontend, **Analitika nepremičnin**, is a responsive Next.js
 dashboard with a real interactive MapLibre street/satellite map,
 geography-aware Slovenia/region/municipality/local-area summaries, exact GURS
 region boundaries, sale/rental switching, geographic and property filters,
@@ -263,31 +312,6 @@ labels and uses representative demo data. Configure a deployed API with
 The checked-in MapLibre basemaps use public development tile services and need
 no local secret or API key. They are suitable for this repository's current
 local-use stage; choose a licensed tile service before public production use.
-
-## Windows setup
-
-Install Docker Desktop, open PowerShell in the project folder, and run:
-
-```powershell
-docker compose up -d --build --wait
-```
-
-No Python, Go, Node, GNU Make, or virtual environment is required. Monitor the
-initial import in another PowerShell window:
-
-```powershell
-docker compose logs -f pipeline-worker
-```
-
-Manual refresh and reset commands are identical on all supported systems:
-
-```powershell
-docker compose run --rm pipeline-worker refresh-system --output-dir /data/raw
-docker compose run --rm pipeline-worker reset-and-repopulate --confirm-reset --output-dir /data/raw
-```
-
-Disable automatic sleep while the first import runs. Do not copy Docker
-volumes between computers; share the repository and let Compose create them.
 
 ## Optional local pipeline development
 
@@ -393,14 +417,6 @@ Run the isolated PostgreSQL integration test against the Docker database:
 
 ```bash
 make test
-```
-
-PowerShell equivalent:
-
-```powershell
-$env:TEST_DATABASE_URL = "postgresql://real_estate:real_estate@localhost:5432/real_estate"
-Set-Location apps/data-pipeline
-..\..\.venv\Scripts\pytest.exe -q -m integration
 ```
 
 The integration tests create uniquely named temporary schemas, test municipality and national BUY snapshots, RENT snapshots, incomplete and duplicate historical records, snapshot replacement, `COPY`, and codebook deduplication, and then remove only those temporary schemas.
