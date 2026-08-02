@@ -106,6 +106,46 @@ municipality/region context and then the hedonic Ridge estimate. Package
 composition and data-quality evidence must still be checked before treating
 two agreements as economically equivalent.
 
+## Current-market estimate
+
+The current-market estimate is an additional reference and does not replace
+the historical transaction comparisons. For every sale or rental with usable
+area and coordinates, the API searches representative transactions from the
+current calendar year using progressively larger radii of 1 km, 2.5 km, 5 km,
+10 km, and 20 km. It first requires area within ±15% and construction year
+within ±10 years. If that strict profile cannot supply 50 observations within
+20 km, it widens to ±25% area and ±15 construction years and repeats the
+progressive-radius search. If the incomplete current calendar year still
+cannot supply 50 observations, the same hierarchy is repeated over the current
+and previous calendar years. Search expansion stops once at least 50
+observations are available; 20 km remains an absolute ceiling. When the
+available market is smaller, the largest eligible cohort of at least five
+observations is returned with an explicit warning that the 50-comparable target
+was not reached. The response warns whenever the previous year was needed.
+
+Candidates receive a transparent similarity weight:
+
+- 35% relative floor-area similarity;
+- 25% construction-year similarity;
+- 20% straight-line PostGIS distance similarity;
+- 10% contract recency;
+- 10% agreement-package component-count similarity.
+
+The central estimate is the weighted median amount per m² multiplied by the
+subject area. The displayed lower and upper values are weighted p25 and p75,
+not formal appraisal confidence intervals. When fewer than five current-year
+candidates belong to the subject municipality, the worker compares matched
+transactions in that municipality with the surrounding selected-radius market
+over the preceding three calendar years. A factor is applied only with at
+least five local and twenty surrounding observations and is bounded to
+0.65–1.35. The response exposes the factor and local sample size.
+
+Confidence is moderate only with at least 50 strict matches inside 10 km, low
+with at least 20, and very low otherwise. The current year is explicitly
+marked incomplete. Property condition, renovation, view, exact floor and
+package details can remain unobserved, so the output is not an official
+valuation.
+
 ## Robust cohort outliers
 
 Sales compare price per m² using the most specific cohort with enough data:

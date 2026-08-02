@@ -30,6 +30,9 @@ The dashboard provides:
   year, with their actual matching tolerances displayed in the card;
 - broad market medians and model estimates kept visually separate from direct
   and physically matched evidence.
+- a separate current-market estimate card showing its weighted p25–median–p75
+  range, actual adaptive radius, comparable count, physical tolerances,
+  location adjustment, confidence and limitations.
 
 Filters define one market population for dashboard and map requests and are
 stored in URL query parameters so an analysis can be refreshed or shared.

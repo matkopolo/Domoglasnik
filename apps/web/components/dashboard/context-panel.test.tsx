@@ -57,6 +57,24 @@ vi.mock("@/lib/api", () => ({
       isPublishable: true,
       comparisonProfile: "unadjusted",
     }],
+    currentMarketEstimate: {
+      lowerTotal: 150000,
+      centralTotal: 157000,
+      upperTotal: 165000,
+      lowerAmountPerSqm: 2885,
+      centralAmountPerSqm: 3019,
+      upperAmountPerSqm: 3173,
+      comparableCount: 60,
+      maximumRadiusMeters: 20000,
+      areaTolerancePercent: 15,
+      constructionYearTolerance: 10,
+      locationAdjustmentFactor: 0.91,
+      localAdjustmentSampleSize: 7,
+      referenceYear: 2026,
+      confidence: "low",
+      warnings: ["statistična tržna ocena, ne uradna cenitev"],
+      methodologyVersion: "test",
+    },
     quality: { isQualityEligible: true, isRepresentative: true, reasons: [] },
     methodologyVersion: "test",
   })),
@@ -85,6 +103,8 @@ describe("ContextPanel", () => {
     expect(screen.getByText("+16,67 %")).toBeInTheDocument();
     expect(screen.getByText(/n=31/)).toBeInTheDocument();
     expect(screen.getByText(/širši tržni vzorec/)).toBeInTheDocument();
+    expect(screen.getByText("157.000 €")).toBeInTheDocument();
+    expect(screen.getByText("primerljivih poslov", { exact: false })).toBeInTheDocument();
     expect(screen.getByText("750 €")).toBeInTheDocument();
     expect(screen.getByText(/Ista stavba · isto leto/)).toBeInTheDocument();
     expect(screen.getByText("Primerjava z okolico")).toBeInTheDocument();

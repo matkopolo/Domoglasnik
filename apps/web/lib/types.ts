@@ -359,8 +359,28 @@ export interface TransactionContextResponse {
   directComparables: DirectComparable[];
   benchmarks: ContextBenchmark[];
   valuation?: ValuationPrediction | null;
+  currentMarketEstimate?: CurrentMarketEstimate;
   quality: QualityDecision;
   outlierStatus?: string | null;
+  methodologyVersion: string;
+}
+
+export interface CurrentMarketEstimate {
+  lowerTotal: number;
+  centralTotal: number;
+  upperTotal: number;
+  lowerAmountPerSqm: number;
+  centralAmountPerSqm: number;
+  upperAmountPerSqm: number;
+  comparableCount: number;
+  maximumRadiusMeters: number;
+  areaTolerancePercent: number;
+  constructionYearTolerance?: number;
+  locationAdjustmentFactor: number;
+  localAdjustmentSampleSize: number;
+  referenceYear: number;
+  confidence: "moderate" | "low" | "very_low";
+  warnings: string[];
   methodologyVersion: string;
 }
 

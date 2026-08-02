@@ -72,6 +72,12 @@ physically matched. Municipality, statistical-region, and national medians are
 deliberately broader market context. Each aggregate response exposes the
 matching profile and tolerances that produced it. The model estimate remains a
 separate final reference rather than being mixed into observed comparables.
+The same response adds an adaptive current-market estimate based on weighted
+current-year transactions. Its search targets at least 50 comparable
+transactions, expanding only as needed from 1 km to a 20 km ceiling and then
+including the previous calendar year when the incomplete current year remains
+too thin. It returns the range, central value, sample size, actual radius,
+physical tolerances, municipality adjustment, confidence and warnings.
 
 See `docs/statistical-methodology.md` for equations, cohorts, model validation,
 uncertainty, and known limitations.

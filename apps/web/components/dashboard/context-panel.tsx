@@ -247,6 +247,42 @@ function TransactionView({
           </button>
         ))}
       </section>
+      {context.currentMarketEstimate && (
+        <section className="context-section current-market-estimate">
+          <h3>{context.transactionKind === "sale"
+            ? "Ocena trenutne tržne vrednosti"
+            : "Ocena trenutne mesečne najemnine"}</h3>
+          <div className="current-market-range">
+            <span>{euro.format(context.currentMarketEstimate.lowerTotal)}</span>
+            <strong>{euro.format(context.currentMarketEstimate.centralTotal)}</strong>
+            <span>{euro.format(context.currentMarketEstimate.upperTotal)}</span>
+          </div>
+          <p>
+            Osrednja ocena {decimal.format(context.currentMarketEstimate.centralAmountPerSqm)} €/m²
+            {context.transactionKind === "rent" ? " na mesec" : ""}
+            · zanesljivost {reliabilityLabel(context.currentMarketEstimate.confidence)}
+          </p>
+          <div className="current-market-kpis">
+            <small><b>{context.currentMarketEstimate.comparableCount}</b> primerljivih poslov</small>
+            <small><b>{context.currentMarketEstimate.maximumRadiusMeters >= 1000
+              ? `${decimal.format(context.currentMarketEstimate.maximumRadiusMeters / 1000)} km`
+              : `${context.currentMarketEstimate.maximumRadiusMeters} m`}</b> največji radij</small>
+            <small><b>±{context.currentMarketEstimate.areaTolerancePercent} %</b> površina</small>
+            {context.currentMarketEstimate.constructionYearTolerance && (
+              <small><b>±{context.currentMarketEstimate.constructionYearTolerance} let</b> leto gradnje</small>
+            )}
+          </div>
+          {context.currentMarketEstimate.locationAdjustmentFactor !== 1 && (
+            <small>
+              Lokalna prilagoditev ×{decimal.format(context.currentMarketEstimate.locationAdjustmentFactor)}
+              · lokalni zgodovinski vzorec n={context.currentMarketEstimate.localAdjustmentSampleSize}
+            </small>
+          )}
+          <ul>{context.currentMarketEstimate.warnings.map((warning) => (
+            <li key={warning}>{warning}</li>
+          ))}</ul>
+        </section>
+      )}
       <section className="context-section">
         <h3>Primerjava z okolico</h3>
         {context.incompletePeriod && (

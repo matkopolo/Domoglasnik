@@ -1959,6 +1959,8 @@ components:
           oneOf:
             - $ref: "#/components/schemas/ContextValuation"
             - {type: "null"}
+        currentMarketEstimate:
+          $ref: "#/components/schemas/CurrentMarketEstimate"
         quality:
           $ref: "#/components/schemas/QualityDecision"
         outlierStatus: {type: [string, "null"]}
@@ -1987,6 +1989,43 @@ components:
         warnings:
           type: array
           items: {type: string}
+    CurrentMarketEstimate:
+      type: object
+      required:
+        - lowerTotal
+        - centralTotal
+        - upperTotal
+        - lowerAmountPerSqm
+        - centralAmountPerSqm
+        - upperAmountPerSqm
+        - comparableCount
+        - maximumRadiusMeters
+        - areaTolerancePercent
+        - locationAdjustmentFactor
+        - localAdjustmentSampleSize
+        - referenceYear
+        - confidence
+        - warnings
+        - methodologyVersion
+      properties:
+        lowerTotal: {type: number}
+        centralTotal: {type: number}
+        upperTotal: {type: number}
+        lowerAmountPerSqm: {type: number}
+        centralAmountPerSqm: {type: number}
+        upperAmountPerSqm: {type: number}
+        comparableCount: {type: integer}
+        maximumRadiusMeters: {type: integer}
+        areaTolerancePercent: {type: integer}
+        constructionYearTolerance: {type: integer}
+        locationAdjustmentFactor: {type: number}
+        localAdjustmentSampleSize: {type: integer}
+        referenceYear: {type: integer}
+        confidence: {type: string, enum: [moderate, low, very_low]}
+        warnings:
+          type: array
+          items: {type: string}
+        methodologyVersion: {type: string}
     ErrorResponse:
       type: object
       required: [error]

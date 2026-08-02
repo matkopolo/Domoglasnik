@@ -56,3 +56,13 @@ func TestNearbyBenchmarkProfiles(t *testing.T) {
 		t.Fatalf("nearbyBenchmarkProfiles(without age)=%+v", withoutAge)
 	}
 }
+
+func TestWeightedQuantile(t *testing.T) {
+	values := []weightedValue{{value: 100, weight: 1}, {value: 200, weight: 8}, {value: 300, weight: 1}}
+	if got := weightedQuantile(values, .5); got != 200 {
+		t.Fatalf("weightedQuantile()=%v want=200", got)
+	}
+	if got := weightedQuantile(values, .9); got != 200 {
+		t.Fatalf("weightedQuantile(.9)=%v want=200", got)
+	}
+}

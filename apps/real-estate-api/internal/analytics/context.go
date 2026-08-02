@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
+	"sort"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -44,18 +46,38 @@ type DirectComparable struct {
 }
 
 type TransactionContext struct {
-	TransactionKind    string             `json:"transactionKind"`
-	TransactionID      int64              `json:"transactionId"`
-	ContractYear       int                `json:"contractYear"`
-	IncompletePeriod   bool               `json:"incompletePeriod"`
-	PropertyGroup      string             `json:"propertyGroup"`
-	ActualAmountPerSQM float64            `json:"actualAmountPerSqm"`
-	DirectComparables  []DirectComparable `json:"directComparables"`
-	Benchmarks         []ContextBenchmark `json:"benchmarks"`
-	Valuation          *ContextValuation  `json:"valuation"`
-	Quality            QualityDecision    `json:"quality"`
-	OutlierStatus      *string            `json:"outlierStatus"`
-	MethodologyVersion string             `json:"methodologyVersion"`
+	TransactionKind    string                 `json:"transactionKind"`
+	TransactionID      int64                  `json:"transactionId"`
+	ContractYear       int                    `json:"contractYear"`
+	IncompletePeriod   bool                   `json:"incompletePeriod"`
+	PropertyGroup      string                 `json:"propertyGroup"`
+	ActualAmountPerSQM float64                `json:"actualAmountPerSqm"`
+	DirectComparables  []DirectComparable     `json:"directComparables"`
+	Benchmarks         []ContextBenchmark     `json:"benchmarks"`
+	Valuation          *ContextValuation      `json:"valuation"`
+	CurrentMarket      *CurrentMarketEstimate `json:"currentMarketEstimate,omitempty"`
+	Quality            QualityDecision        `json:"quality"`
+	OutlierStatus      *string                `json:"outlierStatus"`
+	MethodologyVersion string                 `json:"methodologyVersion"`
+}
+
+type CurrentMarketEstimate struct {
+	LowerTotal                float64  `json:"lowerTotal"`
+	CentralTotal              float64  `json:"centralTotal"`
+	UpperTotal                float64  `json:"upperTotal"`
+	LowerAmountPerSQM         float64  `json:"lowerAmountPerSqm"`
+	CentralAmountPerSQM       float64  `json:"centralAmountPerSqm"`
+	UpperAmountPerSQM         float64  `json:"upperAmountPerSqm"`
+	ComparableCount           int      `json:"comparableCount"`
+	MaximumRadiusMeters       int      `json:"maximumRadiusMeters"`
+	AreaTolerancePercent      int      `json:"areaTolerancePercent"`
+	ConstructionYearTolerance *int     `json:"constructionYearTolerance,omitempty"`
+	LocationAdjustmentFactor  float64  `json:"locationAdjustmentFactor"`
+	LocalAdjustmentSampleSize int      `json:"localAdjustmentSampleSize"`
+	ReferenceYear             int      `json:"referenceYear"`
+	Confidence                string   `json:"confidence"`
+	Warnings                  []string `json:"warnings"`
+	MethodologyVersion        string   `json:"methodologyVersion"`
 }
 
 // ContextValuation is the public, decision-useful subset of the model result.
@@ -107,6 +129,7 @@ type contextSubject struct {
 	cadastralCode    *int32
 	buildingNumber   *string
 	constructionYear *int
+	packageCount     int
 }
 
 func (r *StatisticsRepository) TransactionContext(
@@ -131,6 +154,10 @@ func (r *StatisticsRepository) TransactionContext(
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	var subject contextSubject
+	packageExpression := "fact.building_part_count+fact.land_parcel_count"
+	if kind == "rent" {
+		packageExpression = "fact.space_count"
+	}
 	query := fmt.Sprintf(`
 		SELECT extract(year FROM fact.contract_date)::integer,fact.property_group,
 		  fact.%s::float8,fact.is_quality_eligible,
@@ -138,11 +165,11 @@ func (r *StatisticsRepository) TransactionContext(
 		  fact.statistical_region_id,fact.municipality_id,fact.city_district_id,
 		  fact.local_community_id,fact.settlement_id,fact.area::float8,
 		  fact.cadastral_municipality_code,fact.building_number,
-		  fact.construction_year
+		  fact.construction_year,%s
 		FROM %s fact
 		LEFT JOIN %s evaluation USING(transaction_id)
 		WHERE fact.transaction_id=$1 AND fact.contract_date IS NOT NULL
-		  AND fact.%s>0`, amountColumn, factTable, outlierTable, amountColumn)
+		  AND fact.%s>0`, amountColumn, packageExpression, factTable, outlierTable, amountColumn)
 	err = tx.QueryRow(ctx, query, id).Scan(
 		&subject.year, &subject.propertyGroup, &subject.actual,
 		&subject.quality.IsQualityEligible, &subject.quality.IsRepresentative,
@@ -150,6 +177,7 @@ func (r *StatisticsRepository) TransactionContext(
 		&subject.municipalityID, &subject.cityDistrictID,
 		&subject.localCommunityID, &subject.settlementID, &subject.area,
 		&subject.cadastralCode, &subject.buildingNumber, &subject.constructionYear,
+		&subject.packageCount,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return TransactionContext{}, ErrTransactionNotFound
@@ -254,6 +282,20 @@ func (r *StatisticsRepository) TransactionContext(
 		result.Benchmarks = append(result.Benchmarks, country)
 	}
 
+	currentMarket, estimateErr := loadCurrentMarketEstimate(ctx, tx, currentMarketQuery{
+		table: cohortTable, subjectTable: factTable, amountColumn: amountColumn,
+		packageColumn: map[string]string{
+			"sale": "building_part_count+land_parcel_count", "rent": "space_count",
+		}[kind],
+		subjectID: id, propertyGroup: subject.propertyGroup, area: subject.area,
+		constructionYear: subject.constructionYear, packageCount: subject.packageCount,
+		municipalityID: subject.municipalityID,
+	})
+	if estimateErr != nil {
+		return TransactionContext{}, estimateErr
+	}
+	result.CurrentMarket = currentMarket
+
 	valuation, valuationErr := r.ValuationPrediction(ctx, kind, id)
 	if valuationErr == nil {
 		result.Valuation = &ContextValuation{
@@ -271,6 +313,230 @@ func (r *StatisticsRepository) TransactionContext(
 		return TransactionContext{}, valuationErr
 	}
 	return result, tx.Commit(ctx)
+}
+
+type currentMarketQuery struct {
+	table, subjectTable, amountColumn, packageColumn, propertyGroup string
+	subjectID                                                       int64
+	area                                                            float64
+	constructionYear                                                *int
+	packageCount                                                    int
+	municipalityID                                                  *int64
+}
+
+type marketCandidate struct {
+	amountPerSQM, area, distance float64
+	constructionYear             *int
+	contractDate                 time.Time
+	packageCount                 int
+	municipalityID               *int64
+}
+
+const (
+	currentMarketMinimumSample = 5
+	currentMarketTargetSample  = 50
+)
+
+func loadCurrentMarketEstimate(
+	ctx context.Context, tx pgx.Tx, input currentMarketQuery,
+) (*CurrentMarketEstimate, error) {
+	if input.area <= 0 {
+		return nil, nil
+	}
+	profiles := nearbyBenchmarkProfiles(input.constructionYear)
+	radii := []int{1000, 2500, 5000, 10000, 20000}
+	var selected []marketCandidate
+	var selectedProfile benchmarkProfile
+	selectedRadius := 0
+	selectedStartYear := time.Now().Year()
+	targetReached := false
+	for _, startYear := range []int{time.Now().Year(), time.Now().Year() - 1} {
+		for _, profile := range profiles {
+			for _, radius := range radii {
+				candidates, err := queryCurrentCandidates(ctx, tx, input, profile, radius, startYear)
+				if err != nil {
+					return nil, err
+				}
+				if len(candidates) > len(selected) {
+					selected, selectedProfile, selectedRadius, selectedStartYear = candidates, profile, radius, startYear
+				}
+				if len(candidates) >= currentMarketTargetSample {
+					selected, selectedProfile, selectedRadius, selectedStartYear = candidates, profile, radius, startYear
+					targetReached = true
+					break
+				}
+			}
+			if targetReached {
+				break
+			}
+		}
+		if targetReached {
+			break
+		}
+	}
+	if len(selected) < currentMarketMinimumSample {
+		return nil, nil
+	}
+
+	weighted := make([]weightedValue, 0, len(selected))
+	localCurrent := 0
+	for _, candidate := range selected {
+		if input.municipalityID != nil && candidate.municipalityID != nil &&
+			*input.municipalityID == *candidate.municipalityID {
+			localCurrent++
+		}
+		areaScore := math.Max(0, 1-math.Abs(candidate.area/input.area-1)/.25)
+		ageScore := .5
+		if input.constructionYear != nil && candidate.constructionYear != nil {
+			ageScore = math.Max(0, 1-math.Abs(float64(*candidate.constructionYear-*input.constructionYear))/15)
+		}
+		distanceScore := math.Max(0, 1-candidate.distance/20000)
+		recencyScore := math.Max(0, 1-time.Since(candidate.contractDate).Hours()/(24*730))
+		packageScore := 0.0
+		if candidate.packageCount == input.packageCount {
+			packageScore = 1
+		}
+		weight := 35*areaScore + 25*ageScore + 20*distanceScore + 10*recencyScore + 10*packageScore
+		weighted = append(weighted, weightedValue{candidate.amountPerSQM, math.Max(weight, 1)})
+	}
+
+	locationFactor, localSample, adjustmentErr := currentMarketLocationFactor(
+		ctx, tx, input, selectedProfile, selectedRadius, localCurrent,
+	)
+	if adjustmentErr != nil {
+		return nil, adjustmentErr
+	}
+	lower := weightedQuantile(weighted, .25) * locationFactor
+	central := weightedQuantile(weighted, .5) * locationFactor
+	upper := weightedQuantile(weighted, .75) * locationFactor
+	warnings := []string{"statistična tržna ocena, ne uradna cenitev", "tekoče leto še ni zaključeno"}
+	if selectedStartYear < time.Now().Year() {
+		warnings = append(warnings, "za doseganje ciljnega vzorca so vključeni tudi posli prejšnjega koledarskega leta")
+	}
+	if len(selected) < currentMarketTargetSample {
+		warnings = append(warnings, "cilj 50 primerljivih poslov ni bil dosežen znotraj največ 20 km")
+	}
+	if locationFactor != 1 {
+		warnings = append(warnings, "uporabljena zgodovinska prilagoditev med domačo občino in okoliškim trgom")
+	}
+	confidence := "very_low"
+	if len(selected) >= 20 {
+		confidence = "low"
+	}
+	if len(selected) >= currentMarketTargetSample && selectedRadius <= 10000 && selectedProfile.areaTolerancePercent == 15 {
+		confidence = "moderate"
+	}
+	var ageTolerance *int
+	if selectedProfile.constructionYearTolerance > 0 {
+		ageTolerance = &selectedProfile.constructionYearTolerance
+	}
+	return &CurrentMarketEstimate{
+		LowerTotal: lower * input.area, CentralTotal: central * input.area, UpperTotal: upper * input.area,
+		LowerAmountPerSQM: lower, CentralAmountPerSQM: central, UpperAmountPerSQM: upper,
+		ComparableCount: len(selected), MaximumRadiusMeters: selectedRadius,
+		AreaTolerancePercent:      selectedProfile.areaTolerancePercent,
+		ConstructionYearTolerance: ageTolerance, LocationAdjustmentFactor: locationFactor,
+		LocalAdjustmentSampleSize: localSample, ReferenceYear: time.Now().Year(),
+		Confidence: confidence, Warnings: warnings,
+		MethodologyVersion: "adaptive-current-market-v2",
+	}, nil
+}
+
+func queryCurrentCandidates(
+	ctx context.Context, tx pgx.Tx, input currentMarketQuery, profile benchmarkProfile, radius, startYear int,
+) ([]marketCandidate, error) {
+	args := []any{input.subjectID, input.propertyGroup, startYear, input.area, radius, time.Now().Year() + 1}
+	ageClause := "TRUE"
+	if profile.constructionYearTolerance > 0 && input.constructionYear != nil {
+		args = append(args, *input.constructionYear)
+		ageClause = fmt.Sprintf("fact.construction_year IS NOT NULL AND abs(fact.construction_year-$%d)<=%d",
+			len(args), profile.constructionYearTolerance)
+	}
+	query := fmt.Sprintf(`SELECT fact.%s::float8,fact.area::float8,
+	  ST_Distance(fact.location,subject.location)::float8,fact.construction_year,
+	  fact.contract_date,(%s)::integer,fact.municipality_id
+	FROM %s fact CROSS JOIN (SELECT location FROM %s WHERE transaction_id=$1) subject
+	WHERE fact.transaction_id<>$1 AND fact.property_group=$2
+	  AND fact.contract_date>=make_date($3,1,1) AND fact.contract_date<make_date($6,1,1)
+	  AND fact.representative_eligible AND fact.%s>0 AND fact.area>0
+	  AND subject.location IS NOT NULL AND fact.location IS NOT NULL
+	  AND ST_DWithin(fact.location,subject.location,$5)
+	  AND abs(fact.area/$4-1)<=%f AND %s
+	ORDER BY ST_Distance(fact.location,subject.location),fact.transaction_id LIMIT 250`,
+		input.amountColumn, input.packageColumn, input.table, input.subjectTable,
+		input.amountColumn, float64(profile.areaTolerancePercent)/100, ageClause)
+	rows, err := tx.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("load current market candidates: %w", err)
+	}
+	defer rows.Close()
+	result := []marketCandidate{}
+	for rows.Next() {
+		var candidate marketCandidate
+		if err := rows.Scan(&candidate.amountPerSQM, &candidate.area, &candidate.distance,
+			&candidate.constructionYear, &candidate.contractDate, &candidate.packageCount,
+			&candidate.municipalityID); err != nil {
+			return nil, fmt.Errorf("scan current market candidate: %w", err)
+		}
+		result = append(result, candidate)
+	}
+	return result, rows.Err()
+}
+
+func currentMarketLocationFactor(
+	ctx context.Context, tx pgx.Tx, input currentMarketQuery, profile benchmarkProfile,
+	radius, localCurrent int,
+) (float64, int, error) {
+	if input.municipalityID == nil || localCurrent >= 5 {
+		return 1, localCurrent, nil
+	}
+	args := []any{input.subjectID, input.propertyGroup, time.Now().Year() - 3,
+		time.Now().Year(), input.area, radius, *input.municipalityID}
+	ageClause := "TRUE"
+	if profile.constructionYearTolerance > 0 && input.constructionYear != nil {
+		args = append(args, *input.constructionYear)
+		ageClause = fmt.Sprintf("fact.construction_year IS NOT NULL AND abs(fact.construction_year-$%d)<=%d",
+			len(args), profile.constructionYearTolerance)
+	}
+	query := fmt.Sprintf(`SELECT count(*) FILTER(WHERE fact.municipality_id=$7)::integer,
+	  count(*)::integer,
+	  percentile_cont(.5) WITHIN GROUP(ORDER BY fact.%s) FILTER(WHERE fact.municipality_id=$7)::float8,
+	  percentile_cont(.5) WITHIN GROUP(ORDER BY fact.%s)::float8
+	FROM %s fact CROSS JOIN (SELECT location FROM %s WHERE transaction_id=$1) subject
+	WHERE fact.property_group=$2 AND extract(year FROM fact.contract_date)>=$3
+	  AND extract(year FROM fact.contract_date)<$4 AND fact.representative_eligible
+	  AND fact.%s>0 AND fact.area>0 AND fact.location IS NOT NULL
+	  AND ST_DWithin(fact.location,subject.location,$6)
+	  AND abs(fact.area/$5-1)<=%f AND %s`, input.amountColumn, input.amountColumn,
+		input.table, input.subjectTable, input.amountColumn,
+		float64(profile.areaTolerancePercent)/100, ageClause)
+	var localN, allN int
+	var localMedian, allMedian *float64
+	if err := tx.QueryRow(ctx, query, args...).Scan(&localN, &allN, &localMedian, &allMedian); err != nil {
+		return 1, 0, fmt.Errorf("load current market location adjustment: %w", err)
+	}
+	if localN < 5 || allN < 20 || localMedian == nil || allMedian == nil || *allMedian <= 0 {
+		return 1, localN, nil
+	}
+	return math.Max(.65, math.Min(1.35, *localMedian / *allMedian)), localN, nil
+}
+
+type weightedValue struct{ value, weight float64 }
+
+func weightedQuantile(values []weightedValue, quantile float64) float64 {
+	sort.Slice(values, func(i, j int) bool { return values[i].value < values[j].value })
+	var total float64
+	for _, value := range values {
+		total += value.weight
+	}
+	target, cumulative := total*quantile, 0.0
+	for _, value := range values {
+		cumulative += value.weight
+		if cumulative >= target {
+			return value.value
+		}
+	}
+	return values[len(values)-1].value
 }
 
 type directComparableQuery struct {

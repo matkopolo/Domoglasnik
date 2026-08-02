@@ -537,6 +537,13 @@ button.outlier-row { cursor: pointer; }
 .outlier-row strong { display: grid; }
 .outlier-row strong small { color: var(--muted); font-weight: 400; }
 .model-diagnostics { background: #f7f3ff; margin-left: 0 !important; margin-right: 0 !important; padding: 15px 18px; }
+.current-market-estimate { background: #eef7f1; }
+.current-market-range { display: grid; grid-template-columns: 1fr 1.25fr 1fr; align-items: baseline; gap: 5px; margin: 8px 0 4px; text-align: center; }
+.current-market-range strong { color: var(--green); font-size: 17px; }
+.current-market-range span { color: var(--muted); font-size: 11px; }
+.current-market-kpis { display: grid; grid-template-columns: repeat(2, 1fr); gap: 5px; margin: 8px 0; }
+.current-market-kpis small { padding: 6px; border-radius: 5px; background: #fff; color: var(--muted); }
+.current-market-kpis b { display: block; color: var(--ink); }
 .building-market-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; padding: 14px 0; }
 .building-market-kpis div { padding: 8px; border-radius: 5px; background: var(--surface-soft); }
 .building-market-kpis span { display: block; color: var(--muted); font-size: 8px; }

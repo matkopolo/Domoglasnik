@@ -1229,6 +1229,7 @@ export interface components {
             directComparables: components["schemas"]["DirectComparable"][];
             benchmarks: components["schemas"]["ContextBenchmark"][];
             valuation?: components["schemas"]["ContextValuation"] | null;
+            currentMarketEstimate?: components["schemas"]["CurrentMarketEstimate"];
             quality: components["schemas"]["QualityDecision"];
             outlierStatus?: string | null;
             methodologyVersion: string;
@@ -1244,6 +1245,25 @@ export interface components {
             /** @enum {string} */
             reliability: "moderate" | "low" | "very_low";
             warnings: string[];
+        };
+        CurrentMarketEstimate: {
+            lowerTotal: number;
+            centralTotal: number;
+            upperTotal: number;
+            lowerAmountPerSqm: number;
+            centralAmountPerSqm: number;
+            upperAmountPerSqm: number;
+            comparableCount: number;
+            maximumRadiusMeters: number;
+            areaTolerancePercent: number;
+            constructionYearTolerance?: number;
+            locationAdjustmentFactor: number;
+            localAdjustmentSampleSize: number;
+            referenceYear: number;
+            /** @enum {string} */
+            confidence: "moderate" | "low" | "very_low";
+            warnings: string[];
+            methodologyVersion: string;
         };
         ErrorResponse: {
             error: {
