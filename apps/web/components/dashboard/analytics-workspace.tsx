@@ -171,15 +171,26 @@ function IndexExplorer({ items }: { items: MarketIndex[] }) {
   const min = Math.min(...allValues, 80);
   const max = Math.max(...allValues, 120);
   const colors = { hedonic: "#0d5c3d", matched_pair_median: "#c15f3c" };
+  const periods = [...new Set(items.filter((item) => item.isPublishable).map((item) => item.period))].sort();
+  const xForPeriod = (period: string) => 80
+    + periods.indexOf(period) / Math.max(periods.length - 1, 1) * 775;
+  const periodLabelStep = Math.max(1, Math.ceil(periods.length / 9));
+  const hasHedonic = groups.has("hedonic");
   return (
     <>
       <div className="methodology-callout">
         <BrainCircuit size={20} />
         <div><strong>Dva različna pogleda na gibanje cen</strong>
-          <p>Hedonski indeks prilagodi sestavo prodanih nepremičnin. Matched-pair mediana sledi ponovnim prodajam primerljivih enot. Indeks 100 je bazno obdobje.</p></div>
+          <p>Hedonski indeks primerja cene, kot da bi se skozi čas prodajale enako kakovostne nepremičnine. Indeks ponovnih prodaj spremlja nepremičnine, ki so bile prodane večkrat. Začetno leto je označeno s 100: vrednost 120 pomeni približno 20 % višje cene, vrednost 90 pa približno 10 % nižje cene kot takrat.</p></div>
       </div>
+      {!hasHedonic && items.length > 0 && <p className="chart-source-error" role="status">
+        Hedonski indeks še ni izračunan. Prikazan je samo indeks ponovnih prodaj; hedonska serija bo na voljo po končanem učenju modela.
+      </p>}
       {items.length === 0 ? <p>Za izbrano vrsto ni izračunanega indeksa.</p> : (
         <svg className="index-chart" viewBox="0 0 900 300" role="img" aria-label="Primerjava tržnih indeksov">
+          <text x="16" y="145" textAnchor="middle" className="axis-title"
+            transform="rotate(-90 16 145)">Raven cen (začetno leto = 100)</text>
+          <text x="475" y="292" textAnchor="middle" className="axis-title">Leto</text>
           {[0, 1, 2, 3].map((line) => {
             const value = max - line * (max - min) / 3;
             const y = 35 + line * 70;
@@ -188,8 +199,8 @@ function IndexExplorer({ items }: { items: MarketIndex[] }) {
           })}
           {[...groups.entries()].map(([method, points]) => {
             const published = points.filter((point) => point.isPublishable);
-            const coords = published.map((point, index) => ({
-              x: 80 + index / Math.max(published.length - 1, 1) * 775,
+            const coords = published.map((point) => ({
+              x: xForPeriod(point.period),
               y: 245 - (point.indexValue - min) / Math.max(max - min, 1) * 210,
               point,
             }));
@@ -202,22 +213,25 @@ function IndexExplorer({ items }: { items: MarketIndex[] }) {
               </circle>)}
             </g>;
           })}
+          {periods.filter((_, index) => index % periodLabelStep === 0 || index === periods.length - 1)
+            .map((period) => <text key={period} x={xForPeriod(period)} y="272" textAnchor="middle"
+              className="axis-label">{period.slice(0, 4)}</text>)}
         </svg>
       )}
       <div className="index-legend">
         <span><i className="hedonic" /> Hedonski indeks</span>
-        <span><i className="matched" /> Matched-pair mediana</span>
+        <span><i className="matched" /> Indeks ponovnih prodaj</span>
       </div>
       <div className="index-latest-grid">
         {[...groups.entries()].map(([method, points]) => {
           const latest = points.filter((point) => point.isPublishable).at(-1);
           if (!latest) return null;
           const changeFromBase = latest.indexValue - 100;
+          const changeLabel = `${changeFromBase >= 0 ? "+" : ""}${decimal.format(changeFromBase)} %`;
           return <article key={method}>
             <span>{method === "hedonic" ? "Hedonski" : "Ponovne prodaje"}</span>
-            <strong>{decimal.format(latest.indexValue)} indeksnih točk</strong>
-            <small>{changeFromBase >= 0 ? "+" : ""}{decimal.format(changeFromBase)} % glede na bazno obdobje
-              {" · "}{latest.period.slice(0, 7)} · n={latest.sampleSize}
+            <strong>{changeLabel} od {latest.basePeriod.slice(0, 4)}</strong>
+            <small>indeks {decimal.format(latest.indexValue)} · {latest.period.slice(0, 7)} · n={latest.sampleSize}
               {latest.lowerIndexValue != null && latest.upperIndexValue != null
                 ? ` · interval ${decimal.format(latest.lowerIndexValue)}–${decimal.format(latest.upperIndexValue)}`
                 : ""}</small>

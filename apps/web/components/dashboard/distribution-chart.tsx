@@ -4,6 +4,13 @@ import type { Distribution, MarketMode } from "@/lib/types";
 
 const format = new Intl.NumberFormat("sl-SI", { maximumFractionDigits: 0 });
 
+function transactionCountLabel(count: number) {
+  if (count === 1) return "1 posel";
+  if (count === 2) return "2 posla";
+  if (count === 3 || count === 4) return `${count} posli`;
+  return `${count.toLocaleString("sl-SI")} poslov`;
+}
+
 export function DistributionChart({ data, mode }: { data: Distribution; mode: MarketMode }) {
   const max = Math.max(...data.buckets.map((bucket) => bucket.count), 1);
   const percentiles = data.percentiles;
@@ -25,9 +32,21 @@ export function DistributionChart({ data, mode }: { data: Distribution; mode: Ma
       <div className="histogram" aria-label={mode === "sale"
         ? "Histogram vrednosti na kvadratni meter"
         : "Histogram mesečnih najemnin"}>
-        {data.buckets.map((bucket) => (
-          <span key={bucket.index} className={mode} style={{ height: `${Math.max(10, bucket.count / max * 100)}%` }} title={`${bucket.count} poslov`} />
-        ))}
+        <span className="histogram-y-axis">Število poslov</span>
+        {data.buckets.map((bucket) => {
+          const unit = mode === "sale" ? "€/m²" : "€/mesec";
+          const label = `${format.format(bucket.from)}–${format.format(bucket.to)} ${unit}: ${transactionCountLabel(bucket.count)}`;
+          return (
+            <button key={bucket.index} type="button" className={`histogram-bar ${mode}`}
+              style={{ height: `${Math.max(10, bucket.count / max * 100)}%` }} aria-label={label}>
+              <span className="histogram-tooltip" role="tooltip">
+                <strong>{transactionCountLabel(bucket.count)}</strong>
+                <small>{format.format(bucket.from)}–{format.format(bucket.to)} {unit}</small>
+              </span>
+            </button>
+          );
+        })}
+        <span className="histogram-x-axis">{mode === "sale" ? "Cena na m²" : "Mesečna najemnina"}</span>
       </div>
       <div className="percentile-track">
         {(["p10", "p25", "p50", "p75", "p90"] as const).map((key) => (

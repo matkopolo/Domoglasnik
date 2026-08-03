@@ -26,5 +26,7 @@ describe("TrendChart", () => {
     expect(screen.getByRole("button", { name: "2024: 12 poslov" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Mesec" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Inflacija" })).toBeInTheDocument();
+    expect(screen.getByText("poslov")).toBeInTheDocument();
+    expect(screen.getByText("Obdobje")).toBeInTheDocument();
   });
 });

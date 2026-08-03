@@ -253,10 +253,12 @@ function TransactionView({
       </section>
       {context.currentMarketEstimate && (
         <section className="context-section current-market-estimate">
-          <small className="provenance-label calculated">Izračun aplikacije</small>
-          <h3>{context.transactionKind === "sale"
-            ? "Ocena trenutne tržne vrednosti"
-            : "Ocena trenutne mesečne najemnine"}</h3>
+          <div className="context-section-heading">
+            <h3>{context.transactionKind === "sale"
+              ? "Ocena trenutne tržne vrednosti"
+              : "Ocena trenutne mesečne najemnine"}</h3>
+            <small className="provenance-label calculated">Izračun aplikacije</small>
+          </div>
           <div className="current-market-range">
             <span>{euro.format(context.currentMarketEstimate.lowerTotal)}</span>
             <strong>{euro.format(context.currentMarketEstimate.centralTotal)}</strong>
@@ -491,12 +493,12 @@ export function ContextPanel({
                   <div><strong>{index.method === "hedonic" ? "Hedonski" : "Ponovne prodaje"}</strong>
                     <span>baza {index.basePeriod.slice(0, 4)} · n={index.sampleSize}</span>
                   </div>
-                  <b>{decimal.format(index.indexValue)} točk</b>
-                  <small>{index.indexValue >= 100 ? "+" : ""}
-                    {decimal.format(index.indexValue - 100)} % od baze · {index.period.slice(0, 7)}</small>
+                  <b>{index.indexValue >= 100 ? "+" : ""}
+                    {decimal.format(index.indexValue - 100)} % od {index.basePeriod.slice(0, 4)}</b>
+                  <small>indeks {decimal.format(index.indexValue)} · {index.period.slice(0, 7)}</small>
                 </div>
               ))}
-              <small>Indeks 100 pomeni bazno obdobje; to ni število poslov.</small>
+              <small>Začetno leto je označeno s 100. Indeks 120 pomeni približno 20 % višje cene kot v začetnem letu.</small>
             </section>
           )}
         </>

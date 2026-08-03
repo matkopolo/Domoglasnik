@@ -132,6 +132,9 @@ export function TrendChart({
       )}
       {coords.length === 0 ? <p className="chart-empty">Za izbrano obdobje ni podatkov.</p> : (
         <svg viewBox="0 0 736 210" role="img" aria-label={`${tabLabels[tab]} po času`}>
+          <text x="14" y="112" textAnchor="middle" className="axis-title"
+            transform="rotate(-90 14 112)">{unit}</text>
+          <text x="386" y="209" textAnchor="middle" className="axis-title">Obdobje</text>
           {grid.map(({ y, value }) => <g key={y}>
             <line x1="72" x2="700" y1={y} y2={y} className="grid-line" />
             <text x="63" y={y + 4} textAnchor="end" className="axis-value">
@@ -145,7 +148,7 @@ export function TrendChart({
               aria-label={`${point.label}: ${format.format(point.value)} ${unit}`}
               onMouseEnter={() => setHoveredIndex(index)} onMouseLeave={() => setHoveredIndex(undefined)}
               onFocus={() => setHoveredIndex(index)} onBlur={() => setHoveredIndex(undefined)} />
-            {index % labelStep === 0 && <text x={point.x} y="201" textAnchor="middle"
+            {index % labelStep === 0 && <text x={point.x} y="194" textAnchor="middle"
               className="axis-label">{point.label}</text>}
           </g>)}
           {hovered && <g className="chart-tooltip"

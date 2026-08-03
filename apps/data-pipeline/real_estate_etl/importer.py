@@ -16,6 +16,12 @@ from psycopg import sql
 from .conversion import converted
 from .models import ImportStats
 
+IGNORED_SOURCE_COLUMNS = {
+    "OPOMBE_O_PRAVNEM_POSLU",
+    "OPOMBE_O_NEPREMICNINI",
+    "OPOMBE_O_ODDANIH_PROSTORIH",
+}
+
 TABLES = {
     "POSLI": ("transactions", {
         "ID_POSLA": "transaction_id", "VRSTA_KUPOPRODAJNEGA_POSLA": "transaction_type",
@@ -265,7 +271,7 @@ def import_zip(connection, path: Path, verbose: bool = False) -> ImportStats:
                     )
                 text, rows = _reader(archive, member)
                 try:
-                    unknown = set(rows.fieldnames or ()) - set(mapping)
+                    unknown = set(rows.fieldnames or ()) - set(mapping) - IGNORED_SOURCE_COLUMNS
                     if unknown:
                         raise ValueError(
                             f"Unmapped columns in {member}: {sorted(unknown)}"

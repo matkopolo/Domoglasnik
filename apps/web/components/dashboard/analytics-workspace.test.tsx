@@ -101,9 +101,12 @@ describe("AnalyticsWorkspace", () => {
     expect(screen.getByText("#502")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /Indeksi in modeli/ }));
-    expect((await screen.findAllByText("121 indeksnih točk")).length).toBeGreaterThan(0);
-    expect(screen.getAllByText("118 indeksnih točk").length).toBeGreaterThan(0);
-    expect(screen.getByText(/\+21 % glede na bazno obdobje/)).toBeInTheDocument();
+    expect((await screen.findAllByText("+21 % od 2018")).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("+18 % od 2018").length).toBeGreaterThan(0);
+    expect(screen.getByText(/indeks 121/)).toBeInTheDocument();
+    expect(screen.getByText("Indeks ponovnih prodaj")).toBeInTheDocument();
+    expect(screen.getByText("Raven cen (začetno leto = 100)")).toBeInTheDocument();
+    expect(screen.getByText("Leto")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /Primerjava območij/ }));
     expect(screen.getByText("Podravska")).toBeInTheDocument();

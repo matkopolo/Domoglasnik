@@ -9,7 +9,7 @@ import psycopg
 import pytest
 from psycopg import sql
 
-from real_estate_etl.importer import RENT_TABLES, TABLES, import_zip
+from real_estate_etl.importer import IGNORED_SOURCE_COLUMNS, RENT_TABLES, TABLES, import_zip
 
 DATABASE_URL = os.getenv("TEST_DATABASE_URL")
 pytestmark = pytest.mark.integration
@@ -28,6 +28,11 @@ def test_public_source_free_text_is_not_mapped_for_persistence():
         "OPOMBE_O_NEPREMICNINI",
         "OPOMBE_O_ODDANIH_PROSTORIH",
     })
+    assert {
+        "OPOMBE_O_PRAVNEM_POSLU",
+        "OPOMBE_O_NEPREMICNINI",
+        "OPOMBE_O_ODDANIH_PROSTORIH",
+    } == IGNORED_SOURCE_COLUMNS
 
 
 def csv_bytes(fieldnames, rows):

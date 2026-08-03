@@ -22,7 +22,14 @@ export function SummaryPanel({ title, mode, overview, series }: SummaryPanelProp
     <aside className={`summary-panel ${mode}`}>
       <div className="summary-title">
         <div><span>Izbrano območje</span><h2>{title}</h2></div>
-        <CircleHelp size={17} aria-label="Kazalniki vključujejo le primerljive posle" />
+        <button type="button" className="summary-help" aria-label="Pojasnilo kazalnikov"
+          aria-describedby="summary-help-text">
+          <CircleHelp size={17} />
+          <span id="summary-help-text" role="tooltip">
+            Kazalniki temeljijo na kakovostno ustreznih, primerljivih poslih za izbrano območje,
+            vrsto nepremičnine in obdobje. Statistična odstopanja niso vključena v srednje vrednosti.
+          </span>
+        </button>
       </div>
       <div className="primary-metric">
         <span>{mode === "sale" ? "Srednja cena / m²" : "Srednja mesečna najemnina"}</span>
