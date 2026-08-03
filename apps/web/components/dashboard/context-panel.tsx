@@ -13,10 +13,12 @@ import {
   loadTransactionContext,
 } from "@/lib/api";
 import {
+  anomalyStatusLabel,
   decimal,
   euro,
   meaningfulPosition,
   meaningfulText,
+  qualityReasonLabel,
   reliabilityLabel,
   visibleFields,
 } from "@/lib/display-values";
@@ -149,6 +151,7 @@ function TransactionView({
         ))}
       </div>
       <div className="context-primary">
+        <small className="provenance-label source">Podatek GURS ETN</small>
         <span>{sale ? "Prodaja" : "Najem"} #{detail.transactionId}</span>
         <strong>{amount == null ? "Cena ni objavljena" : euro.format(amount)}</strong>
         {amountPerSqm != null && <b>{decimal.format(amountPerSqm)} €/m²</b>}
@@ -249,6 +252,7 @@ function TransactionView({
       </section>
       {context.currentMarketEstimate && (
         <section className="context-section current-market-estimate">
+          <small className="provenance-label calculated">Izračun aplikacije</small>
           <h3>{context.transactionKind === "sale"
             ? "Ocena trenutne tržne vrednosti"
             : "Ocena trenutne mesečne najemnine"}</h3>
@@ -306,16 +310,21 @@ function TransactionView({
       </section>
       <section className="context-section">
         <h3>Kakovost podatka</h3>
-        <p>
-          {context.quality.isRepresentative ? "Reprezentativen posel" : "Posel ni v reprezentativnem vzorcu"}
-          {context.outlierStatus ? ` · odstopanje: ${context.outlierStatus}` : ""}
-        </p>
+        <div className="quality-status">
+          <strong>{context.quality.isRepresentative
+            ? "Reprezentativen posel"
+            : "Posel ni v reprezentativnem vzorcu"}</strong>
+          {context.outlierStatus && <span>{anomalyStatusLabel(context.outlierStatus)}</span>}
+        </div>
         {context.quality.reasons.length > 0 && (
-          <ul>{context.quality.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul>
+          <ul>{context.quality.reasons.map((reason) => (
+            <li key={reason}>{qualityReasonLabel(reason)}</li>
+          ))}</ul>
         )}
       </section>
       {context.valuation && (
         <section className="context-section">
+          <small className="provenance-label calculated">Statistična modelska ocena</small>
           <h3>Statistična ocena</h3>
           <strong>{decimal.format(context.valuation.predictedAmountPerSqm)} €/m²</strong>
           <p>
@@ -466,11 +475,11 @@ export function ContextPanel({
             <span>{mode === "sale" ? "Mediana prodajne cene" : "Mediana mesečne najemnine"}</span>
             <strong>{(mode === "sale"
               ? overview.medianPricePerSqm
-              : overview.medianMonthlyRentPerSqm) == null
+              : overview.medianMonthlyRent) == null
               ? "Ni dovolj podatkov"
-              : `${euro.format(mode === "sale"
-                ? overview.medianPricePerSqm!
-                : overview.medianMonthlyRentPerSqm!)}/m²`}</strong>
+              : mode === "sale"
+                ? `${euro.format(overview.medianPricePerSqm!)}/m²`
+                : `${euro.format(overview.medianMonthlyRent!)} / mesec`}</strong>
           </div>
           <p>Izberite regijo, občino, lokalno območje, stavbo ali posel za primerjave na isti ravni.</p>
           {indices.length > 0 && (
@@ -531,9 +540,11 @@ export function ContextPanel({
                     name: comparison.name,
                   })}>
                   <span>{comparison.name} · n={comparison.representativeCount}</span>
-                  <strong>{comparison.medianAmountPerSqm == null
+                  <strong>{(mode === "rent" ? comparison.medianAmount : comparison.medianAmountPerSqm) == null
                     ? "mediana ni objavljena"
-                    : `${decimal.format(comparison.medianAmountPerSqm)} €/m²`}</strong>
+                    : mode === "rent"
+                      ? `${euro.format(comparison.medianAmount!)} / mesec`
+                      : `${decimal.format(comparison.medianAmountPerSqm!)} €/m²`}</strong>
                 </button>
               ))}
             </section>
@@ -545,21 +556,32 @@ export function ContextPanel({
           {(() => {
             const summary = mode === "sale" ? current.building.sales : current.building.rentals;
             const history = mode === "sale" ? current.building.saleHistory : current.building.rentalHistory;
-            const max = Math.max(...history.map((point) => point.medianAmountPerSqm ?? 0), 1);
+            const historyAmount = (point: typeof history[number]) => mode === "sale"
+              ? point.medianAmountPerSqm
+              : point.medianAmount;
+            const max = Math.max(...history.map((point) => historyAmount(point) ?? 0), 1);
             return <>
               <div className="building-market-kpis">
                 <div><span>Vsi posli</span><strong>{summary.transactionCount.toLocaleString("sl-SI")}</strong></div>
                 <div><span>Reprezentativni</span><strong>{summary.representativeCount.toLocaleString("sl-SI")}</strong></div>
-                <div><span>Mediana / m²</span><strong>{summary.medianAmountPerSqm == null
-                  ? "—" : `${decimal.format(summary.medianAmountPerSqm)} €`}</strong></div>
+                <div><span>{mode === "sale" ? "Mediana / m²" : "Mesečna mediana"}</span>
+                  <strong>{(mode === "sale" ? summary.medianAmountPerSqm : summary.medianAmount) == null
+                    ? "—"
+                    : mode === "sale"
+                      ? `${decimal.format(summary.medianAmountPerSqm!)} €`
+                      : euro.format(summary.medianAmount!)}</strong></div>
               </div>
               {history.length > 0 && <section className="context-section">
                 <h3>Zgodovina stavbe</h3>
                 <div className="building-history">
                   {history.map((point) => <div key={point.year}>
                     <span>{point.year}</span>
-                    <i style={{ height: `${Math.max(8, 100 * (point.medianAmountPerSqm ?? 0) / max)}%` }} />
-                    <strong>{point.medianAmountPerSqm == null ? "—" : decimal.format(point.medianAmountPerSqm)}</strong>
+                    <i style={{ height: `${Math.max(8, 100 * (historyAmount(point) ?? 0) / max)}%` }} />
+                    <strong>{historyAmount(point) == null
+                      ? "—"
+                      : mode === "sale"
+                        ? decimal.format(historyAmount(point)!)
+                        : euro.format(historyAmount(point)!)}</strong>
                     <small>n={point.representativeCount}</small>
                   </div>)}
                 </div>

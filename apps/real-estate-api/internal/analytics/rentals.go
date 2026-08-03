@@ -91,7 +91,7 @@ func (r *StatisticsRepository) RentalClusters(
 	query := fmt.Sprintf(`
 		WITH bounded AS (
 		  SELECT ST_SnapToGrid(ST_Transform(location,4326),$11,$11) grid_point,
-		    monthly_rent_per_sqm,representative_eligible
+		    monthly_rent_per_sqm,monthly_rent_ex_vat,representative_eligible
 		  FROM analytics.rental_facts
 		  WHERE location IS NOT NULL
 		    AND location && ST_Transform(ST_MakeEnvelope($7,$8,$9,$10,4326),3794)
@@ -102,6 +102,8 @@ func (r *StatisticsRepository) RentalClusters(
 		SELECT ST_X(grid_point),ST_Y(grid_point),count(*)::bigint,
 		  count(*) FILTER (WHERE representative_eligible)::bigint,
 		  percentile_cont(.5) WITHIN GROUP (ORDER BY monthly_rent_per_sqm)
+		    FILTER (WHERE representative_eligible)::float8,
+		  percentile_cont(.5) WITHIN GROUP (ORDER BY monthly_rent_ex_vat)
 		    FILTER (WHERE representative_eligible)::float8
 		FROM bounded GROUP BY grid_point ORDER BY count(*) DESC LIMIT 5000`, clause)
 	rows, err := r.pool.Query(ctx, query, filter.FromDate, filter.ToDate,
@@ -116,7 +118,7 @@ func (r *StatisticsRepository) RentalClusters(
 		var item Cluster
 		if err := rows.Scan(&item.Longitude, &item.Latitude,
 			&item.TransactionCount, &item.RepresentativeCount,
-			&item.MedianPricePerSQM); err != nil {
+			&item.MedianPricePerSQM, &item.MedianAmount); err != nil {
 			return nil, fmt.Errorf("scan rental cluster: %w", err)
 		}
 		items = append(items, item)

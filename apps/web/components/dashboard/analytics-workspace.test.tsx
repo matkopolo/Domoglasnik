@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { AnalyticsWorkspace } from "./analytics-workspace";
 
@@ -73,6 +73,12 @@ vi.mock("@/lib/api", () => ({
 
 describe("AnalyticsWorkspace", () => {
   it("exposes indices, geography rankings, and outlier diagnostics", async () => {
+    const onContextChange = vi.fn();
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    const mapPanel = document.createElement("section");
+    mapPanel.className = "map-panel";
+    document.body.appendChild(mapPanel);
     render(<AnalyticsWorkspace
       mode="sale"
       propertyGroup="apartment"
@@ -87,7 +93,7 @@ describe("AnalyticsWorkspace", () => {
         medianArea: 65,
         isPublishable: true,
       }}
-      onContextChange={vi.fn()}
+      onContextChange={onContextChange}
     />);
     expect(await screen.findByText("180.000 €")).toBeInTheDocument();
     expect(screen.getByText("Vsi evidentirani posli")).toBeInTheDocument();
@@ -101,6 +107,16 @@ describe("AnalyticsWorkspace", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Primerjava območij/ }));
     expect(screen.getByText("Podravska")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Nazaj na zemljevid/ })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Podravska/ }));
+    expect(onContextChange).toHaveBeenCalledWith({
+      kind: "geography",
+      id: 2,
+      level: "statistical_region",
+      name: "Podravska",
+    });
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
 
     fireEvent.click(screen.getByRole("button", { name: /Odstopanja/ }));
     expect(screen.getByText("#99")).toBeInTheDocument();

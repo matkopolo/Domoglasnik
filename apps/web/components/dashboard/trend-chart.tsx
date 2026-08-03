@@ -19,7 +19,7 @@ interface TrendChartProps {
 }
 
 const tabLabels: Record<Tab, string> = {
-  price: "Cena / m²",
+  price: "Cena",
   volume: "Število poslov",
   inflation: "Inflacija",
 };
@@ -71,7 +71,7 @@ export function TrendChart({
         ? point.transactionCount
         : Number(mode === "sale"
           ? point.medianPricePerSqm ?? 0
-          : point.medianMonthlyRentPerSqm ?? 0),
+          : point.medianMonthlyRent ?? 0),
     })).filter((point) => tab === "volume" || point.value > 0);
   }, [inflation, mode, series, tab]);
 
@@ -94,7 +94,7 @@ export function TrendChart({
   const format = new Intl.NumberFormat("sl-SI", {
     maximumFractionDigits: tab === "price" && mode === "sale" || tab === "volume" ? 0 : 1,
   });
-  const unit = tab === "price" ? "€/m²" : tab === "inflation" ? "%" : "poslov";
+  const unit = tab === "price" ? mode === "sale" ? "€/m²" : "€/mesec" : tab === "inflation" ? "%" : "poslov";
   const hovered = hoveredIndex === undefined ? undefined : coords[hoveredIndex];
   const labelStep = Math.max(1, Math.ceil(coords.length / 8));
 
@@ -102,7 +102,7 @@ export function TrendChart({
     <section className="chart-panel trend-panel" aria-labelledby="trend-title">
       <header className="panel-heading trend-heading">
         <div><h2 id="trend-title">Gibanje trga</h2><p>
-          {tab === "price" && `Mediana ${mode === "sale" ? "cene" : "najemnine"} / m²`}
+          {tab === "price" && (mode === "sale" ? "Mediana cene / m²" : "Mediana mesečne najemnine")}
           {tab === "volume" && `Vsi evidentirani ${mode === "sale" ? "prodajni" : "najemni"} posli`}
           {tab === "inflation" && "Letna inflacija v Sloveniji · SURS H281S"}
         </p></div>

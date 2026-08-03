@@ -2,7 +2,7 @@
 
 import { Menu, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { loadDashboard } from "@/lib/api";
+import { loadBuildingStatistics, loadDashboard, loadTransaction } from "@/lib/api";
 import type {
   AreaRange,
   DashboardData,
@@ -10,6 +10,7 @@ import type {
   MarketContext,
   MarketMode,
   PropertyGroup,
+  TransactionGeography,
   YearRange,
 } from "@/lib/types";
 import { Brand } from "@/components/ui/brand";
@@ -43,6 +44,24 @@ const EMPTY_DATA: DashboardData = {
 };
 
 type GeographyContext = Extract<MarketContext, { kind: "geography" }>;
+
+const localGeographyPreference: GeographyLevel[] = [
+  "city_district",
+  "local_community",
+  "municipality",
+  "settlement",
+  "statistical_region",
+];
+
+function preferredTransactionGeography(
+  geographies: TransactionGeography[],
+): GeographyContext | undefined {
+  for (const level of localGeographyPreference) {
+    const geography = geographies.find((item) => item.level === level);
+    if (geography) return { kind: "geography", ...geography };
+  }
+  return undefined;
+}
 
 function initialState(): {
   mode: MarketMode;
@@ -113,6 +132,7 @@ export function MarketDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
   const generation = useRef(0);
+  const contextGeographyGeneration = useRef(0);
   const geographyId = geographyContext?.id;
 
   useEffect(() => {
@@ -167,10 +187,44 @@ export function MarketDashboard() {
 
   const selectedName = geographyContext?.name ?? "Slovenija";
   const analysisContext: MarketContext = geographyContext ?? { kind: "country" };
+  const syncLocalGeography = (next: Extract<MarketContext, { kind: "building" | "transaction" }>) => {
+    const requestGeneration = ++contextGeographyGeneration.current;
+    const controller = new AbortController();
+    const detail = (async () => {
+      if (next.kind === "transaction") {
+        return loadTransaction(next.mode, next.id, controller.signal);
+      }
+      const building = await loadBuildingStatistics(
+          next.cadastralCode,
+          next.buildingNumber,
+          propertyGroup,
+          years,
+          controller.signal,
+      );
+      const transaction = mode === "sale"
+        ? building.saleTransactions[0]
+        : building.rentalTransactions[0];
+      return transaction
+        ? loadTransaction(mode, transaction.transactionId, controller.signal)
+        : undefined;
+    })();
+    detail.then((transaction) => {
+      if (!transaction || requestGeneration !== contextGeographyGeneration.current) return;
+      const geography = preferredTransactionGeography(transaction.geographies);
+      if (geography) setGeographyContext(geography);
+    }).catch(() => undefined);
+  };
   const handleContext = (next: MarketContext) => {
-    if (next.kind === "geography") setGeographyContext(next);
-    if (next.kind === "country") setGeographyContext(undefined);
+    if (next.kind === "geography") {
+      contextGeographyGeneration.current += 1;
+      setGeographyContext(next);
+    }
+    if (next.kind === "country") {
+      contextGeographyGeneration.current += 1;
+      setGeographyContext(undefined);
+    }
     setContext(next);
+    if (next.kind === "building" || next.kind === "transaction") syncLocalGeography(next);
     if (next.kind === "transaction") {
       if (next.mode !== mode) setMode(next.mode);
       window.setTimeout(() => {
@@ -275,18 +329,44 @@ export function MarketDashboard() {
           overview={data.overview}
           onContextChange={handleContext}
         />
-        <footer>
-          <span>
-            Vir: GURS ETN in RPE · Mediane in primerjave uporabljajo reprezentativni vzorec;
-            statistična odstopanja niso samodejno označena kot napake.
-          </span>
-          <a
-            href="https://github.com/matkopolo/NepremicninskiAgent/blob/main/docs/statistical-methodology.md"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Metodologija
-          </a>
+        <footer className="legal-footer">
+          <div>
+            <strong>Viri, licenca in odgovornost</strong>
+            <p>
+              Vir podatkov: Geodetska uprava Republike Slovenije (GURS), Evidenca trga
+              nepremičnin (ETN) in Register prostorskih enot (RPE). Prikazano obdobje ETN:
+              {` ${years.from}–${years.to}`}; stanje je vezano na zadnji uspešni lokalni uvoz.
+              Podatki so obdelani in uporabljeni pod licenco{" "}
+              <a href="https://creativecommons.org/licenses/by/4.0/deed.sl" target="_blank" rel="noreferrer">
+                CC BY 4.0
+              </a>.
+            </p>
+            <p>
+              GURS te aplikacije ne podpira, ne potrjuje in ne odgovarja za izračune ali
+              interpretacijo. Podatki GURS, izračuni aplikacije in statistične modelske ocene
+              so v uporabniškem vmesniku označeni ločeno.
+            </p>
+            <p>
+              Rezultati so informativni in niso uradna ali certificirana cenitev. Niso namenjeni
+              odločanju o zavarovanem posojanju, sodnim, davčnim ali računovodskim postopkom brez
+              presoje ustrezno usposobljenega strokovnjaka. Manjkajoči, napačno poročani ali
+              netipični posli lahko vplivajo na rezultate.
+            </p>
+            <p>
+              Javni ETN izvlečki ne vsebujejo imen pogodbenih strank. Aplikacija ne uvaža ali
+              hrani prostih besedilnih opomb iz ETN, s čimer zmanjšuje tveganje nenamerne hrambe
+              osebnih podatkov.
+            </p>
+          </div>
+          <nav aria-label="Pravne in metodološke informacije">
+            <a href="https://www.e-prostor.gov.si/dostopi/javni-dostop/" target="_blank" rel="noreferrer">
+              Pogoji GURS
+            </a>
+            <a href="https://github.com/matkopolo/NepremicninskiAgent/blob/main/docs/data-licensing-privacy.md"
+              target="_blank" rel="noreferrer">Podatki in zasebnost</a>
+            <a href="https://github.com/matkopolo/NepremicninskiAgent/blob/main/docs/statistical-methodology.md"
+              target="_blank" rel="noreferrer">Metodologija</a>
+          </nav>
         </footer>
       </main>
     </div>

@@ -25,6 +25,7 @@ type BuildingYearPoint struct {
 	TransactionCount    int64    `json:"transactionCount"`
 	RepresentativeCount int64    `json:"representativeCount"`
 	MedianAmountPerSQM  *float64 `json:"medianAmountPerSqm"`
+	MedianAmount        *float64 `json:"medianAmount"`
 }
 
 type BuildingTransaction struct {
@@ -167,12 +168,12 @@ func (r *StatisticsRepository) BuildingStatistics(
 		return BuildingStatistics{}, err
 	}
 	result.SaleHistory, err = r.loadBuildingHistory(ctx, "analytics.sale_facts_strict_land",
-		"price_per_sqm", cadastralCode, buildingNumber, filter)
+		"price", "price_per_sqm", cadastralCode, buildingNumber, filter)
 	if err != nil {
 		return BuildingStatistics{}, err
 	}
 	result.RentalHistory, err = r.loadBuildingHistory(ctx, "analytics.rental_facts",
-		"monthly_rent_per_sqm", cadastralCode, buildingNumber, filter)
+		"monthly_rent_ex_vat", "monthly_rent_per_sqm", cadastralCode, buildingNumber, filter)
 	if err != nil {
 		return BuildingStatistics{}, err
 	}
@@ -259,12 +260,14 @@ func (r *StatisticsRepository) loadBuildingSummary(
 }
 
 func (r *StatisticsRepository) loadBuildingHistory(
-	ctx context.Context, table, perSQM string, code int32, number string,
+	ctx context.Context, table, amount, perSQM string, code int32, number string,
 	filter BuildingFilter,
 ) ([]BuildingYearPoint, error) {
 	query := fmt.Sprintf(`
 		SELECT extract(year FROM contract_date)::integer,count(*)::bigint,
 		  count(*) FILTER(WHERE representative_eligible)::bigint,
+		  percentile_cont(.5) WITHIN GROUP(ORDER BY %s)
+		    FILTER(WHERE representative_eligible)::float8,
 		  percentile_cont(.5) WITHIN GROUP(ORDER BY %s)
 		    FILTER(WHERE representative_eligible)::float8
 		FROM %s
@@ -273,7 +276,7 @@ func (r *StatisticsRepository) loadBuildingHistory(
 		  AND ($3='' OR property_group=$3)
 		  AND ($4::date IS NULL OR contract_date>=$4)
 		  AND ($5::date IS NULL OR contract_date<=$5)
-		GROUP BY 1 ORDER BY 1`, perSQM, table)
+		GROUP BY 1 ORDER BY 1`, perSQM, amount, table)
 	rows, err := r.pool.Query(ctx, query, code, number, filter.PropertyGroup,
 		filter.FromDate, filter.ToDate)
 	if err != nil {
@@ -284,7 +287,7 @@ func (r *StatisticsRepository) loadBuildingHistory(
 	for rows.Next() {
 		var item BuildingYearPoint
 		if err := rows.Scan(&item.Year, &item.TransactionCount,
-			&item.RepresentativeCount, &item.MedianAmountPerSQM); err != nil {
+			&item.RepresentativeCount, &item.MedianAmountPerSQM, &item.MedianAmount); err != nil {
 			return nil, fmt.Errorf("scan building history: %w", err)
 		}
 		items = append(items, item)

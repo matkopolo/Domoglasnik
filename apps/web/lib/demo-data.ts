@@ -81,13 +81,14 @@ const rentOverview: Overview = {
 const rentSeries: TimePoint[] = [2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025].map((year, index) => ({
   period: `${year}-01-01`,
   medianMonthlyRentPerSqm: [8.2, 8.7, 9.1, 9.4, 10.1, 10.9, 11.9, 12.6][index],
+  medianMonthlyRent: [470, 490, 520, 540, 570, 600, 650, 690][index],
   transactionCount: 8200 + index * 460,
   includedSampleSize: 7100 + index * 330,
 }));
 
 const rentDistribution: Distribution = {
   ...saleDistribution,
-  metric: "rentPerSqm",
+  metric: "monthlyRent",
   sampleSize: 9368,
   percentiles: { p05: 5.1, p10: 6.2, p25: 8.4, p50: 11.9, p75: 15.3, p90: 19.8, p95: 23.5 },
   histogramLowerBound: 3.2,

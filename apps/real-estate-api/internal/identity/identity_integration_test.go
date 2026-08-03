@@ -79,7 +79,7 @@ func TestIdentityRepositoryIntegrationAndLeastPrivilege(t *testing.T) {
 	}
 
 	if _, err := apiPool.Exec(ctx,
-		`UPDATE transactions SET notes=notes WHERE false`); err == nil {
+		`UPDATE transactions SET contract_price=contract_price WHERE false`); err == nil {
 		t.Fatal("API role unexpectedly has UPDATE permission on source transactions")
 	}
 	anomalyTransactionID := -time.Now().UnixNano()

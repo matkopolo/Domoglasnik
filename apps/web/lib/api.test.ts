@@ -115,9 +115,9 @@ describe("loadDashboard", () => {
 
 describe("loadGeographyComparisons", () => {
   it.each([
-    ["sale", "medianPricePerSqm", 1430],
-    ["rent", "medianMonthlyRentPerSqm", 12.6],
-  ] as const)("maps the %s mode-specific median", async (mode, field, median) => {
+    ["sale", "medianPricePerSqm", 1430, "medianAmountPerSqm"],
+    ["rent", "medianMonthlyRent", 760, "medianAmount"],
+  ] as const)("maps the %s mode-specific median", async (mode, field, median, resultField) => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
       type: "FeatureCollection",
       features: [{
@@ -149,6 +149,6 @@ describe("loadGeographyComparisons", () => {
       new AbortController().signal,
     );
 
-    expect(result[0].medianAmountPerSqm).toBe(median);
+    expect(result[0][resultField]).toBe(median);
   });
 });

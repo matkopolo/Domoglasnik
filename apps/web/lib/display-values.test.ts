@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { meaningfulNumber, meaningfulPosition, meaningfulText, visibleFields } from "./display-values";
+import {
+  anomalyStatusLabel,
+  meaningfulNumber,
+  meaningfulPosition,
+  meaningfulText,
+  qualityReasonLabel,
+  suppressionReasonLabel,
+  visibleFields,
+} from "./display-values";
 
 describe("property display policy", () => {
   it.each([undefined, null, "", "  ", "-", "N/A", "Ni podatka", "null"])(
@@ -22,5 +30,29 @@ describe("property display policy", () => {
       { label: "B", value: "" },
       { label: "C", value: 0 },
     ])).toEqual([{ label: "C", value: 0 }]);
+  });
+
+  it("translates internal suppression codes into useful Slovenian copy", () => {
+    expect(suppressionReasonLabel("below_minimum_sample_30", 12)).toBe(
+      "Za zanesljiv prikaz potrebujemo najmanj 30 primerljivih poslov. "
+      + "Trenutno je na voljo 12 primerljivih poslov.",
+    );
+    expect(suppressionReasonLabel("internal_unknown", 4)).not.toContain("internal_unknown");
+  });
+
+  it.each([
+    ["inlier", "V običajnem razponu primerljivih poslov"],
+    ["outlier", "Statistično izstopajoč posel"],
+    ["insufficient_cohort", "Premalo primerljivih poslov za oceno odstopanja"],
+    ["ineligible", "Posel ni primeren za statistično primerjavo"],
+  ])("translates anomaly status %s", (status, label) => {
+    expect(anomalyStatusLabel(status)).toBe(label);
+  });
+
+  it("never exposes internal quality codes", () => {
+    expect(qualityReasonLabel("missing_or_invalid_area")).toBe(
+      "Površina ni navedena ali ni veljavna",
+    );
+    expect(qualityReasonLabel("unknown_internal_reason")).not.toContain("unknown_internal_reason");
   });
 });

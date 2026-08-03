@@ -133,8 +133,10 @@ func (s *server) geographyMap(w http.ResponseWriter, r *http.Request, kind strin
 		}
 		if kind == "sale" {
 			properties["medianPricePerSqm"] = item.MedianAmountPerSQM
+			properties["medianPrice"] = item.MedianAmount
 		} else {
 			properties["medianMonthlyRentPerSqm"] = item.MedianAmountPerSQM
+			properties["medianMonthlyRent"] = item.MedianAmount
 		}
 		features = append(features, map[string]any{
 			"type": "Feature", "id": item.GeographyID,

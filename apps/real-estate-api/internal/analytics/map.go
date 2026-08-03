@@ -15,6 +15,7 @@ type Cluster struct {
 	TransactionCount    int64    `json:"transactionCount"`
 	RepresentativeCount int64    `json:"representativeCount"`
 	MedianPricePerSQM   *float64 `json:"medianPricePerSqm"`
+	MedianAmount        *float64 `json:"medianAmount,omitempty"`
 }
 
 type PropertyPoint struct {
@@ -41,6 +42,7 @@ type GeographySummary struct {
 	TransactionCount    int64     `json:"transactionCount"`
 	RepresentativeCount int64     `json:"representativeCount"`
 	MedianAmountPerSQM  *float64  `json:"medianAmountPerSqm"`
+	MedianAmount        *float64  `json:"medianAmount"`
 }
 
 type MapStore interface {
@@ -64,9 +66,9 @@ func (r *StatisticsRepository) GeographySummaries(
 	level string,
 	kind string,
 ) ([]GeographySummary, error) {
-	table, metric := saleFactsTable(filter), "price_per_sqm"
+	table, metric, amountMetric := saleFactsTable(filter), "price_per_sqm", "price"
 	if kind == "rent" {
-		table, metric = "analytics.rental_facts", "monthly_rent_per_sqm"
+		table, metric, amountMetric = "analytics.rental_facts", "monthly_rent_per_sqm", "monthly_rent_ex_vat"
 	}
 	join := "TRUE"
 	if level != "country" {
@@ -88,6 +90,8 @@ func (r *StatisticsRepository) GeographySummaries(
 		  count(*)::bigint,
 		  count(*) FILTER (WHERE fact.representative_eligible)::bigint,
 		  percentile_cont(.5) WITHIN GROUP (ORDER BY fact.%s)
+		    FILTER (WHERE fact.representative_eligible)::float8,
+		  percentile_cont(.5) WITHIN GROUP (ORDER BY fact.%s)
 		    FILTER (WHERE fact.representative_eligible)::float8
 		FROM analytics.geographic_units unit
 		JOIN %s fact ON %s
@@ -99,7 +103,7 @@ func (r *StatisticsRepository) GeographySummaries(
 		  AND ($3 = '' OR fact.property_group=$3)
 		  AND %s
 		GROUP BY unit.id,unit.level,unit.name,unit.geometry_wgs84,extent
-		ORDER BY count(*) DESC`, metric, table, join, geographyClause)
+		ORDER BY count(*) DESC`, metric, amountMetric, table, join, geographyClause)
 	rows, err := r.pool.Query(ctx, query,
 		filter.FromDate, filter.ToDate, filter.PropertyGroup, geographyID, filter.MinArea, filter.MaxArea,
 		bounds.West, bounds.South, bounds.East, bounds.North, level,
@@ -115,7 +119,7 @@ func (r *StatisticsRepository) GeographySummaries(
 			&item.GeographyID, &item.Level, &item.Name,
 			&item.Longitude, &item.Latitude, &item.Bounds,
 			&item.TransactionCount, &item.RepresentativeCount,
-			&item.MedianAmountPerSQM,
+			&item.MedianAmountPerSQM, &item.MedianAmount,
 		); err != nil {
 			return nil, fmt.Errorf("scan geography summary: %w", err)
 		}

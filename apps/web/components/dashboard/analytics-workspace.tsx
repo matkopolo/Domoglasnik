@@ -1,6 +1,14 @@
 "use client";
 
-import { AlertTriangle, BarChart3, BrainCircuit, MapPinned, TrendingUp } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowDown,
+  ArrowUp,
+  BarChart3,
+  BrainCircuit,
+  MapPinned,
+  TrendingUp,
+} from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   loadAnomalySummary,
@@ -12,7 +20,7 @@ import {
   loadStatisticalOutliers,
   loadTransactionExtremes,
 } from "@/lib/api";
-import { decimal, euro } from "@/lib/display-values";
+import { decimal, euro, suppressionReasonLabel } from "@/lib/display-values";
 import type {
   AnomalySummary,
   GeographyComparison,
@@ -45,7 +53,7 @@ function percentage(value: number | undefined) {
 
 function growth(points: TimePoint[], mode: MarketMode) {
   const values = points
-    .map((point) => mode === "sale" ? point.medianPricePerSqm : point.medianMonthlyRentPerSqm)
+    .map((point) => mode === "sale" ? point.medianPricePerSqm : point.medianMonthlyRent)
     .filter((value): value is number => value != null);
   return values.length < 2 || values[0] <= 0 ? undefined : 100 * (values.at(-1)! / values[0] - 1);
 }
@@ -92,7 +100,9 @@ function MarketDepth({
           {periodGrowth == null ? "—" : `${periodGrowth > 0 ? "+" : ""}${decimal.format(periodGrowth)} %`}
         </strong><small>prva proti zadnji objavljeni točki</small></article>
         <article><span>Objavljivost</span><strong>{overview.isPublishable === false ? "Ne" : "Da"}</strong>
-          <small>{overview.suppressionReason ?? `${overview.includedSampleSize.toLocaleString("sl-SI")} opazovanj`}</small></article>
+          <small>{overview.suppressionReason
+            ? suppressionReasonLabel(overview.suppressionReason, overview.includedSampleSize)
+            : `${overview.includedSampleSize.toLocaleString("sl-SI")} opazovanj`}</small></article>
       </div>
       <div className="extremes-grid">
         {(["highest", "lowest"] as const).map((direction) => (
@@ -128,9 +138,11 @@ function MarketDepth({
         </div>
       )}
       <div className="period-table">
-        <div className="period-row header"><span>Obdobje</span><span>Mediana / m²</span><span>Vzorec</span><span>Odstopanja</span></div>
+        <div className="period-row header"><span>Obdobje</span><span>
+          {mode === "sale" ? "Mediana / m²" : "Mesečna mediana"}
+        </span><span>Vzorec</span><span>Odstopanja</span></div>
         {points.slice(-16).map((point) => {
-          const value = mode === "sale" ? point.medianPricePerSqm : point.medianMonthlyRentPerSqm;
+          const value = mode === "sale" ? point.medianPricePerSqm : point.medianMonthlyRent;
           return (
             <div className="period-row" key={point.period}>
               <strong>{point.period.slice(0, 7)}{point.incomplete ? " *" : ""}</strong>
@@ -225,27 +237,57 @@ function GeographyExplorer({
   mode: MarketMode;
   onContextChange: (context: MarketContext) => void;
 }) {
-  const sorted = [...rankings].sort((a, b) => (b.medianAmountPerSqm ?? -1) - (a.medianAmountPerSqm ?? -1));
-  const max = Math.max(...sorted.map((item) => item.medianAmountPerSqm ?? 0), 1);
+  const amount = (item: GeographyComparison) => mode === "rent"
+    ? item.medianAmount
+    : item.medianAmountPerSqm;
+  const sorted = [...rankings].sort((a, b) => (amount(b) ?? -1) - (amount(a) ?? -1));
+  const max = Math.max(...sorted.map((item) => amount(item) ?? 0), 1);
+  const scrollList = (position: "top" | "bottom") => {
+    const body = document.querySelector<HTMLElement>(".analytics-body");
+    body?.scrollTo({
+      top: position === "top" ? 0 : body.scrollHeight,
+      behavior: "smooth",
+    });
+  };
+  const showOnMap = () => {
+    document.querySelector<HTMLElement>(".map-panel")?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  };
+  const selectGeography = (item: GeographyComparison) => {
+    onContextChange({ kind: "geography", id: item.id, level: item.level, name: item.name });
+    window.setTimeout(showOnMap, 80);
+  };
   return (
-    <div className="ranking-table">
-      <div className="ranking-row header"><span>#</span><span>Območje</span><span>Mediana / m²</span><span>Vsi posli</span><span>V vzorcu</span></div>
-      {sorted.map((item, index) => (
-        <button type="button" className="ranking-row" key={item.id} onClick={() => onContextChange({
-          kind: "geography", id: item.id, level: item.level, name: item.name,
-        })}>
-          <b>{index + 1}</b><strong>{item.name}</strong>
-          <span className="ranking-value">
-            <i style={{ width: `${100 * (item.medianAmountPerSqm ?? 0) / max}%` }} />
-            {item.medianAmountPerSqm == null ? "—" : `${decimal.format(item.medianAmountPerSqm)} €`}
-          </span>
-          <span>{item.transactionCount.toLocaleString("sl-SI")}</span>
-          <span>{item.representativeCount.toLocaleString("sl-SI")}</span>
+    <>
+      <div className="geography-navigation" aria-label="Navigacija primerjave območij">
+        <span>Pomik po seznamu</span>
+        <button type="button" onClick={() => scrollList("top")}><ArrowUp size={14} /> Na vrh</button>
+        <button type="button" onClick={() => scrollList("bottom")}><ArrowDown size={14} /> Na dno</button>
+        <button type="button" className="map-return" onClick={showOnMap}>
+          <MapPinned size={14} /> Nazaj na zemljevid
         </button>
-      ))}
-      {sorted.length === 0 && <p>Za to raven ni primerljivih območij.</p>}
-      <small>{mode === "sale" ? "Prodajne cene" : "Mesečne najemnine"}; razvrščeno po reprezentativni mediani.</small>
-    </div>
+      </div>
+      <div className="ranking-table">
+        <div className="ranking-row header"><span>#</span><span>Območje</span><span>
+          {mode === "sale" ? "Mediana / m²" : "Mesečna mediana"}
+        </span><span>Vsi posli</span><span>V vzorcu</span></div>
+        {sorted.map((item, index) => (
+          <button type="button" className="ranking-row" key={item.id} onClick={() => selectGeography(item)}>
+            <b>{index + 1}</b><strong>{item.name}</strong>
+            <span className="ranking-value">
+              <i style={{ width: `${100 * (amount(item) ?? 0) / max}%` }} />
+              {amount(item) == null ? "—" : euro.format(amount(item)!)}
+            </span>
+            <span>{item.transactionCount.toLocaleString("sl-SI")}</span>
+            <span>{item.representativeCount.toLocaleString("sl-SI")}</span>
+          </button>
+        ))}
+        {sorted.length === 0 && <p>Za to raven ni primerljivih območij.</p>}
+        <small>{mode === "sale" ? "Prodajne cene" : "Mesečne najemnine"}; razvrščeno po reprezentativni mediani.</small>
+      </div>
+    </>
   );
 }
 

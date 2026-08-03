@@ -7,8 +7,10 @@ export function mapAmountLabel(
 ) {
   const value = mode === "sale"
     ? properties.medianPricePerSqm ?? properties.pricePerSqm
-    : properties.medianMonthlyRentPerSqm ?? properties.monthlyRentPerSqm;
-  return typeof value === "number" ? `${decimal.format(value)} €/m²` : undefined;
+    : properties.medianMonthlyRent ?? properties.monthlyRent;
+  return typeof value === "number"
+    ? mode === "sale" ? `${decimal.format(value)} €/m²` : `${euro.format(value)} / mesec`
+    : undefined;
 }
 
 export function buildMapPopup(feature: MapPointFeature, mode: MarketMode) {

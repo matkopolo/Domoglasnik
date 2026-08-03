@@ -1,3 +1,5 @@
+import { ChartNoAxesColumnIncreasing } from "lucide-react";
+import { suppressionReasonLabel } from "@/lib/display-values";
 import type { Distribution, MarketMode } from "@/lib/types";
 
 const format = new Intl.NumberFormat("sl-SI", { maximumFractionDigits: 0 });
@@ -11,11 +13,18 @@ export function DistributionChart({ data, mode }: { data: Distribution; mode: Ma
         <div><h2 id="distribution-title">Porazdelitev cen</h2><p>{data.sampleSize.toLocaleString("sl-SI")} primerljivih poslov</p></div>
       </header>
       {!data.isPublishable || !percentiles ? (
-        <p className="suppressed-statistic">
-          Porazdelitev ni objavljena: {data.suppressionReason ?? "vzorec je premajhen"}.
-        </p>
+        <div className="suppressed-statistic" role="status">
+          <span className="suppressed-statistic-icon"><ChartNoAxesColumnIncreasing size={22} /></span>
+          <div>
+            <strong>Za porazdelitev je premalo podatkov</strong>
+            <p>{suppressionReasonLabel(data.suppressionReason, data.sampleSize)}</p>
+            <small>Ko bo prag dosežen, se histogram prikaže samodejno.</small>
+          </div>
+        </div>
       ) : <>
-      <div className="histogram" aria-label="Histogram vrednosti na kvadratni meter">
+      <div className="histogram" aria-label={mode === "sale"
+        ? "Histogram vrednosti na kvadratni meter"
+        : "Histogram mesečnih najemnin"}>
         {data.buckets.map((bucket) => (
           <span key={bucket.index} className={mode} style={{ height: `${Math.max(10, bucket.count / max * 100)}%` }} title={`${bucket.count} poslov`} />
         ))}

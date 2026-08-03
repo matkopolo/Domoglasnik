@@ -18,11 +18,22 @@ vi.mock("@/lib/api", async () => {
     })),
     loadGeographyChildren: vi.fn(async () => ({ items: [] })),
     loadGeographyComparisons: vi.fn(async () => []),
+    loadBuildingStatistics: vi.fn(async () => ({
+      cadastralMunicipalityCode: 665, buildingNumber: "8", knownBuildingPartCount: 2,
+      sales: { transactionCount: 2, representativeCount: 2 },
+      rentals: { transactionCount: 0, representativeCount: 0 },
+      saleHistory: [], rentalHistory: [],
+      saleTransactions: [{ transactionId: 501, propertyGroup: "apartment" }],
+      rentalTransactions: [],
+    })),
     loadTransaction: vi.fn(async () => ({
       transactionId: 501, datasetYear: 2023, propertyGroup: "apartment",
       priceDerivation: "transaction", quality: {
         isQualityEligible: true, isRepresentative: true, reasons: [],
-      }, geographies: [], buildingParts: [], landParcels: [],
+      }, geographies: [
+        { id: 12, level: "statistical_region", name: "Podravska" },
+        { id: 77, level: "municipality", name: "Ruše" },
+      ], buildingParts: [], landParcels: [],
     })),
     loadTransactionContext: vi.fn(async () => ({
       transactionKind: "sale", transactionId: 501, contractYear: 2023,
@@ -68,13 +79,20 @@ describe("MarketDashboard", () => {
     expect(screen.getByRole("application", { name: "Interaktivni zemljevid nepremičninskih poslov v Sloveniji" })).toBeInTheDocument();
     const metric = await screen.findByText("Srednja cena / m²");
     expect(metric.nextElementSibling).toHaveTextContent("2596");
+    expect(screen.getByText(/Geodetska uprava Republike Slovenije/)).toBeInTheDocument();
+    expect(screen.getByText(/GURS te aplikacije ne podpira/)).toBeInTheDocument();
+    expect(screen.getByText(/niso uradna ali certificirana cenitev/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "CC BY 4.0" })).toHaveAttribute(
+      "href",
+      "https://creativecommons.org/licenses/by/4.0/deed.sl",
+    );
   });
 
   it("switches to rental metrics", async () => {
     render(<MarketDashboard />);
     fireEvent.click(screen.getByRole("button", { name: "Najem" }));
-    const metric = await screen.findByText("Srednja najemnina / m²");
-    expect(metric.nextElementSibling).toHaveTextContent("12");
+    const metric = await screen.findByText("Srednja mesečna najemnina");
+    expect(metric.nextElementSibling).toHaveTextContent("650");
   });
 
   it("allows the analysis year range to be changed", () => {
@@ -112,20 +130,25 @@ describe("MarketDashboard", () => {
       .mockResolvedValueOnce(demoDashboard("rent"));
     render(<MarketDashboard />);
     fireEvent.click(screen.getByRole("button", { name: "Najem" }));
-    await screen.findByText("Srednja najemnina / m²");
+    await screen.findByText("Srednja mesečna najemnina");
     await act(async () => resolveFirst(demoDashboard("sale")));
-    expect(screen.getByText("Srednja najemnina / m²")).toBeInTheDocument();
+    expect(screen.getByText("Srednja mesečna najemnina")).toBeInTheDocument();
   });
 
-  it("keeps the selected geography while opening a transaction", async () => {
+  it("returns statistics to the transaction municipality when reopening it", async () => {
     render(<MarketDashboard />);
     fireEvent.click(screen.getByRole("button", { name: "Izberi Podravsko" }));
     await screen.findAllByRole("heading", { name: "Podravska" });
     fireEvent.click(screen.getByRole("button", { name: "Odpri posel" }));
     expect(window.location.search).toContain("context=transaction");
-    expect(window.location.search).toContain("geographyId=12");
-    expect(screen.getAllByRole("heading", { name: "Podravska" }).length).toBeGreaterThan(0);
+    await waitFor(() => expect(window.location.search).toContain("geographyId=77"));
+    expect(screen.getAllByRole("heading", { name: "Ruše" }).length).toBeGreaterThan(0);
     await waitFor(() => expect(Element.prototype.scrollIntoView).toHaveBeenCalled());
-    expect(loadDashboardMock.mock.calls.at(-1)?.[2]).toBe(12);
+    expect(loadDashboardMock.mock.calls.at(-1)?.[2]).toBe(77);
+
+    fireEvent.click(screen.getByRole("button", { name: "Izberi Podravsko" }));
+    await waitFor(() => expect(window.location.search).toContain("geographyId=12"));
+    fireEvent.click(screen.getByRole("button", { name: "Odpri posel" }));
+    await waitFor(() => expect(window.location.search).toContain("geographyId=77"));
   });
 });

@@ -2,7 +2,7 @@
 
 ## Purpose and ownership
 
-PostgreSQL 16 with PostGIS is the system of record. It stores immutable GURS
+PostgreSQL 16 with PostGIS is the system of record. It stores structured GURS
 source rows, current GURS RPE geography, deterministic analytical facts,
 offline-model outputs, application identity, preferences, and anomaly reviews.
 Neither the API nor the frontend maintains a second copy of market data.
@@ -23,6 +23,13 @@ idempotent incremental migrations to an existing volume.
 - `codebook_values` and `codebook_imports` preserve GURS categorical meaning.
 - `municipalities` and `cadastral_municipalities` are source references.
 - `app_users`, `auth_sessions`, and `user_preferences` are application-owned.
+
+Public ETN party names and identifiers are not present in the source archives
+or schema. Unstructured GURS note fields are intentionally excluded from import
+and removed by migration 027 because they are unnecessary for analytics and
+could theoretically contain identifying free text. This is the sole deliberate
+exception to structured source-field preservation. See
+[`data-licensing-privacy.md`](data-licensing-privacy.md).
 
 Source child rows use internal identities plus `(source_file_id,
 source_row_number)` uniqueness because historical cadastral identifiers may be

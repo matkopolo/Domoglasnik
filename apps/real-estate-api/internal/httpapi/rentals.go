@@ -110,6 +110,7 @@ func (s *server) rentalMapClusters(w http.ResponseWriter, r *http.Request) {
 				"transactionCount":        item.TransactionCount,
 				"representativeCount":     item.RepresentativeCount,
 				"medianMonthlyRentPerSqm": item.MedianPricePerSQM,
+				"medianMonthlyRent":       item.MedianAmount,
 			},
 		})
 	}

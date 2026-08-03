@@ -15,6 +15,21 @@ DATABASE_URL = os.getenv("TEST_DATABASE_URL")
 pytestmark = pytest.mark.integration
 
 
+def test_public_source_free_text_is_not_mapped_for_persistence():
+    source_columns = {
+        *TABLES["POSLI"][1],
+        *TABLES["DELISTAVB"][1],
+        *TABLES["ZEMLJISCA"][1],
+        *RENT_TABLES["POSLI"][1],
+        *RENT_TABLES["DELISTAVB"][1],
+    }
+    assert source_columns.isdisjoint({
+        "OPOMBE_O_PRAVNEM_POSLU",
+        "OPOMBE_O_NEPREMICNINI",
+        "OPOMBE_O_ODDANIH_PROSTORIH",
+    })
+
+
 def csv_bytes(fieldnames, rows):
     output = io.StringIO(newline="")
     writer = csv.DictWriter(output, fieldnames=fieldnames)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decimal } from "@/lib/display-values";
+import { decimal, euro } from "@/lib/display-values";
 import { buildMapPopup, mapAmountLabel } from "@/lib/map-popup";
 import type { MapPointFeature } from "@/lib/types";
 
@@ -31,5 +31,13 @@ describe("map popup presentation", () => {
       medianPricePerSqm: 3100,
       pricePerSqm: 2000,
     }, "sale")).toBe(`${decimal.format(3100)} €/m²`);
+  });
+
+  it("presents the full monthly rent as the primary rental value", () => {
+    expect(mapAmountLabel({
+      featureKind: "cluster",
+      medianMonthlyRent: 780,
+      medianMonthlyRentPerSqm: 14,
+    }, "rent")).toBe(`${euro.format(780)} / mesec`);
   });
 });

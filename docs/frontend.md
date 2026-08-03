@@ -39,6 +39,13 @@ stored in URL query parameters so an analysis can be refreshed or shared.
 Selecting another building closes the previous selection. Thin or suppressed
 cells are shown honestly rather than replaced with a fabricated median.
 
+Transaction values reported by ETN, calculations made by the application, and
+statistical model estimates have separate provenance labels. The persistent
+footer provides GURS/ETN/RPE attribution, the active ETN period, a CC BY 4.0
+link, non-endorsement wording, valuation limitations, and the privacy/data
+minimization statement. These disclosures must remain visible in any public or
+commercial deployment.
+
 ## Structure
 
 - `app/` contains the Next.js entry point, layout, and global design tokens.

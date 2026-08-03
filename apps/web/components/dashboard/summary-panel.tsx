@@ -12,8 +12,10 @@ interface SummaryPanelProps {
 }
 
 export function SummaryPanel({ title, mode, overview, series }: SummaryPanelProps) {
-  const metric = mode === "sale" ? overview.medianPricePerSqm : overview.medianMonthlyRentPerSqm;
-  const values = series.map((point) => mode === "sale" ? point.medianPricePerSqm : point.medianMonthlyRentPerSqm).filter((value): value is number => value != null);
+  const metric = mode === "sale" ? overview.medianPricePerSqm : overview.medianMonthlyRent;
+  const values = series.map((point) => mode === "sale"
+    ? point.medianPricePerSqm
+    : point.medianMonthlyRent).filter((value): value is number => value != null);
   const annualChange = values.length > 1 ? ((values.at(-1)! / values.at(-2)!) - 1) * 100 : undefined;
   const positive = annualChange != null && annualChange >= 0;
   return (
@@ -23,7 +25,7 @@ export function SummaryPanel({ title, mode, overview, series }: SummaryPanelProp
         <CircleHelp size={17} aria-label="Kazalniki vključujejo le primerljive posle" />
       </div>
       <div className="primary-metric">
-        <span>{mode === "sale" ? "Srednja cena / m²" : "Srednja najemnina / m²"}</span>
+        <span>{mode === "sale" ? "Srednja cena / m²" : "Srednja mesečna najemnina"}</span>
         <strong>{metric != null ? euro.format(metric) : "—"}</strong>
       </div>
       <div className="metric-row">

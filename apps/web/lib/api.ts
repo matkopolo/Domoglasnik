@@ -74,7 +74,7 @@ export async function loadDashboard(
 ): Promise<DashboardData> {
   const query = marketQuery(propertyGroup, years, geographyId, area);
   const prefix = mode === "sale" ? "" : "/rentals";
-  const distributionMetric = mode === "sale" ? "pricePerSqm" : "rentPerSqm";
+  const distributionMetric = mode === "sale" ? "pricePerSqm" : "monthlyRent";
   const mapPath = mode === "sale" ? "/api/v1/map/clusters" : "/api/v1/rentals/map/clusters";
   const [overview, timeSeries, distribution, geographyResponse, clusterResponse] = await Promise.all([
     getJSON<Overview>(`/api/v1${prefix}/statistics/overview?${query}`, signal),
@@ -305,6 +305,11 @@ export async function loadGeographyRankings(
     level: String(feature.properties.level) as Geography["level"],
     transactionCount: Number(feature.properties.transactionCount ?? 0),
     representativeCount: Number(feature.properties.representativeCount ?? 0),
+    medianAmount: mode === "rent" && typeof feature.properties.medianMonthlyRent === "number"
+      ? feature.properties.medianMonthlyRent
+      : mode === "sale" && typeof feature.properties.medianPrice === "number"
+        ? feature.properties.medianPrice
+        : undefined,
     medianAmountPerSqm: typeof feature.properties.medianPricePerSqm === "number"
       ? feature.properties.medianPricePerSqm
       : typeof feature.properties.medianMonthlyRentPerSqm === "number"
@@ -365,6 +370,11 @@ export async function loadGeographyComparisons(
     level: String(feature.properties.level) as Geography["level"],
     transactionCount: Number(feature.properties.transactionCount ?? 0),
     representativeCount: Number(feature.properties.representativeCount ?? 0),
+    medianAmount: mode === "rent" && typeof feature.properties.medianMonthlyRent === "number"
+      ? feature.properties.medianMonthlyRent
+      : mode === "sale" && typeof feature.properties.medianPrice === "number"
+        ? feature.properties.medianPrice
+        : undefined,
     medianAmountPerSqm: typeof feature.properties.medianPricePerSqm === "number"
       ? feature.properties.medianPricePerSqm
       : typeof feature.properties.medianMonthlyRentPerSqm === "number"

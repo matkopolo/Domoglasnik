@@ -24,6 +24,7 @@ export interface GeographyComparison {
   level: GeographyLevel;
   transactionCount: number;
   representativeCount: number;
+  medianAmount?: number | null;
   medianAmountPerSqm?: number | null;
 }
 
@@ -103,6 +104,7 @@ export interface Cluster {
   medianAmountPerSqm?: number | null;
   medianPricePerSqm?: number | null;
   medianMonthlyRentPerSqm?: number | null;
+  medianMonthlyRent?: number | null;
   representativeCount?: number;
 }
 
@@ -434,6 +436,7 @@ export interface BuildingYearPoint {
   transactionCount: number;
   representativeCount: number;
   medianAmountPerSqm?: number | null;
+  medianAmount?: number | null;
 }
 
 export type MarketContext =

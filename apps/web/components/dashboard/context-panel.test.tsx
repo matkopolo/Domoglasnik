@@ -32,6 +32,7 @@ vi.mock("@/lib/api", () => ({
     incompletePeriod: false,
     propertyGroup: "apartment",
     actualAmountPerSqm: 14,
+    outlierStatus: "insufficient_cohort",
     directComparables: [{
       transactionId: 78,
       contractDate: "2024-08-10",
@@ -104,10 +105,12 @@ describe("ContextPanel", () => {
     expect(screen.getByText(/n=31/)).toBeInTheDocument();
     expect(screen.getByText(/širši tržni vzorec/)).toBeInTheDocument();
     expect(screen.getByText("157.000 €")).toBeInTheDocument();
-    expect(screen.getByText("primerljivih poslov", { exact: false })).toBeInTheDocument();
+    expect(screen.getAllByText("primerljivih poslov", { exact: false }).length).toBeGreaterThan(0);
     expect(screen.getByText("750 €")).toBeInTheDocument();
     expect(screen.getByText(/Ista stavba · isto leto/)).toBeInTheDocument();
     expect(screen.getByText("Primerjava z okolico")).toBeInTheDocument();
+    expect(screen.getByText("Premalo primerljivih poslov za oceno odstopanja")).toBeInTheDocument();
+    expect(screen.queryByText(/insufficient_cohort/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByText("750 €"));
     expect(onChange).toHaveBeenCalledWith({ kind: "transaction", mode: "rent", id: 78 });
     expect(screen.queryByText("Ni podatka")).not.toBeInTheDocument();
