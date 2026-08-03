@@ -320,8 +320,9 @@ func TestStrictLandPopulationIntegration(t *testing.T) {
 	}
 	defer pool.Close()
 
-	var allLand, strictLand, violations int64
-	if err := pool.QueryRow(ctx, `
+	readPopulation := func() (int64, int64, int64) {
+		var allLand, strictLand, violations int64
+		if err := pool.QueryRow(ctx, `
 		SELECT
 		  (SELECT count(*) FROM analytics.sale_facts_all_land
 		    WHERE property_group='land'),
@@ -332,8 +333,17 @@ func TestStrictLandPopulationIntegration(t *testing.T) {
 		    WHERE fact.property_group='land'
 		      AND (NOT land.is_strict_buildable
 		        OR land.land_type_codes && ARRAY[3,4,5,6,7,8,9,10]))
-	`).Scan(&allLand, &strictLand, &violations); err != nil {
-		t.Fatalf("inspect land populations: %v", err)
+		`).Scan(&allLand, &strictLand, &violations); err != nil {
+			t.Fatalf("inspect land populations: %v", err)
+		}
+		return allLand, strictLand, violations
+	}
+
+	allLand, strictLand, violations := readPopulation()
+	if allLand == 0 {
+		cleanup := seedStrictLandPopulationFixture(t, ctx, pool)
+		defer cleanup()
+		allLand, strictLand, violations = readPopulation()
 	}
 	if strictLand == 0 || allLand <= strictLand || violations != 0 {
 		t.Fatalf("all=%d strict=%d violations=%d", allLand, strictLand, violations)
@@ -356,4 +366,69 @@ func TestStrictLandPopulationIntegration(t *testing.T) {
 			strictOverview.TransactionCount, strictLand,
 			allOverview.TransactionCount, allLand)
 	}
+}
+
+func seedStrictLandPopulationFixture(
+	t *testing.T, ctx context.Context, pool *pgxpool.Pool,
+) func() {
+	t.Helper()
+	const strictID int64 = 9_223_372_036_854_775_001
+	const nonStrictID int64 = 9_223_372_036_854_775_002
+	const checksum = "9999999999999999999999999999999999999999999999999999999999999998"
+
+	cleanup := func() {
+		if _, err := pool.Exec(ctx,
+			`DELETE FROM transactions WHERE transaction_id IN ($1,$2)`,
+			strictID, nonStrictID); err != nil {
+			t.Errorf("delete land transaction fixtures: %v", err)
+		}
+		if _, err := pool.Exec(ctx,
+			`DELETE FROM source_files WHERE sha256=$1`, checksum); err != nil {
+			t.Errorf("delete land source fixture: %v", err)
+		}
+	}
+	cleanup()
+
+	var sourceFileID int64
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO source_files(file_name,dataset_year,dataset_type,dataset_scope,sha256)
+		VALUES ('ci-land-population.zip',2024,'sales','national',$1)
+		RETURNING id`, checksum).Scan(&sourceFileID); err != nil {
+		t.Fatalf("insert land source fixture: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO transactions(
+			transaction_id,contract_date,contract_price,dataset_year,source_file_id
+		) VALUES
+			($1,DATE '2024-01-10',100000,2024,$3),
+			($2,DATE '2024-01-11',80000,2024,$3)`,
+		strictID, nonStrictID, sourceFileID); err != nil {
+		t.Fatalf("insert land transaction fixtures: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO analytics.sale_facts(
+			transaction_id,contract_date,dataset_year,property_group,
+			building_part_count,land_parcel_count,primary_property_count,
+			area,price,price_per_sqm,price_derivation,is_quality_eligible,
+			quality_reasons,representative_eligible
+		) VALUES
+			($1,DATE '2024-01-10',2024,'land',0,1,1,500,100000,200,
+			 'component_prices',true,ARRAY[]::text[],true),
+			($2,DATE '2024-01-11',2024,'land',0,1,1,400,80000,200,
+			 'component_prices',true,ARRAY[]::text[],true)`,
+		strictID, nonStrictID); err != nil {
+		t.Fatalf("insert sale fact fixtures: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO analytics.land_transaction_facts(
+			transaction_id,parcel_count,land_type_codes,readiness_class,
+			is_strict_buildable,is_broad_buildable,parcel_area,analytical_price,
+			price_per_sqm,strict_parcel_count,broad_parcel_count,unknown_parcel_count
+		) VALUES
+			($1,1,ARRAY[1],'building_permit',true,true,500,100000,200,1,1,0),
+			($2,1,ARRAY[5],'mixed_or_non_buildable',false,false,400,80000,200,0,0,0)`,
+		strictID, nonStrictID); err != nil {
+		t.Fatalf("insert land fact fixtures: %v", err)
+	}
+	return cleanup
 }
