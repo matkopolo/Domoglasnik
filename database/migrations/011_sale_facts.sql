@@ -155,20 +155,24 @@ BEGIN
              THEN qualified.analytical_price/qualified.area END,
         qualified.price_derivation,
         cardinality(qualified.quality_reasons)=0,qualified.quality_reasons,
-        qualified.location,region.id,municipality.id,district.id,community.id,settlement.id
+        qualified.location,municipality.parent_id,municipality.id,
+        district.id,community.id,settlement.id
     FROM qualified
     LEFT JOIN LATERAL (
-        SELECT id FROM analytics.geographic_units
-        WHERE level='statistical_region' AND qualified.location IS NOT NULL
+        SELECT id,parent_id FROM analytics.geographic_units
+        WHERE level='settlement' AND qualified.location IS NOT NULL
           AND ST_Covers(geometry_d96tm,qualified.location)
         ORDER BY ST_Area(geometry_d96tm),id LIMIT 1
-    ) region ON true
+    ) settlement ON true
     LEFT JOIN LATERAL (
         SELECT id FROM analytics.geographic_units
-        WHERE level='municipality' AND qualified.location IS NOT NULL
+        WHERE level='municipality' AND settlement.id IS NULL
+          AND qualified.location IS NOT NULL
           AND ST_Covers(geometry_d96tm,qualified.location)
         ORDER BY ST_Area(geometry_d96tm),id LIMIT 1
-    ) municipality ON true
+    ) municipality_fb ON true
+    LEFT JOIN analytics.geographic_units municipality
+        ON municipality.id=coalesce(settlement.parent_id,municipality_fb.id)
     LEFT JOIN LATERAL (
         SELECT id FROM analytics.geographic_units
         WHERE level='city_district' AND qualified.location IS NOT NULL
@@ -180,13 +184,7 @@ BEGIN
         WHERE level='local_community' AND qualified.location IS NOT NULL
           AND ST_Covers(geometry_d96tm,qualified.location)
         ORDER BY ST_Area(geometry_d96tm),id LIMIT 1
-    ) community ON true
-    LEFT JOIN LATERAL (
-        SELECT id FROM analytics.geographic_units
-        WHERE level='settlement' AND qualified.location IS NOT NULL
-          AND ST_Covers(geometry_d96tm,qualified.location)
-        ORDER BY ST_Area(geometry_d96tm),id LIMIT 1
-    ) settlement ON true;
+    ) community ON true;
 
     GET DIAGNOSTICS imported_rows=ROW_COUNT;
     ANALYZE analytics.sale_facts;

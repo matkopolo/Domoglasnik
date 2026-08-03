@@ -178,6 +178,12 @@ development ceilings of 4 GB for PostgreSQL, 3 GB for the offline pipeline
 worker, 512 MB for the Go API, and 768 MB for the web application. These are
 maximums, not reserved memory.
 
+Within the 4 GB database ceiling, Compose configures PostgreSQL with 1 GB
+`shared_buffers`, 64 MB per-node `work_mem`, 512 MB
+`maintenance_work_mem`, a 3 GB effective cache estimate, and up to four
+parallel workers per gather. These settings target the periodic offline
+analytics rebuild; PostgreSQL/PostGIS still owns all durable data.
+
 Allocate 8–12 GB to Docker Desktop for a full model refresh alongside
 PostgreSQL and image builds. The API uses bounded SQL queries, pagination, map
 bounding boxes, and precomputed database aggregates.
@@ -208,7 +214,13 @@ make models-refresh WORKERS=6
 
 `analytics-refresh` rebuilds deterministic facts, strict land readiness,
 robust outliers, missingness profiles, exact/near-duplicate signals, and the
-matched-pair median index. `models-refresh` separately evaluates hedonic models
+matched-pair median index. It prints every completed stage with its row count
+and elapsed time. The independent sale and rental chains use two PostgreSQL
+connections; shared analytical stages start after both finish. On the documented
+617,679-sale/456,448-rental development dataset, the optimized analytics phase
+measured about 4m46s; hardware and Docker resource allocation will change that
+result. `models-refresh`
+separately evaluates hedonic models
 on the latest complete year and municipality holdouts, calibrates prediction
 ranges on the preceding year, trains Isolation Forest models, and appends a
 new hedonic-index vintage.

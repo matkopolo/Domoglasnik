@@ -5,7 +5,9 @@ from __future__ import annotations
 import os
 import signal
 import sys
+import time
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -32,6 +34,10 @@ ANALYTICS_REFRESH_FUNCTIONS = (
     "analytics.refresh_missingness_profiles",
     "analytics.refresh_repeat_sales_indices",
 )
+
+SALE_ANALYTICS_REFRESH_FUNCTIONS = ANALYTICS_REFRESH_FUNCTIONS[:3]
+RENTAL_ANALYTICS_REFRESH_FUNCTIONS = ANALYTICS_REFRESH_FUNCTIONS[3:5]
+SHARED_ANALYTICS_REFRESH_FUNCTIONS = ANALYTICS_REFRESH_FUNCTIONS[5:]
 
 RESET_TABLES = (
     "analytics.valuation_predictions",
@@ -70,15 +76,41 @@ class SystemRefreshResult:
     model_rows: dict[str, int]
 
 
-def refresh_analytics(connection) -> dict[str, int]:
-    """Refresh deterministic analytical tables in dependency order."""
+def _refresh_functions(connection, functions: tuple[str, ...]) -> dict[str, int]:
     counts: dict[str, int] = {}
     with connection.transaction(), connection.cursor() as cursor:
-        for function in ANALYTICS_REFRESH_FUNCTIONS:
+        for function in functions:
+            started = time.monotonic()
             cursor.execute(f"SELECT {function}()")  # fixed internal allow-list
             value = cursor.fetchone()[0]
             counts[function] = int(value or 0)
+            print(
+                f"  {function.rsplit('.', 1)[-1]}: "
+                f"{int(value or 0):,} rows in {time.monotonic() - started:.1f}s",
+                flush=True,
+            )
     return counts
+
+
+def _refresh_branch(database_url: str, functions: tuple[str, ...]) -> dict[str, int]:
+    with psycopg.connect(database_url) as connection:
+        return _refresh_functions(connection, functions)
+
+
+def refresh_analytics(connection, *, database_url: str) -> dict[str, int]:
+    """Refresh independent sale/rent branches, then their shared dependants."""
+    with ThreadPoolExecutor(max_workers=2, thread_name_prefix="analytics") as executor:
+        sale_future = executor.submit(
+            _refresh_branch, database_url, SALE_ANALYTICS_REFRESH_FUNCTIONS
+        )
+        rental_future = executor.submit(
+            _refresh_branch, database_url, RENTAL_ANALYTICS_REFRESH_FUNCTIONS
+        )
+        sale_counts = sale_future.result()
+        rental_counts = rental_future.result()
+
+    shared_counts = _refresh_functions(connection, SHARED_ANALYTICS_REFRESH_FUNCTIONS)
+    return sale_counts | rental_counts | shared_counts
 
 
 def reset_market_data(connection) -> None:
@@ -96,6 +128,7 @@ def refresh_system(
     force: bool,
     workers: int,
     verbose: bool,
+    database_url: str,
 ) -> SystemRefreshResult:
     """Run one mutually exclusive source → geography → analytics → model refresh."""
     acquired = connection.execute(
@@ -113,6 +146,7 @@ def refresh_system(
             force=force,
             workers=workers,
             verbose=verbose,
+            database_url=database_url,
         )
     finally:
         connection.rollback()
@@ -127,6 +161,7 @@ def reset_and_repopulate(
     end_year: int,
     workers: int,
     verbose: bool,
+    database_url: str,
 ) -> SystemRefreshResult:
     acquired = connection.execute(
         "SELECT pg_try_advisory_lock(%s)", (REFRESH_LOCK_ID,)
@@ -144,6 +179,7 @@ def reset_and_repopulate(
             force=False,
             workers=workers,
             verbose=verbose,
+            database_url=database_url,
         )
     finally:
         connection.rollback()
@@ -159,6 +195,7 @@ def _refresh_system_unlocked(
     force: bool,
     workers: int,
     verbose: bool,
+    database_url: str,
 ) -> SystemRefreshResult:
     archives = refresh_all_national(
         connection,
@@ -170,7 +207,7 @@ def _refresh_system_unlocked(
         refresh_current_year=True,
     )
     geography_counts = sync_geographies(connection)
-    analytics_counts = refresh_analytics(connection)
+    analytics_counts = refresh_analytics(connection, database_url=database_url)
     print(
         "Refreshed analytics: "
         + ", ".join(
@@ -225,6 +262,7 @@ def scheduled_refresh_loop(
                     force=False,
                     workers=workers,
                     verbose=verbose,
+                    database_url=database_url,
                 )
             if health_file:
                 health_file.parent.mkdir(parents=True, exist_ok=True)

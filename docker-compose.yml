@@ -4,6 +4,20 @@ services:
       context: .
       dockerfile: infrastructure/docker/database/Dockerfile
     image: real-estate-postgis:16
+    command:
+      - postgres
+      - -c
+      - shared_buffers=1GB
+      - -c
+      - work_mem=64MB
+      - -c
+      - maintenance_work_mem=512MB
+      - -c
+      - effective_cache_size=3GB
+      - -c
+      - max_parallel_workers_per_gather=4
+      - -c
+      - random_page_cost=1.1
     environment:
       POSTGRES_DB: real_estate
       POSTGRES_USER: real_estate

@@ -232,9 +232,10 @@ def run(args: argparse.Namespace) -> None:
                 force=args.force,
                 workers=args.workers,
                 verbose=args.verbose,
+                database_url=args.database_url,
             )
         elif args.command == "refresh-analytics":
-            counts = refresh_analytics(connection)
+            counts = refresh_analytics(connection, database_url=args.database_url)
             print(
                 "Refreshed analytics: "
                 + ", ".join(
@@ -249,6 +250,7 @@ def run(args: argparse.Namespace) -> None:
                 end_year=args.end_year,
                 workers=args.workers,
                 verbose=args.verbose,
+                database_url=args.database_url,
             )
 
 

@@ -52,8 +52,11 @@ the analytics refresh recreates them after the fact tables are current.
 Source centroids are D96/TM coordinates (EPSG:3794). Generated `location`
 columns create PostGIS points only when both coordinates exist and have GiST
 indexes. Fact refreshes aggregate component points to one representative
-transaction centroid and assign the smallest covering current RPE polygon at
-each hierarchy level. WGS84 transformations are performed for browser maps.
+transaction centroid. One settlement spatial lookup supplies settlement,
+municipality, and statistical-region ancestry; city districts and local
+communities remain independent spatial lookups because they are sibling RPE
+levels whose polygons do not always nest perfectly. WGS84 transformations are
+performed for browser maps.
 
 These are source centroids, not guaranteed entrances. Current polygons do not
 reconstruct historical administrative boundaries. Missing locations remain
@@ -79,6 +82,15 @@ every 14 days and also rechecks the current year for revisions.
 `make reset-and-repopulate` truncates market-source and derived analytical
 tables with explicit confirmation, then rebuilds them. Users and saved
 preferences are preserved. Docker volumes survive normal container rebuilds.
+
+The local PostgreSQL container is tuned within its 4GB limit for full-table
+analytical rebuilds. Independent sale and rental chains run concurrently on two
+connections; shared anomaly, duplicate, missingness, and repeat-index stages run
+only after both chains succeed. Each chain is transactional, but the complete
+cross-chain refresh is not one transaction, so readers can briefly observe mixed
+generations during a scheduled rebuild. The worker prints each completed stage
+with row count and wall-clock duration. Individual `analytics.refresh_runs`
+stages also use wall-clock start timestamps.
 
 ## Access and integrity
 
