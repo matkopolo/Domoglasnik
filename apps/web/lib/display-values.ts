@@ -44,6 +44,13 @@ export function propertyGroupLabel(value: string) {
   }[value] ?? "nepremičnine";
 }
 
+export function indexChangeInterpretation(indexValue: number, basePeriod: string) {
+  const change = indexValue - 100;
+  const year = basePeriod.slice(0, 4);
+  if (Math.abs(change) < 0.05) return `Približno enaka raven cen kot leta ${year}`;
+  return `Približno ${decimal.format(Math.abs(change))} % ${change > 0 ? "višje" : "nižje"} kot leta ${year}`;
+}
+
 export function reliabilityLabel(value: string) {
   return {
     moderate: "srednja",

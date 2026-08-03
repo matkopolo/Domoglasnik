@@ -18,6 +18,7 @@ import {
   euro,
   meaningfulPosition,
   meaningfulText,
+  indexChangeInterpretation,
   propertyGroupLabel,
   qualityReasonLabel,
   reliabilityLabel,
@@ -491,14 +492,13 @@ export function ContextPanel({
               {latestIndices.map((index) => (
                 <div className="benchmark-card" key={index.method}>
                   <div><strong>{index.method === "hedonic" ? "Hedonski" : "Ponovne prodaje"}</strong>
-                    <span>baza {index.basePeriod.slice(0, 4)} · n={index.sampleSize}</span>
+                    <span>začetno leto {index.basePeriod.slice(0, 4)} · n={index.sampleSize}</span>
                   </div>
-                  <b>{index.indexValue >= 100 ? "+" : ""}
-                    {decimal.format(index.indexValue - 100)} % od {index.basePeriod.slice(0, 4)}</b>
+                  <b>{indexChangeInterpretation(index.indexValue, index.basePeriod)}</b>
                   <small>indeks {decimal.format(index.indexValue)} · {index.period.slice(0, 7)}</small>
                 </div>
               ))}
-              <small>Začetno leto je označeno s 100. Indeks 120 pomeni približno 20 % višje cene kot v začetnem letu.</small>
+              <small>Nad 100 pomeni višje, pod 100 nižje, vrednost 100 pa približno enake cene kot v začetnem letu.</small>
             </section>
           )}
         </>

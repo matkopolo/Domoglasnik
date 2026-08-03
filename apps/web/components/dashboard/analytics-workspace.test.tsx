@@ -101,12 +101,16 @@ describe("AnalyticsWorkspace", () => {
     expect(screen.getByText("#502")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /Indeksi in modeli/ }));
-    expect((await screen.findAllByText("+21 % od 2018")).length).toBeGreaterThan(0);
-    expect(screen.getAllByText("+18 % od 2018").length).toBeGreaterThan(0);
+    expect((await screen.findAllByText("Približno 21 % višje kot leta 2018")).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Približno 18 % višje kot leta 2018").length).toBeGreaterThan(0);
     expect(screen.getByText(/indeks 121/)).toBeInTheDocument();
     expect(screen.getByText("Indeks ponovnih prodaj")).toBeInTheDocument();
     expect(screen.getByText("Raven cen (začetno leto = 100)")).toBeInTheDocument();
     expect(screen.getByText("Leto")).toBeInTheDocument();
+    const hedonicPoint = screen.getByRole("button", { name: /Hedonski indeks, 2025-01: indeks 121/ });
+    fireEvent.mouseEnter(hedonicPoint);
+    expect(screen.getByText(/Hedonski indeks · 2025-01 · indeks 121/)).toBeInTheDocument();
+    expect(screen.getByText(/Približno 21 % višje kot leta 2018 · n=80/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /Primerjava območij/ }));
     expect(screen.getByText("Podravska")).toBeInTheDocument();

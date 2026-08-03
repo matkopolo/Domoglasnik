@@ -4,6 +4,7 @@ import {
   meaningfulNumber,
   meaningfulPosition,
   meaningfulText,
+  indexChangeInterpretation,
   propertyGroupLabel,
   qualityReasonLabel,
   suppressionReasonLabel,
@@ -27,6 +28,14 @@ describe("property display policy", () => {
     ["commercial", "poslovni prostori"],
   ])("presents property group %s in Slovenian", (group, label) => {
     expect(propertyGroupLabel(group)).toBe(label);
+  });
+
+  it.each([
+    [121, "Približno 21 % višje kot leta 2018"],
+    [90, "Približno 10 % nižje kot leta 2018"],
+    [100, "Približno enaka raven cen kot leta 2018"],
+  ])("interprets price index %s relative to its starting year", (value, label) => {
+    expect(indexChangeInterpretation(value as number, "2018-01-01")).toBe(label);
   });
 
   it("omits a generic position but preserves an actual position", () => {

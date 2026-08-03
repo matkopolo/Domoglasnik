@@ -58,15 +58,20 @@ button:focus-visible, a:focus-visible, select:focus-visible, [tabindex]:focus-vi
 }
 .brand { display: flex; align-items: center; gap: 10px; color: var(--green-dark); font-size: 18px; font-weight: 700; white-space: nowrap; }
 .brand-mark {
-  width: 33px;
-  height: 33px;
+  width: 36px;
+  height: 36px;
   display: grid;
   place-items: center;
-  border: 1px solid #9ab5a5;
-  transform: rotate(45deg);
-  border-radius: 5px 12px 5px 12px;
+  overflow: hidden;
+  border-radius: 10px;
+  background: var(--green-dark);
+  box-shadow: 0 5px 12px rgba(21, 62, 40, .18);
 }
-.brand-mark svg { transform: rotate(-45deg); }
+.brand-mark svg { width: 100%; height: 100%; }
+.brand-house { fill: #f4f7f2; }
+.brand-roof { fill: none; stroke: #f4f7f2; stroke-width: 2.3; stroke-linecap: round; stroke-linejoin: round; }
+.brand-bars { fill: none; stroke: #d77a4f; stroke-width: 2.7; stroke-linecap: round; }
+.brand-point { fill: #d77a4f; }
 .topbar nav { height: 100%; display: flex; align-items: stretch; gap: 37px; }
 .topbar nav a { display: flex; align-items: center; color: #34423a; text-decoration: none; font-weight: 550; position: relative; }
 .topbar nav a.active { color: var(--green-dark); font-weight: 700; }
@@ -559,6 +564,7 @@ main { width: min(1480px, calc(100% - 48px)); margin: 0 auto; padding: 25px 0 30
 .quality-status strong { color: var(--green-dark); font-size: 11px; }
 .quality-status span { color: #526057; font-size: 10px; line-height: 1.4; }
 .index-chart { display: block; width: 100%; height: 300px; margin-top: 10px; }
+.index-point { cursor: pointer; stroke: #fff; stroke-width: 2px; }
 .index-legend { display: flex; justify-content: center; gap: 25px; font-size: 10px; }
 .index-legend i { display: inline-block; width: 20px; height: 3px; vertical-align: middle; margin-right: 6px; }
 .index-legend i.hedonic { background: #0d5c3d; }

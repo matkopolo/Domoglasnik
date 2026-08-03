@@ -20,7 +20,7 @@ import {
   loadStatisticalOutliers,
   loadTransactionExtremes,
 } from "@/lib/api";
-import { decimal, euro, propertyGroupLabel, suppressionReasonLabel } from "@/lib/display-values";
+import { decimal, euro, indexChangeInterpretation, propertyGroupLabel, suppressionReasonLabel } from "@/lib/display-values";
 import type {
   AnomalySummary,
   GeographyComparison,
@@ -158,6 +158,12 @@ function MarketDepth({
 }
 
 function IndexExplorer({ items }: { items: MarketIndex[] }) {
+  const [hovered, setHovered] = useState<{
+    method: string;
+    point: MarketIndex;
+    x: number;
+    y: number;
+  }>();
   const groups = useMemo(() => {
     const result = new Map<string, MarketIndex[]>();
     items.forEach((item) => {
@@ -176,12 +182,15 @@ function IndexExplorer({ items }: { items: MarketIndex[] }) {
     + periods.indexOf(period) / Math.max(periods.length - 1, 1) * 775;
   const periodLabelStep = Math.max(1, Math.ceil(periods.length / 9));
   const hasHedonic = groups.has("hedonic");
+  const methodLabel = (method: string) => method === "hedonic"
+    ? "Hedonski indeks"
+    : "Indeks ponovnih prodaj";
   return (
     <>
       <div className="methodology-callout">
         <BrainCircuit size={20} />
         <div><strong>Dva različna pogleda na gibanje cen</strong>
-          <p>Hedonski indeks primerja cene, kot da bi se skozi čas prodajale enako kakovostne nepremičnine. Indeks ponovnih prodaj spremlja nepremičnine, ki so bile prodane večkrat. Začetno leto je označeno s 100: vrednost 120 pomeni približno 20 % višje cene, vrednost 90 pa približno 10 % nižje cene kot takrat.</p></div>
+          <p>Hedonski indeks primerja cene, kot da bi se skozi čas prodajale enako kakovostne nepremičnine. Indeks ponovnih prodaj spremlja nepremičnine, ki so bile prodane večkrat. Začetno leto je označeno s 100. Nad 100 pomeni rast cen, pod 100 padec, natanko 100 pa približno nespremenjene cene. Primer: 120 pomeni približno 20 % višje, 90 pa približno 10 % nižje cene kot v začetnem letu.</p></div>
       </div>
       {!hasHedonic && items.length > 0 && <p className="chart-source-error" role="status">
         Hedonski indeks še ni izračunan. Prikazan je samo indeks ponovnih prodaj; hedonska serija bo na voljo po končanem učenju modela.
@@ -207,15 +216,29 @@ function IndexExplorer({ items }: { items: MarketIndex[] }) {
             return <g key={method}>
               <polyline fill="none" stroke={colors[method as keyof typeof colors]} strokeWidth="3"
                 points={coords.map((point) => `${point.x},${point.y}`).join(" ")} />
-              {coords.map(({ x, y, point }) => <circle key={point.period} cx={x} cy={y} r="4"
-                fill={colors[method as keyof typeof colors]}>
-                <title>{point.period.slice(0, 7)} · {decimal.format(point.indexValue)} · n={point.sampleSize}</title>
-              </circle>)}
+              {coords.map(({ x, y, point }) => <circle key={point.period} cx={x} cy={y}
+                r={hovered?.method === method && hovered.point.period === point.period ? "6" : "4"}
+                fill={colors[method as keyof typeof colors]} className="index-point" tabIndex={0} role="button"
+                aria-label={`${methodLabel(method)}, ${point.period.slice(0, 7)}: indeks ${decimal.format(point.indexValue)}, ${indexChangeInterpretation(point.indexValue, point.basePeriod)}, ${point.sampleSize} poslov`}
+                onMouseEnter={() => setHovered({ method, point, x, y })}
+                onMouseLeave={() => setHovered(undefined)}
+                onFocus={() => setHovered({ method, point, x, y })}
+                onBlur={() => setHovered(undefined)} />)}
             </g>;
           })}
           {periods.filter((_, index) => index % periodLabelStep === 0 || index === periods.length - 1)
             .map((period) => <text key={period} x={xForPeriod(period)} y="272" textAnchor="middle"
               className="axis-label">{period.slice(0, 4)}</text>)}
+          {hovered && <g className="chart-tooltip"
+            transform={`translate(${Math.min(745, Math.max(175, hovered.x))} ${Math.max(58, hovered.y - 9)})`}>
+            <rect x="-165" y="-49" width="330" height="42" rx="6" />
+            <text x="0" y="-32" textAnchor="middle">
+              {methodLabel(hovered.method)} · {hovered.point.period.slice(0, 7)} · indeks {decimal.format(hovered.point.indexValue)}
+            </text>
+            <text x="0" y="-17" textAnchor="middle">
+              {indexChangeInterpretation(hovered.point.indexValue, hovered.point.basePeriod)} · n={hovered.point.sampleSize}
+            </text>
+          </g>}
         </svg>
       )}
       <div className="index-legend">
@@ -226,11 +249,9 @@ function IndexExplorer({ items }: { items: MarketIndex[] }) {
         {[...groups.entries()].map(([method, points]) => {
           const latest = points.filter((point) => point.isPublishable).at(-1);
           if (!latest) return null;
-          const changeFromBase = latest.indexValue - 100;
-          const changeLabel = `${changeFromBase >= 0 ? "+" : ""}${decimal.format(changeFromBase)} %`;
           return <article key={method}>
             <span>{method === "hedonic" ? "Hedonski" : "Ponovne prodaje"}</span>
-            <strong>{changeLabel} od {latest.basePeriod.slice(0, 4)}</strong>
+            <strong>{indexChangeInterpretation(latest.indexValue, latest.basePeriod)}</strong>
             <small>indeks {decimal.format(latest.indexValue)} · {latest.period.slice(0, 7)} · n={latest.sampleSize}
               {latest.lowerIndexValue != null && latest.upperIndexValue != null
                 ? ` · interval ${decimal.format(latest.lowerIndexValue)}–${decimal.format(latest.upperIndexValue)}`
