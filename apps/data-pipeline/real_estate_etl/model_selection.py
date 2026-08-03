@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 from datetime import date
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 from sklearn.ensemble import HistGradientBoostingRegressor
@@ -144,17 +144,30 @@ def optimize_model(
     groups: np.ndarray,
     settings: SelectionSettings,
     configurations: list[dict[str, Any]] | None = None,
+    progress: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
+    progress = progress or (lambda _message: None)
     folds, skipped, holdout_year = temporal_folds(
         dates, min_training_rows=settings.min_training_rows,
         min_calibration_rows=settings.min_calibration_rows,
         min_validation_rows=settings.min_validation_rows,
     )
     if holdout_year is None or not folds:
+        progress("selection unavailable: insufficient temporal folds")
         return {"status": "insufficient_temporal_folds", "skipped_folds": skipped,
                 "final_holdout_year": holdout_year}
+    progress(
+        f"temporal selection: {len(folds)} valid folds, {len(skipped)} skipped, "
+        f"untouched holdout={holdout_year}"
+    )
     evaluated = []
-    for configuration in configurations or candidate_configurations():
+    candidates = configurations or candidate_configurations()
+    for candidate_number, configuration in enumerate(candidates, start=1):
+        candidate_started = time.monotonic()
+        progress(
+            f"candidate {candidate_number}/{len(candidates)}: "
+            f"{_configuration_label(configuration)} across {len(folds)} folds"
+        )
         results = []
         for fold in folds:
             model = build_pipeline(configuration, settings.random_seed)
@@ -183,13 +196,20 @@ def optimize_model(
             })
         evaluated.append({"configuration": configuration, "folds": results,
                           "aggregate": _aggregate(results)})
+        progress(
+            f"candidate {candidate_number}/{len(candidates)} complete: "
+            f"weighted MAE={evaluated[-1]['aggregate']['weighted_mae_amount_per_sqm']:.3f}, "
+            f"elapsed={time.monotonic() - candidate_started:.1f}s"
+        )
     selected = select_configuration(evaluated)
+    progress(f"selected: {_configuration_label(selected['configuration'])}")
     training, calibration, holdout = final_holdout_split(
         dates, holdout_year, min_training_rows=settings.min_training_rows,
         min_calibration_rows=settings.min_calibration_rows,
         min_holdout_rows=settings.min_validation_rows,
     )
     final_model = build_pipeline(selected["configuration"], settings.random_seed)
+    progress(f"final holdout: fitting pre-{holdout_year} training population")
     holdout_prediction, training_seconds, prediction_seconds = _timed_fit_predict(
         final_model, features[training], target[training], features[holdout]
     )
@@ -213,6 +233,15 @@ def optimize_model(
         features[pre_holdout], target[pre_holdout], groups[pre_holdout],
         selected["configuration"], settings,
     )
+    progress(
+        "grouped robustness: "
+        + (
+            f"{robustness['held_out_group_count']} groups / "
+            f"{robustness['held_out_row_count']} rows"
+            if robustness["status"] == "evaluated"
+            else str(robustness["status"])
+        )
+    )
     return {
         "status": "selected", "candidate_results": evaluated,
         "selected_configuration": selected["configuration"],
@@ -228,6 +257,13 @@ def optimize_model(
         "final_holdout": final_metrics, "grouped_robustness": robustness,
         "interval_half_width_log": half_width,
     }
+
+
+def _configuration_label(configuration: dict[str, Any]) -> str:
+    parameters = ", ".join(
+        f"{key}={value}" for key, value in configuration.items() if key != "family"
+    )
+    return f"{configuration['family']}({parameters})"
 
 
 def grouped_robustness(features, target, groups, configuration, settings):

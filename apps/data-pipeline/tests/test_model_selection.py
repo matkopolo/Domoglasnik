@@ -106,3 +106,22 @@ def test_insufficient_temporal_folds_has_explicit_status():
     )
     assert result["status"] == "insufficient_temporal_folds"
     assert result["skipped_folds"]
+
+
+def test_progress_reports_candidate_holdout_and_grouped_stages():
+    features, target, dates, groups = population()
+    messages = []
+    optimize_model(
+        features,
+        target,
+        dates,
+        groups,
+        settings(),
+        [{"family": "ridge", "alpha": 1.0}],
+        progress=messages.append,
+    )
+
+    assert any("candidate 1/1" in message for message in messages)
+    assert any("selected: ridge(alpha=1.0)" in message for message in messages)
+    assert any("final holdout" in message for message in messages)
+    assert any("grouped robustness" in message for message in messages)

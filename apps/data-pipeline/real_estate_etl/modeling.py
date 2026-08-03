@@ -127,6 +127,8 @@ def _refresh_kind(
         group_features = features[group_indices]
         group_target = target[group_indices]
         group_dates = [contract_dates[index] for index in group_indices]
+        prefix = f"[{kind} model · {group}]"
+        print(f"{prefix} population={len(group_indices):,} rows", flush=True)
         robustness_groups = building_identities[group_indices].copy()
         missing_identity = np.asarray([not value for value in robustness_groups])
         robustness_groups[missing_identity] = np.asarray(
@@ -136,11 +138,15 @@ def _refresh_kind(
         selection = optimize_model(
             group_features, group_target, group_dates, robustness_groups,
             selection_settings,
+            progress=lambda message, prefix=prefix: print(
+                f"{prefix} {message}", flush=True
+            ),
         )
         if selection["status"] != "selected":
             # Preserve production coverage for sparse groups without presenting
             # this fit as validated or calibrated model selection.
             fallback = build_pipeline({"family": "ridge", "alpha": 2.0}, RANDOM_SEED)
+            print(f"{prefix} fitting sparse-group production fallback", flush=True)
             production_started = time.monotonic()
             fallback.fit(group_features, group_target)
             production_training_seconds = time.monotonic() - production_started
@@ -169,6 +175,7 @@ def _refresh_kind(
         interval_widths[group_indices] = group_interval
         configuration = selection["selected_configuration"]
         final_model = build_pipeline(configuration, RANDOM_SEED)
+        print(f"{prefix} fitting selected production model", flush=True)
         production_started = time.monotonic()
         final_model.fit(group_features, group_target)
         production_training_seconds = time.monotonic() - production_started
@@ -195,6 +202,7 @@ def _refresh_kind(
         }
 
     isolation_features = np.column_stack([target, features])
+    print(f"[{kind} model] fitting separate Isolation Forest", flush=True)
     isolation_transformer = preprocessor(list(range(7)), [7, 8])
     transformed = isolation_transformer.fit_transform(isolation_features)
     generator = np.random.default_rng(RANDOM_SEED)
@@ -249,6 +257,7 @@ def _refresh_kind(
     now = datetime.now(timezone.utc)
     version = f"{kind}-selected-hedonic-iforest-v3-{now:%Y%m%dT%H%M%SZ}"
     model_run_id = uuid.uuid4()
+    print(f"[{kind} model] persisting model run and production predictions", flush=True)
 
     with connection.transaction():  # noqa: SIM117 - transaction and cursor have distinct cleanup semantics
         with connection.cursor() as cursor:

@@ -228,7 +228,10 @@ appends a new hedonic-index vintage. Normal startup, the 14-day scheduled run,
 Model refresh logs report temporal holdout MAE, median absolute percentage
 error, log RMSE/R², observed coverage of the 90% prediction interval,
 property-group performance against a local-median baseline, and performance
-on held-out municipalities. They deliberately do not print one generic
+on held-out groups. During the run they also show the current sale/rental
+property group, candidate number and hyperparameters, fold count, candidate
+MAE and duration, selected configuration, final-holdout evaluation, grouped
+robustness, Isolation Forest fit, and persistence stage. They deliberately do not print one generic
 “accuracy” number because this is regression, not classification. Full
 definitions and interpretation are in
 [docs/statistical-methodology.md](docs/statistical-methodology.md).
