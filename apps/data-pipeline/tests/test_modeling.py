@@ -2,9 +2,10 @@ from datetime import date, timedelta
 
 import numpy as np
 
-from real_estate_etl.modeling import (
+from real_estate_etl.model_validation import (
     interval_half_width,
     percentile_scores,
+    temporal_folds,
     temporal_split_indices,
 )
 
@@ -19,9 +20,9 @@ def test_percentile_scores_handle_empty_input():
 
 
 def test_temporal_split_is_deterministic_disjoint_and_has_no_future_leakage():
-    dates = [date(2018, 1, 1) + timedelta(days=index) for index in range(100)]
-    first = temporal_split_indices(dates)
-    second = temporal_split_indices(dates)
+    dates = [date(year, 1, 1) + timedelta(days=index) for year in range(2019, 2026) for index in range(12)]
+    first = temporal_split_indices(dates, as_of=date(2026, 8, 1))
+    second = temporal_split_indices(dates, as_of=date(2026, 8, 1))
     assert all(np.array_equal(left, right) for left, right in zip(first, second))
     training, calibration, test = first
     assert set(training).isdisjoint(calibration)
@@ -36,7 +37,7 @@ def test_temporal_split_is_deterministic_disjoint_and_has_no_future_leakage():
 
 
 def test_temporal_split_rejects_small_population():
-    with np.testing.assert_raises_regex(ValueError, "at least 30"):
+    with np.testing.assert_raises_regex(ValueError, "no earlier calibration year"):
         temporal_split_indices([date(2025, 1, 1)] * 29)
 
 
@@ -53,6 +54,25 @@ def test_temporal_split_uses_latest_complete_year_and_prior_calibration_year():
     assert {dates[index].year for index in training} == {2023}
     assert {dates[index].year for index in calibration} == {2024}
     assert {dates[index].year for index in test} == {2025}
+
+
+def test_rolling_folds_exclude_current_year_and_reserve_latest_complete_year():
+    dates = [date(year, 6, 1) for year in range(2018, 2027) for _ in range(10)]
+    folds, skipped, holdout = temporal_folds(
+        dates, as_of=date(2026, 8, 1), min_training_rows=10,
+        min_calibration_rows=10, min_validation_rows=10,
+    )
+    assert not skipped
+    assert holdout == 2025
+    assert folds
+    for fold in folds:
+        assert max(fold.train_years) < fold.calibration_year < fold.validation_year < holdout
+        assert set(fold.training).isdisjoint(fold.calibration)
+        assert set(fold.training).isdisjoint(fold.validation)
+        assert set(fold.calibration).isdisjoint(fold.validation)
+        assert all(dates[index].year != 2026 for index in np.concatenate(
+            [fold.training, fold.calibration, fold.validation]
+        ))
 
 
 def test_interval_half_width_uses_finite_sample_conformal_rank():

@@ -19,7 +19,7 @@ MODEL_FEATURES = [
 
 
 def preprocessor(
-    numeric_columns: list[int], categorical_columns: list[int]
+    numeric_columns: list[int], categorical_columns: list[int], *, dense: bool = False
 ) -> ColumnTransformer:
     return ColumnTransformer(
         [
@@ -35,10 +35,15 @@ def preprocessor(
             ),
             (
                 "categorical",
-                OneHotEncoder(handle_unknown="ignore", min_frequency=10),
+                OneHotEncoder(
+                    handle_unknown="ignore",
+                    min_frequency=10,
+                    sparse_output=not dense,
+                ),
                 categorical_columns,
             ),
-        ]
+        ],
+        sparse_threshold=0 if dense else 0.3,
     )
 
 

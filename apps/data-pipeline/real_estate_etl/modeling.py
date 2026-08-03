@@ -12,18 +12,11 @@ from datetime import date, datetime, timezone
 import numpy as np
 import psycopg
 from sklearn.ensemble import IsolationForest
-from sklearn.metrics import mean_absolute_error
-from sklearn.model_selection import GroupShuffleSplit
 from sklearn.pipeline import Pipeline
 
-from .model_features import MODEL_FEATURES, hedonic_pipeline, preprocessor
-from .model_validation import (
-    NOMINAL_INTERVAL_COVERAGE,
-    interval_half_width,
-    percentile_scores,
-    regression_metrics,
-    temporal_split_indices,
-)
+from .model_features import MODEL_FEATURES, preprocessor
+from .model_selection import SelectionSettings, build_pipeline, optimize_model
+from .model_validation import NOMINAL_INTERVAL_COVERAGE, percentile_scores
 
 RANDOM_SEED = 20260723
 ISOLATION_TRAINING_LIMIT = 50_000
@@ -51,12 +44,20 @@ def _query(kind: str) -> str:
           construction_year::float8,extract(year FROM contract_date)::float8,
           extract(month FROM contract_date)::float8,
           ST_X(location)::float8,ST_Y(location)::float8,
-          property_group,coalesce(municipality_id,0)::text,
-          contract_date
+          property_group,coalesce(municipality_id,0)::text,contract_date,
+          CASE WHEN cadastral_municipality_code IS NOT NULL
+                     AND building_number IS NOT NULL
+               THEN concat(cadastral_municipality_code,':',building_number)
+               ELSE NULL END building_identity
         FROM {table}
         WHERE is_quality_eligible AND {target}>0 AND area>0
           AND contract_date IS NOT NULL
           AND contract_date>=DATE '{minimum_date}'
+          AND NOT EXISTS (
+            SELECT 1 FROM analytics.near_duplicate_candidates duplicate
+            WHERE duplicate.transaction_kind='{kind}'
+              AND duplicate.candidate_transaction_id={table}.transaction_id
+          )
         ORDER BY contract_date,transaction_id
     """
 
@@ -107,6 +108,7 @@ def _refresh_kind(
         dtype=object,
     )
     contract_dates = [row[10] for row in rows]
+    building_identities = np.asarray([row[11] for row in rows], dtype=object)
 
     fitted_predictions = np.empty(len(rows), dtype=float)
     interval_widths = np.empty(len(rows), dtype=float)
@@ -114,88 +116,82 @@ def _refresh_kind(
     property_groups = features[:, 6]
     group_metrics: dict[str, dict[str, object]] = {}
     final_models: dict[str, Pipeline] = {}
-    temporal_actual: list[np.ndarray] = []
-    temporal_estimated: list[np.ndarray] = []
-    temporal_covered: list[np.ndarray] = []
+    selection_settings = SelectionSettings(
+        min_training_rows=int(os.getenv("MODEL_MIN_TRAINING_ROWS", "100")),
+        min_calibration_rows=int(os.getenv("MODEL_MIN_CALIBRATION_ROWS", "30")),
+        min_validation_rows=int(os.getenv("MODEL_MIN_VALIDATION_ROWS", "30")),
+        random_seed=RANDOM_SEED,
+    )
     for group in sorted(set(property_groups)):
         group_indices = np.flatnonzero(property_groups == group)
         group_features = features[group_indices]
         group_target = target[group_indices]
         group_dates = [contract_dates[index] for index in group_indices]
-        training, calibration, test = temporal_split_indices(group_dates)
-        validation_model = hedonic_pipeline()
-        validation_model.fit(group_features[training], group_target[training])
-        calibration_predictions = validation_model.predict(group_features[calibration])
-        group_interval = interval_half_width(
-            group_target[calibration], calibration_predictions
+        robustness_groups = building_identities[group_indices].copy()
+        missing_identity = np.asarray([not value for value in robustness_groups])
+        robustness_groups[missing_identity] = np.asarray(
+            [f"municipality:{value}" for value in group_features[missing_identity, 7]],
+            dtype=object,
         )
-        test_predictions = validation_model.predict(group_features[test])
-        test_covered = (
-            np.abs(group_target[test] - test_predictions) <= group_interval
+        selection = optimize_model(
+            group_features, group_target, group_dates, robustness_groups,
+            selection_settings,
         )
-        temporal_actual.append(group_target[test])
-        temporal_estimated.append(test_predictions)
-        temporal_covered.append(test_covered)
-        residual_scores[group_indices[test]] = percentile_scores(
-            np.abs(group_target[test] - test_predictions)
-        )
-        interval_widths[group_indices] = group_interval
-
-        spatial_metrics: dict[str, object]
-        municipalities = group_features[:, 7]
-        if len(set(municipalities)) >= 2:
-            spatial_split = GroupShuffleSplit(
-                n_splits=1, test_size=0.20, random_state=RANDOM_SEED
-            )
-            spatial_training, spatial_test = next(
-                spatial_split.split(group_features, groups=municipalities)
-            )
-            spatial_model = hedonic_pipeline()
-            spatial_model.fit(
-                group_features[spatial_training], group_target[spatial_training]
-            )
-            spatial_metrics = regression_metrics(
-                group_target[spatial_test],
-                spatial_model.predict(group_features[spatial_test]),
-            )
-            spatial_metrics["held_out_municipalities"] = int(
-                len(set(municipalities[spatial_test]))
-            )
-        else:
-            spatial_metrics = {
-                "rows": 0,
-                "status": "insufficient_distinct_municipalities",
+        if selection["status"] != "selected":
+            # Preserve production coverage for sparse groups without presenting
+            # this fit as validated or calibrated model selection.
+            fallback = build_pipeline({"family": "ridge", "alpha": 2.0}, RANDOM_SEED)
+            production_started = time.monotonic()
+            fallback.fit(group_features, group_target)
+            production_training_seconds = time.monotonic() - production_started
+            production_started = time.monotonic()
+            fallback_predictions = fallback.predict(group_features)
+            production_prediction_seconds = time.monotonic() - production_started
+            fallback_width = float(np.quantile(
+                np.abs(group_target - fallback_predictions), NOMINAL_INTERVAL_COVERAGE
+            ))
+            fitted_predictions[group_indices] = fallback_predictions
+            interval_widths[group_indices] = fallback_width
+            final_models[str(group)] = fallback
+            group_metrics[str(group)] = {
+                **selection,
+                "population_rows": int(len(group_indices)),
+                "production_fallback": {"family": "ridge", "alpha": 2.0},
+                "production": {
+                    "training_rows": int(len(group_indices)),
+                    "training_seconds": production_training_seconds,
+                    "prediction_seconds": production_prediction_seconds,
+                },
+                "interval_status": "uncalibrated_sparse_group_fallback",
             }
-
-        final_model = hedonic_pipeline()
+            continue
+        group_interval = float(selection["interval_half_width_log"])
+        interval_widths[group_indices] = group_interval
+        configuration = selection["selected_configuration"]
+        final_model = build_pipeline(configuration, RANDOM_SEED)
+        production_started = time.monotonic()
         final_model.fit(group_features, group_target)
+        production_training_seconds = time.monotonic() - production_started
         final_models[str(group)] = final_model
+        production_started = time.monotonic()
         fitted_predictions[group_indices] = final_model.predict(group_features)
-        local_median = float(np.median(group_target[training]))
+        production_prediction_seconds = time.monotonic() - production_started
+        holdout_year = selection["final_holdout_year"]
+        holdout_indices = np.flatnonzero(
+            np.asarray([value.year for value in group_dates]) == holdout_year
+        )
+        holdout_prediction = final_model.predict(group_features[holdout_indices])
+        residual_scores[group_indices[holdout_indices]] = percentile_scores(
+            np.abs(group_target[holdout_indices] - holdout_prediction)
+        )
         group_metrics[str(group)] = {
             "population_rows": int(len(group_indices)),
-            "temporal": {
-                **regression_metrics(group_target[test], test_predictions),
-                "train_from": min(group_dates[index] for index in training).isoformat(),
-                "train_to": max(group_dates[index] for index in training).isoformat(),
-                "calibration_from": min(
-                    group_dates[index] for index in calibration
-                ).isoformat(),
-                "calibration_to": max(
-                    group_dates[index] for index in calibration
-                ).isoformat(),
-                "test_from": min(group_dates[index] for index in test).isoformat(),
-                "test_to": max(group_dates[index] for index in test).isoformat(),
-                "empirical_interval_coverage": float(np.mean(test_covered)),
-                "mean_interval_width_log": 2 * group_interval,
-                "local_median_baseline_mae": float(
-                    mean_absolute_error(
-                        np.exp(group_target[test]),
-                        np.full(len(test), np.exp(local_median)),
-                    )
-                ),
+            **selection,
+            "production": {
+                "training_rows": int(len(group_indices)),
+                "training_seconds": production_training_seconds,
+                "prediction_seconds": production_prediction_seconds,
             },
-            "spatial": spatial_metrics,
         }
 
     isolation_features = np.column_stack([target, features])
@@ -222,19 +218,36 @@ def _refresh_kind(
     lower = np.exp(fitted_predictions - interval_widths)
     upper = np.exp(fitted_predictions + interval_widths)
     actual = np.exp(target)
-    validation_actual = np.concatenate(temporal_actual)
-    validation_estimated = np.concatenate(temporal_estimated)
-    coverage = float(np.mean(np.concatenate(temporal_covered)))
+    selected_groups = [value for value in group_metrics.values() if value.get("status") == "selected"]
+    holdout_rows = sum(value["final_holdout"]["holdout_rows"] for value in selected_groups)
+    def weighted_holdout(metric: str) -> float | None:
+        if not holdout_rows:
+            return None
+        return float(sum(
+            value["final_holdout"][metric] * value["final_holdout"]["holdout_rows"]
+            for value in selected_groups
+        ) / holdout_rows)
     metrics: dict[str, object] = {
-        **regression_metrics(validation_actual, validation_estimated),
-        "empirical_interval_coverage": coverage,
+        "rows": holdout_rows,
+        "mae_amount_per_sqm": weighted_holdout("mae_amount_per_sqm"),
+        "median_absolute_percentage_error": weighted_holdout("median_absolute_percentage_error"),
+        "rmse_log": weighted_holdout("rmse_log"),
+        "r2_log": weighted_holdout("r2_log"),
+        "empirical_interval_coverage": weighted_holdout("empirical_interval_coverage"),
         "nominal_interval_coverage": NOMINAL_INTERVAL_COVERAGE,
         "interval_method": "split_conformal_absolute_log_residual",
-        "validation_method": "latest_complete_year_with_prior_year_calibration",
+        "validation_method": "rolling_expanding_temporal_cv_plus_untouched_latest_complete_year",
         "property_groups": group_metrics,
+        "excluded_rows_and_reasons": {
+            "quality_ineligible": "excluded_by_is_quality_eligible",
+            "missing_or_nonpositive_target_or_area": "excluded_before_training",
+            "current_calendar_year": "excluded_from_validation_but_included_in_production_fit",
+            "near_duplicates": "higher_transaction_id_in_each_persisted_candidate_pair_excluded",
+            "strict_land": "default sale view permits only verified-buildable ETN land codes 1 and 2",
+        },
     }
     now = datetime.now(timezone.utc)
-    version = f"{kind}-hedonic-ridge-iforest-v2-{now:%Y%m%dT%H%M%SZ}"
+    version = f"{kind}-selected-hedonic-iforest-v3-{now:%Y%m%dT%H%M%SZ}"
     model_run_id = uuid.uuid4()
 
     with connection.transaction():  # noqa: SIM117 - transaction and cursor have distinct cleanup semantics
@@ -243,23 +256,25 @@ def _refresh_kind(
                 """
                 INSERT INTO analytics.model_runs(
                     id,transaction_kind,model_version,model_type,feature_schema,
-                    training_rows,training_from,training_to,metrics,random_seed
-                ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    training_rows,training_from,training_to,metrics,random_seed,
+                    selection_metadata,final_holdout_metrics
+                ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 """,
                 (
                     model_run_id,
                     kind,
                     version,
-                    "ridge_log_hedonic_plus_isolation_forest",
+                    "selected_log_hedonic_plus_isolation_forest",
                     json.dumps(
                         {
                             "hedonic": MODEL_FEATURES,
+                            "targetTransformation": "natural_log_amount_per_sqm",
                             "isolationForest": ["log_amount_per_sqm", *MODEL_FEATURES],
                             "separateModelPerPropertyGroup": True,
                             "isolationTrainingLimit": ISOLATION_TRAINING_LIMIT,
                             "validation": {
-                                "temporal": "latest_complete_year_with_prior_year_calibration",
-                                "spatial": "municipality_group_shuffle_holdout",
+                                "temporal": "expanding_window_cv_untouched_latest_complete_year",
+                                "grouped": "building_identity_then_municipality_group_holdout",
                                 "interval": "split_conformal_absolute_log_residual",
                                 "nominalCoverage": NOMINAL_INTERVAL_COVERAGE,
                             },
@@ -273,6 +288,23 @@ def _refresh_kind(
                     max(contract_dates),
                     json.dumps(metrics),
                     RANDOM_SEED,
+                    json.dumps(
+                        {
+                            group: {
+                                key: value
+                                for key, value in group_result.items()
+                                if key != "final_holdout"
+                            }
+                            for group, group_result in group_metrics.items()
+                        }
+                    ),
+                    json.dumps(
+                        {
+                            group: group_result.get("final_holdout")
+                            for group, group_result in group_metrics.items()
+                            if group_result.get("status") == "selected"
+                        }
+                    ),
                 ),
             )
             cursor.execute("DROP TABLE IF EXISTS model_scores")

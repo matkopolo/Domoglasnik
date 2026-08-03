@@ -14,9 +14,9 @@ def format_model_report(result: Any) -> str:
         f"Model validation — {kind}",
         f"  version={result.model_version} rows={result.rows:,} "
         f"elapsed={_duration(result.elapsed_seconds)}",
-        "  estimators: hedonic valuation=Ridge regression; "
-        "anomaly signal=Isolation Forest",
-        "  latest-complete-year temporal holdout: "
+        "  estimators: hedonic valuation=temporally selected Ridge regression, Elastic Net, "
+        "or histogram gradient boosting; anomaly signal=separate Isolation Forest",
+        "  untouched latest-complete-year holdout: "
         f"n={int(metrics.get('rows', 0)):,}, "
         f"MAE={_number(metrics.get('mae_amount_per_sqm'))}, "
         f"median APE={_percent(metrics.get('median_absolute_percentage_error'))}, "
@@ -33,20 +33,29 @@ def format_model_report(result: Any) -> str:
         for group, raw in sorted(groups.items()):
             if not isinstance(raw, Mapping):
                 continue
-            temporal = raw.get("temporal", {})
-            spatial = raw.get("spatial", {})
+            temporal = raw.get("final_holdout", raw.get("temporal", {}))
+            spatial = raw.get("grouped_robustness", raw.get("spatial", {}))
             if not isinstance(temporal, Mapping) or not isinstance(spatial, Mapping):
                 continue
             model_mae = _as_float(temporal.get("mae_amount_per_sqm"))
-            baseline_mae = _as_float(temporal.get("local_median_baseline_mae"))
+            baseline = temporal.get("baseline", {})
+            baseline_mae = _as_float(
+                baseline.get("mae_amount_per_sqm")
+                if isinstance(baseline, Mapping) and baseline
+                else temporal.get("local_median_baseline_mae")
+            )
             improvement = (
                 1 - model_mae / baseline_mae
                 if model_mae is not None and baseline_mae and baseline_mae > 0
                 else None
             )
+            held_out_label = (
+                "municipalities" if "held_out_municipalities" in spatial else "groups"
+            )
             spatial_summary = (
-                f"spatial R²={_number(spatial.get('r2_log'), 3)} "
-                f"across {int(spatial.get('held_out_municipalities', 0))} held-out municipalities"
+                f"grouped R²={_number(spatial.get('r2_log'), 3)} "
+                f"across {int(spatial.get('held_out_group_count', spatial.get('held_out_municipalities', 0)))} "
+                f"held-out {held_out_label}"
                 if "r2_log" in spatial
                 else f"spatial={spatial.get('status', 'unavailable')}"
             )

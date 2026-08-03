@@ -345,7 +345,7 @@ func TestStrictLandPopulationIntegration(t *testing.T) {
 		defer cleanup()
 		allLand, strictLand, violations = readPopulation()
 	}
-	if strictLand == 0 || allLand <= strictLand || violations != 0 {
+	if strictLand < 2 || allLand <= strictLand || violations != 0 {
 		t.Fatalf("all=%d strict=%d violations=%d", allLand, strictLand, violations)
 	}
 
@@ -372,14 +372,15 @@ func seedStrictLandPopulationFixture(
 	t *testing.T, ctx context.Context, pool *pgxpool.Pool,
 ) func() {
 	t.Helper()
-	const strictID int64 = 9_223_372_036_854_775_001
-	const nonStrictID int64 = 9_223_372_036_854_775_002
+	const strictCode1ID int64 = 9_223_372_036_854_775_001
+	const strictCode2ID int64 = 9_223_372_036_854_775_002
+	const nonStrictCode3ID int64 = 9_223_372_036_854_775_003
 	const checksum = "9999999999999999999999999999999999999999999999999999999999999998"
 
 	cleanup := func() {
 		if _, err := pool.Exec(ctx,
-			`DELETE FROM transactions WHERE transaction_id IN ($1,$2)`,
-			strictID, nonStrictID); err != nil {
+			`DELETE FROM transactions WHERE transaction_id IN ($1,$2,$3)`,
+			strictCode1ID, strictCode2ID, nonStrictCode3ID); err != nil {
 			t.Errorf("delete land transaction fixtures: %v", err)
 		}
 		if _, err := pool.Exec(ctx,
@@ -400,9 +401,10 @@ func seedStrictLandPopulationFixture(
 		INSERT INTO transactions(
 			transaction_id,contract_date,contract_price,dataset_year,source_file_id
 		) VALUES
-			($1,DATE '2024-01-10',100000,2024,$3),
-			($2,DATE '2024-01-11',80000,2024,$3)`,
-		strictID, nonStrictID, sourceFileID); err != nil {
+			($1,DATE '2024-01-10',100000,2024,$4),
+			($2,DATE '2024-01-11',80000,2024,$4),
+			($3,DATE '2024-01-12',60000,2024,$4)`,
+		strictCode1ID, strictCode2ID, nonStrictCode3ID, sourceFileID); err != nil {
 		t.Fatalf("insert land transaction fixtures: %v", err)
 	}
 	if _, err := pool.Exec(ctx, `
@@ -415,8 +417,10 @@ func seedStrictLandPopulationFixture(
 			($1,DATE '2024-01-10',2024,'land',0,1,1,500,100000,200,
 			 'component_prices',true,ARRAY[]::text[],true),
 			($2,DATE '2024-01-11',2024,'land',0,1,1,400,80000,200,
+			 'component_prices',true,ARRAY[]::text[],true),
+			($3,DATE '2024-01-12',2024,'land',0,1,1,300,60000,200,
 			 'component_prices',true,ARRAY[]::text[],true)`,
-		strictID, nonStrictID); err != nil {
+		strictCode1ID, strictCode2ID, nonStrictCode3ID); err != nil {
 		t.Fatalf("insert sale fact fixtures: %v", err)
 	}
 	if _, err := pool.Exec(ctx, `
@@ -426,8 +430,9 @@ func seedStrictLandPopulationFixture(
 			price_per_sqm,strict_parcel_count,broad_parcel_count,unknown_parcel_count
 		) VALUES
 			($1,1,ARRAY[1],'building_permit',true,true,500,100000,200,1,1,0),
-			($2,1,ARRAY[5],'mixed_or_non_buildable',false,false,400,80000,200,0,0,0)`,
-		strictID, nonStrictID); err != nil {
+			($2,1,ARRAY[2],'serviced_buildable',true,true,400,80000,200,1,1,0),
+			($3,1,ARRAY[3],'strict_mixed',false,true,300,60000,200,0,1,0)`,
+		strictCode1ID, strictCode2ID, nonStrictCode3ID); err != nil {
 		t.Fatalf("insert land fact fixtures: %v", err)
 	}
 	return cleanup
