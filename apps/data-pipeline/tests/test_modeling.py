@@ -10,6 +10,24 @@ from real_estate_etl.model_validation import (
 )
 
 
+def test_model_refresh_marks_first_install_bootstrap_only_after_both_kinds(monkeypatch):
+    from unittest.mock import MagicMock
+
+    from real_estate_etl import modeling
+
+    connection = MagicMock()
+    results = [
+        modeling.ModelResult("sale", 10, "sale-v", 1.0, {}),
+        modeling.ModelResult("rent", 20, "rent-v", 1.0, {}),
+    ]
+    monkeypatch.setattr(modeling, "_refresh_kind", lambda _connection, kind, _workers: results[kind == "rent"])
+
+    assert modeling.refresh_models(connection, workers=2) == results
+    cursor = connection.cursor.return_value.__enter__.return_value
+    assert "UPDATE analytics.pipeline_state" in cursor.execute.call_args.args[0]
+    assert cursor.execute.call_args.args[1] == ("sale-v,rent-v",)
+
+
 def test_percentile_scores_are_bounded_and_ranked():
     scores = percentile_scores(np.asarray([10.0, 1.0, 5.0]))
     assert scores.tolist() == [1.0, 1 / 3, 2 / 3]

@@ -118,8 +118,9 @@ def test_refresh_system_holds_and_releases_advisory_lock(tmp_path: Path):
     assert "pg_advisory_unlock" in connection.execute.call_args_list[-1].args[0]
 
 
-def test_system_refresh_never_trains_models_implicitly(tmp_path: Path, capsys):
+def test_system_refresh_skips_models_after_first_install(tmp_path: Path, capsys):
     connection = MagicMock()
+    connection.execute.return_value.fetchone.return_value = (False,)
     archives = RefreshSummary(1, 2, 0)
     with (
         patch("real_estate_etl.operations.refresh_all_national", return_value=archives),
@@ -139,7 +140,36 @@ def test_system_refresh_never_trains_models_implicitly(tmp_path: Path, capsys):
 
     train.assert_not_called()
     assert result.model_rows == {}
-    assert "Skipped valuation-model training" in capsys.readouterr().out
+    assert "first-install bootstrap is already complete" in capsys.readouterr().out
+
+
+def test_system_refresh_trains_models_once_on_fresh_install(tmp_path: Path, capsys):
+    connection = MagicMock()
+    connection.execute.return_value.fetchone.return_value = (True,)
+    archives = RefreshSummary(1, 2, 0)
+    model_result = MagicMock(
+        transaction_kind="sale", rows=12, model_version="sale-test"
+    )
+    with (
+        patch("real_estate_etl.operations.refresh_all_national", return_value=archives),
+        patch("real_estate_etl.operations.sync_geographies", return_value={"country": 1}),
+        patch("real_estate_etl.operations.refresh_analytics", return_value={"facts": 3}),
+        patch("real_estate_etl.modeling.refresh_models", return_value=[model_result]) as train,
+        patch("real_estate_etl.model_reporting.format_model_report", return_value="report"),
+    ):
+        result = _refresh_system_unlocked(
+            connection,
+            output_dir=tmp_path,
+            end_year=2026,
+            force=False,
+            workers=4,
+            verbose=False,
+            database_url="postgresql://test",
+        )
+
+    train.assert_called_once_with(connection, 4)
+    assert result.model_rows == {"sale": 12}
+    assert "one-time first-install" in capsys.readouterr().out
 
 
 def test_scheduled_refresh_runs_immediately_and_marks_health(tmp_path: Path):

@@ -114,7 +114,7 @@ def refresh_analytics(connection, *, database_url: str) -> dict[str, int]:
 
 
 def reset_market_data(connection) -> None:
-    """Delete imported and derived market data while preserving users and preferences."""
+    """Delete market data while preserving users and installation state."""
     tables = ", ".join(RESET_TABLES)
     with connection.transaction(), connection.cursor() as cursor:
         cursor.execute(f"TRUNCATE TABLE {tables} RESTART IDENTITY CASCADE")
@@ -216,11 +216,32 @@ def _refresh_system_unlocked(
         )
     )
 
-    print(
-        "Skipped valuation-model training; run `make models-refresh` explicitly "
-        "when a new model version is required."
+    bootstrap_required = connection.execute(
+        """
+        SELECT model_bootstrap_completed_at IS NULL
+        FROM analytics.pipeline_state WHERE singleton
+        """
+    ).fetchone()[0]
+    connection.commit()
+    if not bootstrap_required:
+        print(
+            "Skipped valuation-model training; first-install bootstrap is already "
+            "complete. Run `make models-refresh` explicitly for a new model version."
+        )
+        return SystemRefreshResult(archives, geography_counts, {})
+
+    print("Starting one-time first-install valuation-model training.", flush=True)
+    from .model_reporting import format_model_report
+    from .modeling import refresh_models
+
+    model_results = refresh_models(connection, workers)
+    for result in model_results:
+        print(format_model_report(result))
+    return SystemRefreshResult(
+        archives,
+        geography_counts,
+        {result.transaction_kind: result.rows for result in model_results},
     )
-    return SystemRefreshResult(archives, geography_counts, {})
 
 
 def scheduled_refresh_loop(

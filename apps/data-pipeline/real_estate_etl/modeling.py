@@ -70,6 +70,16 @@ def refresh_models(
     results = []
     for kind in ("sale", "rent"):
         results.append(_refresh_kind(connection, kind, workers))
+    with connection.transaction(), connection.cursor() as cursor:
+        cursor.execute(
+            """
+            UPDATE analytics.pipeline_state
+            SET model_bootstrap_completed_at=now(),
+                model_bootstrap_version=%s
+            WHERE singleton
+            """,
+            (",".join(result.model_version for result in results),),
+        )
     return results
 
 
