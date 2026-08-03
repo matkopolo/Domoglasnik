@@ -80,9 +80,13 @@ button:focus-visible, a:focus-visible, select:focus-visible, [tabindex]:focus-vi
 @keyframes spin { to { transform: rotate(360deg); } }
 
 main { width: min(1480px, calc(100% - 48px)); margin: 0 auto; padding: 25px 0 30px; }
-.page-intro { display: flex; align-items: end; justify-content: space-between; margin-bottom: 18px; }
+.page-intro { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 18px; }
 .page-intro h1 { font-size: clamp(25px, 2vw, 32px); margin: 0 0 4px; letter-spacing: -.03em; }
 .page-intro p { color: var(--muted); margin: 0; }
+.page-eyebrow { display: block; margin-bottom: 5px; color: var(--green); font-size: 10px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+.primary-action { display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto; min-height: 42px; padding: 0 15px; border: 1px solid var(--green); border-radius: var(--radius); background: var(--green); color: #fff; font-weight: 700; cursor: pointer; box-shadow: 0 7px 16px rgba(30, 91, 58, .16); }
+.primary-action:hover { background: #164b30; }
+.primary-action:focus-visible { outline: 3px solid rgba(30, 91, 58, .22); outline-offset: 2px; }
 .filter-bar {
   display: grid;
   grid-template-columns: auto minmax(220px, 1.15fr) minmax(180px, .9fr) minmax(220px, 1fr) auto;
@@ -109,12 +113,14 @@ main { width: min(1480px, calc(100% - 48px)); margin: 0 auto; padding: 25px 0 30
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 0 14px;
+  position: relative;
+  padding: 14px 14px 3px;
   color: #37443c;
   background: #fff;
   border: 1px solid var(--line);
   border-radius: var(--radius);
 }
+.filter-caption { position: absolute; top: 4px; left: 41px; color: #748078; font-size: 8px; font-weight: 750; letter-spacing: .045em; line-height: 1; text-transform: uppercase; pointer-events: none; }
 .filter-field select { width: 100%; border: 0; color: inherit; background: transparent; outline: 0; cursor: pointer; }
 .area-field input { width: 72px; min-width: 0; border: 0; outline: 0; background: transparent; color: inherit; }
 .filter-field svg, .more-filters svg { color: #59655e; flex: 0 0 auto; }
@@ -138,7 +144,7 @@ main { width: min(1480px, calc(100% - 48px)); margin: 0 auto; padding: 25px 0 30
 .map-heading { border-bottom: 0; position: absolute; z-index: 20; background: rgba(255, 255, 255, .9); left: 12px; top: 12px; right: 12px; min-height: 55px; border-radius: 6px; box-shadow: var(--shadow); }
 .map-panel { position: relative; overflow: hidden; min-height: 610px; }
 .primary-grid.contextual .map-panel { height: 610px; min-height: 0; }
-.real-map-panel { background: #e8eee8; }
+.real-map-panel { background: #e8eee8; scroll-margin-top: 145px; }
 .maplibre-canvas { width: 100%; min-height: 610px; height: 100%; }
 .maplibre-canvas .maplibregl-canvas { outline: 0; }
 .maplibre-canvas .maplibregl-ctrl-bottom-left { left: 10px; bottom: 10px; }
@@ -195,7 +201,7 @@ main { width: min(1480px, calc(100% - 48px)); margin: 0 auto; padding: 25px 0 30
 .building-search {
   position: absolute;
   z-index: 24;
-  top: 78px;
+  top: 80px;
   left: 15px;
   width: min(300px, calc(100% - 30px));
 }
@@ -676,6 +682,9 @@ button.outlier-row { cursor: pointer; }
 .legal-footer p { margin: 5px 0 0; max-width: 1050px; }
 .legal-footer a { color: var(--green); }
 .legal-footer nav { display: grid; align-content: start; justify-items: end; gap: 5px; white-space: nowrap; }
+.legal-footer details { margin-top: 6px; }
+.legal-footer summary { width: fit-content; color: #4f6256; font-weight: 650; cursor: pointer; }
+.legal-footer details[open] summary { margin-bottom: 4px; }
 .provenance-label { display: inline-flex; width: fit-content; margin-bottom: 4px; padding: 2px 6px; border-radius: 999px; font-size: 8px; font-weight: 750; letter-spacing: .05em; text-transform: uppercase; }
 .provenance-label.source { color: #365a44; background: #e7f0e9; }
 .provenance-label.calculated { color: #86482f; background: #f8e8e1; }
@@ -702,7 +711,7 @@ button.outlier-row { cursor: pointer; }
   .topbar nav, .updated { display: none; }
   .mobile-menu { display: block; position: absolute; left: 14px; }
   main { width: 100%; padding: 14px 12px 24px; }
-  .page-intro { margin: 4px 0 14px; }
+  .page-intro { align-items: flex-start; flex-direction: column; gap: 10px; margin: 4px 0 14px; }
   .page-intro h1 { font-size: 22px; }
   .page-intro p { font-size: 12px; }
   .filter-bar {
@@ -720,7 +729,8 @@ button.outlier-row { cursor: pointer; }
   .mode-switch { width: 150px; }
   .mode-switch button { flex: 1; min-height: 39px; }
   .mode-switch button { min-width: 0; }
-  .filter-field { width: 165px; min-height: 40px; padding: 0 10px; }
+  .filter-field { width: 165px; min-height: 44px; padding: 14px 10px 2px; }
+  .filter-caption { left: 36px; top: 4px; }
   .date-field { width: 190px; }
   .area-field { width: 205px; }
   .more-filters { min-height: 40px; }
@@ -732,6 +742,7 @@ button.outlier-row { cursor: pointer; }
   .primary-grid.contextual .context-column { height: auto; overflow: visible; padding-right: 0; }
   .map-panel, .map-canvas, .map-canvas svg, .maplibre-canvas { min-height: 360px; }
   .map-heading { left: 8px; right: 8px; top: 8px; min-height: 50px; }
+  .real-map-panel { scroll-margin-top: 120px; }
   .map-heading p, .map-key span:last-child { display: none; }
   .map-style-control { top: 68px; right: 9px; }
   .map-style-control button { padding: 0 9px; }

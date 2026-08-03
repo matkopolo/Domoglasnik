@@ -20,7 +20,7 @@ import {
   loadStatisticalOutliers,
   loadTransactionExtremes,
 } from "@/lib/api";
-import { decimal, euro, suppressionReasonLabel } from "@/lib/display-values";
+import { decimal, euro, propertyGroupLabel, suppressionReasonLabel } from "@/lib/display-values";
 import type {
   AnomalySummary,
   GeographyComparison,
@@ -407,9 +407,9 @@ export function AnalyticsWorkspace({
   return (
     <section className={`analytics-workspace ${loading ? "loading" : ""}`} aria-labelledby="analytics-title">
       <header className="analytics-header">
-        <div><span>Analitični laboratorij</span><h2 id="analytics-title">Globinski vpogled v trg</h2>
-          <p>Statistika, modeli in diagnostični signali za aktivni filter.</p></div>
-        <div className="analytics-context">{mode === "sale" ? "Prodaja" : "Najem"} · {propertyGroup} · {years.from}–{years.to}</div>
+        <div><span>Podrobna analiza</span><h2 id="analytics-title">Podrobna slika izbranega trga</h2>
+          <p>Gibanje cen, primerjava območij, modeli in statistična odstopanja.</p></div>
+        <div className="analytics-context">{mode === "sale" ? "Prodaja" : "Najem"} · {propertyGroupLabel(propertyGroup)} · {years.from}–{years.to}</div>
       </header>
       <nav className="analytics-tabs" aria-label="Analitični pogledi">
         {tabs.map(({ id, label, icon: Icon }) => <button type="button" key={id}

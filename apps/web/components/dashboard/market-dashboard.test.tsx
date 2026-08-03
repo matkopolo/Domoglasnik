@@ -53,6 +53,7 @@ vi.mock("./slovenia-map", () => ({
       kind: "geography"; id: number; level: "statistical_region"; name: string;
     } | { kind: "transaction"; mode: "sale"; id: number }) => void;
   }) => <div role="application" aria-label="Interaktivni zemljevid nepremičninskih poslov v Sloveniji">
+    <input id="building-address-search" aria-label="Naslov stavbe" />
     <button type="button" onClick={() => onContextChange({
       kind: "geography", id: 12, level: "statistical_region", name: "Podravska",
     })}>Izberi Podravsko</button>
@@ -75,7 +76,7 @@ describe("MarketDashboard", () => {
 
   it("renders the map-first market overview", async () => {
     render(<MarketDashboard />);
-    expect(screen.getByRole("heading", { name: "Analiza nepremičninskega trga" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Je cena nepremičnine realna?" })).toBeInTheDocument();
     expect(screen.getByRole("application", { name: "Interaktivni zemljevid nepremičninskih poslov v Sloveniji" })).toBeInTheDocument();
     const metric = await screen.findByText("Srednja cena / m²");
     expect(metric.nextElementSibling).toHaveTextContent("2596");
@@ -86,6 +87,14 @@ describe("MarketDashboard", () => {
       "href",
       "https://creativecommons.org/licenses/by/4.0/deed.sl",
     );
+  });
+
+  it("takes the buyer directly to address search", async () => {
+    render(<MarketDashboard />);
+    fireEvent.click(screen.getByRole("button", { name: /Preverite konkreten naslov/ }));
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "Naslov stavbe" })).toHaveFocus(), {
+      timeout: 600,
+    });
   });
 
   it("switches to rental metrics", async () => {

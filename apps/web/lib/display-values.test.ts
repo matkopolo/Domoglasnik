@@ -4,6 +4,7 @@ import {
   meaningfulNumber,
   meaningfulPosition,
   meaningfulText,
+  propertyGroupLabel,
   qualityReasonLabel,
   suppressionReasonLabel,
   visibleFields,
@@ -17,6 +18,15 @@ describe("property display policy", () => {
 
   it("preserves meaningful zero values", () => {
     expect(meaningfulNumber(0)).toBe(0);
+  });
+
+  it.each([
+    ["apartment", "stanovanja"],
+    ["house", "hiše"],
+    ["land", "zemljišča"],
+    ["commercial", "poslovni prostori"],
+  ])("presents property group %s in Slovenian", (group, label) => {
+    expect(propertyGroupLabel(group)).toBe(label);
   });
 
   it("omits a generic position but preserves an actual position", () => {

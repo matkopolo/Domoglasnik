@@ -397,7 +397,7 @@ export function SloveniaMap({
   return (
     <section className="map-panel real-map-panel" aria-labelledby="map-title">
       <header className="panel-heading map-heading">
-        <div><h2 id="map-title">Trg po Sloveniji</h2><p>Izberite območje, stavbo ali posel</p></div>
+        <div><h2 id="map-title">Poiščite lokacijo ali raziščite trg</h2></div>
         <div className="map-key"><span className={`legend-dot ${mode}`} />
           <span>{mapStatus === "loading" ? "Osvežujem …"
             : mapStatus === "offline" ? "Zemljevid ni dosegljiv"
@@ -408,10 +408,10 @@ export function SloveniaMap({
       {locationNotice && <div className="map-location-notice" role="status">{locationNotice}</div>}
       <div className="building-search">
         <label><Search size={16} /><span className="sr-only">Poišči stavbo</span>
-          <input value={searchQuery} onChange={(event) => {
+          <input id="building-address-search" aria-label="Naslov stavbe" value={searchQuery} onChange={(event) => {
             setSearchQuery(event.target.value);
             if (event.target.value.trim().length < 3) setSearchResults([]);
-          }} placeholder="Ulica, hišna številka ali kraj" />
+          }} placeholder="Vnesite naslov" />
           {searchQuery && <button type="button" aria-label="Počisti iskanje"
             onClick={() => { setSearchQuery(""); setSearchResults([]); }}><X size={15} /></button>}
         </label>

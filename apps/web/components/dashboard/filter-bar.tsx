@@ -36,8 +36,9 @@ export function FilterBar(props: FilterBarProps) {
       </div>
       <label className="filter-field">
         <MapPin size={17} />
-        <span className="sr-only">Območje</span>
+        <span className="filter-caption">Območje</span>
         <select
+          aria-label="Območje"
           value={props.geographyId ?? ""}
           onChange={(event) => props.onGeographyChange(event.target.value ? Number(event.target.value) : undefined)}
         >
@@ -47,7 +48,7 @@ export function FilterBar(props: FilterBarProps) {
       </label>
       <label className="filter-field date-field">
         <CalendarDays size={17} />
-        <span className="sr-only">Od leta</span>
+        <span className="filter-caption">Obdobje</span>
         <select
           aria-label="Od leta"
           value={props.years.from}
@@ -81,8 +82,8 @@ export function FilterBar(props: FilterBarProps) {
       </label>
       <label className="filter-field">
         <Building2 size={17} />
-        <span className="sr-only">Vrsta nepremičnine</span>
-        <select value={props.propertyGroup} onChange={(event) => props.onPropertyChange(event.target.value as PropertyGroup)}>
+        <span className="filter-caption">Nepremičnina</span>
+        <select aria-label="Vrsta nepremičnine" value={props.propertyGroup} onChange={(event) => props.onPropertyChange(event.target.value as PropertyGroup)}>
           {properties.filter((item) => props.mode === "sale" || item.value !== "land").map((item) => (
             <option key={item.value} value={item.value}>{item.label}</option>
           ))}
@@ -90,7 +91,7 @@ export function FilterBar(props: FilterBarProps) {
       </label>
       <label className="filter-field area-field">
         <SlidersHorizontal size={17} />
-        <span className="sr-only">Površina od</span>
+        <span className="filter-caption">Površina</span>
         <input aria-label="Površina od" type="number" min="1" step="1" placeholder="Od m²"
           value={props.area.min ?? ""}
           onChange={(event) => props.onAreaChange({

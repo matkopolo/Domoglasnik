@@ -18,6 +18,7 @@ import {
   euro,
   meaningfulPosition,
   meaningfulText,
+  propertyGroupLabel,
   qualityReasonLabel,
   reliabilityLabel,
   visibleFields,
@@ -511,7 +512,7 @@ export function ContextPanel({
           </div>
           <p>
             Prikazane statistike, grafi in zemljevid uporabljajo isti filter:
-            {` ${propertyGroup}, ${years.from}–${years.to}.`}
+            {` ${propertyGroupLabel(propertyGroup)}, ${years.from}–${years.to}.`}
           </p>
           <section className="context-section">
             <h3>Podrejena območja</h3>

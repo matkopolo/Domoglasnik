@@ -33,6 +33,17 @@ export const decimal = new Intl.NumberFormat("sl-SI", {
   maximumFractionDigits: 2,
 });
 
+export function propertyGroupLabel(value: string) {
+  return {
+    apartment: "stanovanja",
+    house: "hiše",
+    land: "zemljišča",
+    commercial: "poslovni prostori",
+    garage: "garaže",
+    room: "sobe",
+  }[value] ?? "nepremičnine";
+}
+
 export function reliabilityLabel(value: string) {
   return {
     moderate: "srednja",

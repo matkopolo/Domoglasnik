@@ -1,6 +1,6 @@
 "use client";
 
-import { Menu, RefreshCw } from "lucide-react";
+import { ArrowRight, Menu, RefreshCw, SearchCheck } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { loadBuildingStatistics, loadDashboard, loadTransaction } from "@/lib/api";
 import type {
@@ -261,9 +261,16 @@ export function MarketDashboard() {
       </header>
       <main id="overview">
         <div className="page-intro">
-          <div><h1>Analiza nepremičninskega trga</h1>
-            <p>Primerljive prodaje in najemi po Sloveniji, območjih, stavbah in poslih.</p>
+          <div><span className="page-eyebrow">Dejansko sklenjeni posli · GURS ETN</span>
+            <h1>Je cena nepremičnine realna?</h1>
+            <p>Preverite trg, poiščite stavbo in primerjajte prodaje ali najeme v njeni okolici.</p>
           </div>
+          <button type="button" className="primary-action" onClick={() => {
+            document.querySelector<HTMLElement>(".map-panel")?.scrollIntoView({
+              behavior: "smooth", block: "start",
+            });
+            window.setTimeout(() => document.querySelector<HTMLInputElement>("#building-address-search")?.focus(), 300);
+          }}><SearchCheck size={17} /> Preverite konkreten naslov <ArrowRight size={15} /></button>
         </div>
         {error && (
           <div className="dashboard-error" role="alert">
@@ -341,22 +348,24 @@ export function MarketDashboard() {
                 CC BY 4.0
               </a>.
             </p>
-            <p>
-              GURS te aplikacije ne podpira, ne potrjuje in ne odgovarja za izračune ali
-              interpretacijo. Podatki GURS, izračuni aplikacije in statistične modelske ocene
-              so v uporabniškem vmesniku označeni ločeno.
-            </p>
-            <p>
-              Rezultati so informativni in niso uradna ali certificirana cenitev. Niso namenjeni
-              odločanju o zavarovanem posojanju, sodnim, davčnim ali računovodskim postopkom brez
-              presoje ustrezno usposobljenega strokovnjaka. Manjkajoči, napačno poročani ali
-              netipični posli lahko vplivajo na rezultate.
-            </p>
-            <p>
-              Javni ETN izvlečki ne vsebujejo imen pogodbenih strank. Aplikacija ne uvaža ali
-              hrani prostih besedilnih opomb iz ETN, s čimer zmanjšuje tveganje nenamerne hrambe
-              osebnih podatkov.
-            </p>
+            <p>Rezultati so informativni in niso uradna ali certificirana cenitev.</p>
+            <details>
+              <summary>Več o odgovornosti in zasebnosti</summary>
+              <p>
+                GURS te aplikacije ne podpira, ne potrjuje in ne odgovarja za izračune ali
+                interpretacijo. Podatki GURS, izračuni aplikacije in statistične modelske ocene
+                so v uporabniškem vmesniku označeni ločeno.
+              </p>
+              <p>
+                Rezultati niso namenjeni odločanju o zavarovanem posojanju, sodnim, davčnim ali
+                računovodskim postopkom brez presoje ustrezno usposobljenega strokovnjaka.
+                Manjkajoči, napačno poročani ali netipični posli lahko vplivajo na rezultate.
+              </p>
+              <p>
+                Javni ETN izvlečki ne vsebujejo imen pogodbenih strank. Aplikacija ne uvaža ali
+                hrani prostih besedilnih opomb iz ETN.
+              </p>
+            </details>
           </div>
           <nav aria-label="Pravne in metodološke informacije">
             <a href="https://www.e-prostor.gov.si/dostopi/javni-dostop/" target="_blank" rel="noreferrer">
