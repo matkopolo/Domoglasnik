@@ -130,7 +130,7 @@ def refresh_system(
     verbose: bool,
     database_url: str,
 ) -> SystemRefreshResult:
-    """Run one mutually exclusive source → geography → analytics → model refresh."""
+    """Run source → geography → analytics; model training is explicitly opt-in."""
     acquired = connection.execute(
         "SELECT pg_try_advisory_lock(%s)", (REFRESH_LOCK_ID,)
     ).fetchone()[0]
@@ -216,14 +216,11 @@ def _refresh_system_unlocked(
         )
     )
 
-    from .model_reporting import format_model_report
-    from .modeling import refresh_models
-
-    model_results = refresh_models(connection, workers)
-    model_rows = {result.transaction_kind: result.rows for result in model_results}
-    for result in model_results:
-        print(format_model_report(result))
-    return SystemRefreshResult(archives, geography_counts, model_rows)
+    print(
+        "Skipped valuation-model training; run `make models-refresh` explicitly "
+        "when a new model version is required."
+    )
+    return SystemRefreshResult(archives, geography_counts, {})
 
 
 def scheduled_refresh_loop(

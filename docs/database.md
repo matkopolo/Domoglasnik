@@ -77,11 +77,16 @@ GURS ZIP/CSV
 The worker takes a PostgreSQL advisory lock, imports each archive
 transactionally, then refreshes derived objects in dependency order. A failed
 step does not expose a partially imported archive. The normal scheduled run is
-every 14 days and also rechecks the current year for revisions.
+every 14 days and also rechecks the current year for revisions. It does not
+train valuation models; training is available only through the explicit
+`make models-refresh` command.
 
 `make reset-and-repopulate` truncates market-source and derived analytical
 tables with explicit confirmation, then rebuilds them. Users and saved
-preferences are preserved. Docker volumes survive normal container rebuilds.
+preferences are preserved. Valuation runs and predictions are removed and are
+not automatically recreated. Docker volumes survive normal container rebuilds;
+deleting the database volume also deletes persisted model output, which can be
+recovered only from a database backup or by explicit model retraining.
 
 The local PostgreSQL container is tuned within its 4GB limit for full-table
 analytical rebuilds. Independent sale and rental chains run concurrently on two
@@ -110,7 +115,7 @@ truncate, import, migrate, or refresh analytical tables.
 make db-up                 # start PostGIS and apply migrations
 make db-migrate            # reapply incremental migrations
 make analytics-refresh     # deterministic database-derived objects
-make models-refresh        # offline model outputs and hedonic index vintage
+make models-refresh        # the only command that trains valuation models
 make reset-and-repopulate  # destructive market-data rebuild, preserves users
 ```
 

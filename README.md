@@ -39,7 +39,8 @@ Named database and pipeline volumes are retained by these commands.
 
 On the first run, `pipeline-worker` downloads and imports the national GURS
 history, synchronizes geographic boundaries, refreshes analytics, and builds
-the valuation/anomaly models. The API waits for that first successful refresh
+the deterministic analytical tables. It does not train valuation/anomaly
+models. The API waits for that first successful refresh
 before becoming ready, then the web application starts at
 <http://localhost:3000>. Follow progress with:
 
@@ -204,8 +205,8 @@ Refresh the official GURS RPE statistical-region, municipality, city-district, l
 docker compose run --rm pipeline-worker sync-geographies
 ```
 
-The scheduled/full worker already performs downstream refreshes. For targeted
-development, rebuild only the persisted analytics or models with:
+The scheduled/full worker refreshes imported and deterministic analytical data,
+but never trains valuation models. Model training is deliberately opt-in:
 
 ```bash
 make analytics-refresh
@@ -219,11 +220,10 @@ and elapsed time. The independent sale and rental chains use two PostgreSQL
 connections; shared analytical stages start after both finish. On the documented
 617,679-sale/456,448-rental development dataset, the optimized analytics phase
 measured about 4m46s; hardware and Docker resource allocation will change that
-result. `models-refresh`
-separately evaluates hedonic models
-on the latest complete year and municipality holdouts, calibrates prediction
-ranges on the preceding year, trains Isolation Forest models, and appends a
-new hedonic-index vintage.
+result. Only `models-refresh` evaluates and selects hedonic models, calibrates
+prediction ranges, trains Isolation Forest models, persists predictions, and
+appends a new hedonic-index vintage. Normal startup, the 14-day scheduled run,
+`refresh-system`, and `reset-and-repopulate` never invoke it.
 
 Model refresh logs report temporal holdout MAE, median absolute percentage
 error, log RMSE/R², observed coverage of the 90% prediction interval,
@@ -272,9 +272,9 @@ complete refresh immediately and then every **14 days**:
 4. synchronize current GURS RPE geography;
 5. refresh facts, strict-land populations, outliers, anomaly signals,
    duplicates, missingness profiles, and matched-pair indices;
-6. refresh versioned hedonic models, intervals, Isolation Forest scores, and
-   hedonic indices;
-7. mark the worker healthy only after a complete successful run.
+6. leave versioned hedonic models, intervals, Isolation Forest scores, and
+   hedonic indices unchanged until an explicit `make models-refresh`;
+7. mark the worker healthy only after the non-model refresh succeeds.
 
 Failures retain the last committed database state and retry after one hour.
 Override the interval or retry delay in `.env`:
@@ -299,8 +299,11 @@ docker compose run --rm pipeline-worker reset-and-repopulate \
 
 The reset preserves application users and saved preferences. The confirmation
 flag is mandatory. Cached valid archives are reused, while the current year is
-retrieved again. Equivalent convenience commands are `make start`,
-`make refresh-system`, and `make reset-and-repopulate`.
+retrieved again. It removes persisted valuation outputs with the other derived
+market data but does not retrain them; restore a database backup or explicitly
+run `make models-refresh` when valuation output is required. Equivalent
+convenience commands are `make start`, `make refresh-system`, and
+`make reset-and-repopulate`.
 
 ## Start the web dashboard
 

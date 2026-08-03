@@ -12,6 +12,7 @@ from real_estate_etl.operations import (
     SALE_ANALYTICS_REFRESH_FUNCTIONS,
     SHARED_ANALYTICS_REFRESH_FUNCTIONS,
     SystemRefreshResult,
+    _refresh_system_unlocked,
     refresh_analytics,
     refresh_system,
     reset_market_data,
@@ -115,6 +116,30 @@ def test_refresh_system_holds_and_releases_advisory_lock(tmp_path: Path):
     run.assert_called_once()
     assert "pg_try_advisory_lock" in connection.execute.call_args_list[0].args[0]
     assert "pg_advisory_unlock" in connection.execute.call_args_list[-1].args[0]
+
+
+def test_system_refresh_never_trains_models_implicitly(tmp_path: Path, capsys):
+    connection = MagicMock()
+    archives = RefreshSummary(1, 2, 0)
+    with (
+        patch("real_estate_etl.operations.refresh_all_national", return_value=archives),
+        patch("real_estate_etl.operations.sync_geographies", return_value={"country": 1}),
+        patch("real_estate_etl.operations.refresh_analytics", return_value={"facts": 3}),
+        patch("real_estate_etl.modeling.refresh_models") as train,
+    ):
+        result = _refresh_system_unlocked(
+            connection,
+            output_dir=tmp_path,
+            end_year=2026,
+            force=False,
+            workers=4,
+            verbose=False,
+            database_url="postgresql://test",
+        )
+
+    train.assert_not_called()
+    assert result.model_rows == {}
+    assert "Skipped valuation-model training" in capsys.readouterr().out
 
 
 def test_scheduled_refresh_runs_immediately_and_marks_health(tmp_path: Path):
