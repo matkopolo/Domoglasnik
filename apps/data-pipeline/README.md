@@ -87,6 +87,18 @@ Follow model training and validation output with:
 docker compose logs -f pipeline-worker
 ```
 
+For each sale/rental property group, model selection evaluates 20 candidate
+configurations—10 Ridge, 6 Elastic Net, and 4 histogram-gradient-boosting—on
+every valid expanding temporal fold. It then performs one final-holdout fit,
+one building-first grouped-robustness fit, and one full-population production
+fit. A group with 16 folds therefore performs approximately
+`20 × 16 + 3 = 323` supervised fits. After all groups for sales or rentals are
+finished, one separate Isolation Forest is trained for that complete
+transaction-kind population. The detailed execution sequence, split rules,
+fit-count formula, and persistence behavior are documented under “End-to-end
+training execution and fit count” in
+[../../docs/statistical-methodology.md](../../docs/statistical-methodology.md).
+
 Each completed sale/rent model prints overall temporal-holdout metrics,
 90% interval coverage, property-group diagnostics, comparison with a simple
 training-median baseline, building-first grouped-holdout performance, and

@@ -308,6 +308,75 @@ Primary selection uses row-weighted future-period MAE. Deterministic
 tie-breakers are P90 absolute percentage error, absolute signed bias, lower
 operational complexity, and then the lexical configuration order.
 
+### End-to-end training execution and fit count
+
+One explicit `refresh-models` run processes sales and rentals separately. For
+each populated property group within that transaction kind, it performs the
+following sequence:
+
+1. Construct leakage-safe expanding temporal folds and reserve the latest
+   complete calendar year as an untouched final holdout.
+2. Evaluate 20 candidate configurations:
+   - 10 Ridge configurations;
+   - 6 Elastic Net configurations;
+   - 4 histogram-gradient-boosting configurations.
+3. Fit every candidate independently on every valid temporal fold. Each fit
+   owns preprocessing learned only from that fold's training rows. The
+   following year calibrates its conformal interval, and the next year measures
+   future-period validation error.
+4. Aggregate fold metrics and select the configuration without consulting the
+   final holdout.
+5. Fit the selected configuration on the pre-holdout training population,
+   calibrate on the preceding complete year, and evaluate exactly once on the
+   untouched final holdout.
+6. Fit the selected configuration once more on a deterministic building-first
+   grouped split to measure transfer to unseen buildings or fallback
+   municipalities.
+7. Fit the approved production configuration on every eligible row in that
+   property group, including the latest holdout and incomplete current year.
+8. Generate production predictions, conformal ranges, residual signals, and
+   the property group's constant-quality hedonic index.
+
+If a property group has `F` valid temporal folds, the approximate supervised
+fit count is:
+
+```text
+20 × F candidate/fold fits
++ 1 final-holdout fit
++ 1 grouped-robustness fit
++ 1 full-population production fit
+= 20F + 3 supervised fits
+```
+
+For an apartment population with 16 valid temporal folds, that is:
+
+```text
+20 × 16 = 320 candidate/fold fits
++ 1 final-holdout fit
++ 1 grouped-robustness fit
++ 1 production fit
+= approximately 323 supervised fits
+```
+
+The actual total changes by property group because available years and minimum
+row thresholds determine the number of valid folds. Skipped folds do not
+produce a fit and retain an explicit reason. A sparse group that cannot form
+valid temporal selection uses one uncalibrated production fallback instead of
+claiming cross-validated selection.
+
+After every property group for one transaction kind is complete, the worker
+trains one separate Isolation Forest across the combined eligible sale or
+rental population. Its deterministic training sample is capped at 50,000 rows;
+the resulting unusualness scores are converted to percentiles separately
+within each property group. Isolation Forest is not one of the 20 supervised
+candidates and is not selected using valuation error.
+
+Finally, the worker persists one versioned model run, all selected production
+predictions, anomaly signals, interval metadata, candidate/fold metrics,
+holdout metrics, grouped robustness, and hedonic-index vintages. Validation
+predictions and full-population production predictions remain conceptually
+separate.
+
 Isolation Forest is a separate unsupervised tree ensemble. It identifies
 unusual combinations for the anomaly-review queue; it does not produce the
 valuation and cannot remove a transaction by itself.
