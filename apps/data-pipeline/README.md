@@ -1,9 +1,17 @@
 # Data pipeline worker
 
 Detailed definitions for quality populations, robust cohort outliers,
-duplicate signals, hedonic Ridge models, temporal/spatial validation,
-split-conformal ranges, Isolation Forest, and market indices are in
+duplicate signals, valuation-model selection, rolling temporal validation,
+building/municipality robustness, split-conformal ranges, Isolation Forest,
+and market indices are in
 [../../docs/statistical-methodology.md](../../docs/statistical-methodology.md).
+
+In particular, the methodology explains how many rows are eligible, how
+training/calibration/validation years are formed, why models are national per
+transaction kind and property group rather than per region, and where exact
+per-run counts and selected parameters are persisted. Measured results from the
+representative optimization run are in
+[../../docs/model-optimization-report.md](../../docs/model-optimization-report.md).
 
 The production-style pipeline runs inside Docker. The image contains Python
 3.11, the GURS downloader/importer, psycopg, NumPy, SciPy, and scikit-learn.
@@ -81,8 +89,9 @@ docker compose logs -f pipeline-worker
 
 Each completed sale/rent model prints overall temporal-holdout metrics,
 90% interval coverage, property-group diagnostics, comparison with a simple
-local-median baseline, municipality-holdout performance, and warnings for low
-coverage or negative R². To rerun only model training:
+training-median baseline, building-first grouped-holdout performance, and
+warnings for materially low overall interval coverage. To rerun only model
+training:
 
 ```bash
 docker compose run --rm pipeline-worker refresh-models --workers 6

@@ -62,7 +62,10 @@ Common filters include contract dates, property group, geography, land scope,
 and inclusive minimum/maximum area. Map requests additionally require a valid
 WGS84 bounding box and enforce result limits.
 
-Transaction context uses one hierarchy for every sale and rental. It first
+Transaction context is returned by
+`GET /api/v1/sales/transactions/{id}/context` and
+`GET /api/v1/rentals/transactions/{id}/context`. It uses one hierarchy for
+every sale and rental. It first
 returns quality-eligible transactions from the same building: same year and
 area within ±15%, adjacent year within ±15%, then other same-year units. A
 nearby benchmark is selected only from units within ±15% area and ±10
@@ -73,11 +76,17 @@ deliberately broader market context. Each aggregate response exposes the
 matching profile and tolerances that produced it. The model estimate remains a
 separate final reference rather than being mixed into observed comparables.
 The same response adds an adaptive current-market estimate based on weighted
-current-year transactions. Its search targets at least 50 comparable
-transactions, expanding only as needed from 1 km to a 20 km ceiling and then
-including the previous calendar year when the incomplete current year remains
-too thin. It returns the range, central value, sample size, actual radius,
-physical tolerances, municipality adjustment, confidence and warnings.
+latest-market transactions. This is a backend comparable calculation, not the
+trained model returned in the separate `valuation` field. It first uses the
+current calendar year, expanding through 1, 2.5, 5, 10, and 20 km and from
+strict to wider area/building-age tolerances. Only if no current-year cohort
+reaches the 50-comparable target does it combine the previous and current
+calendar years. It is not a ±1-year window around the subject transaction.
+The result returns weighted p25/median/p75 values, sample size, actual radius,
+physical tolerances, municipality adjustment, confidence and explicit
+fallback warnings. The complete search order, weights, formulas, year example,
+and limitations are documented under “Current-market estimate” in
+`docs/statistical-methodology.md`.
 
 See `docs/statistical-methodology.md` for equations, cohorts, model validation,
 uncertainty, and known limitations.

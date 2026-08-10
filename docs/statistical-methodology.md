@@ -108,43 +108,129 @@ two agreements as economically equivalent.
 
 ## Current-market estimate
 
-The current-market estimate is an additional reference and does not replace
-the historical transaction comparisons. For every sale or rental with usable
-area and coordinates, the API searches representative transactions from the
-current calendar year using progressively larger radii of 1 km, 2.5 km, 5 km,
-10 km, and 20 km. It first requires area within ±15% and construction year
-within ±10 years. If that strict profile cannot supply 50 observations within
-20 km, it widens to ±25% area and ±15 construction years and repeats the
-progressive-radius search. If the incomplete current calendar year still
-cannot supply 50 observations, the same hierarchy is repeated over the current
-and previous calendar years. Search expansion stops once at least 50
-observations are available; 20 km remains an absolute ceiling. When the
-available market is smaller, the largest eligible cohort of at least five
-observations is returned with an explicit warning that the 50-comparable target
-was not reached. The response warns whenever the previous year was needed.
+The “Ocena trenutne tržne vrednosti” is an on-request backend calculation from
+observed comparable transactions. It is not the trained valuation model and it
+does not replace the selected transaction's historical comparisons. The API
+returns the two estimates separately as `currentMarketEstimate` and
+`valuation`.
+
+### Which transaction years are compared
+
+The estimate answers “what does the latest available market evidence imply
+now?”, not “what was this property worth in the year of the selected sale?”
+The selected transaction's contract year does not determine the comparison
+window and there is no symmetric ±1-year window around it.
+
+The backend uses the server's current calendar year:
+
+1. Search transactions dated from 1 January of the current year through the
+   latest imported date before 1 January of the next year.
+2. Try to reach 50 comparable transactions using the physical and distance
+   hierarchy below.
+3. Only when no current-year profile reaches 50, repeat the hierarchy using a
+   combined window beginning 1 January of the previous year and ending before
+   1 January of the next year.
+4. Stop at the first profile/radius containing at least 50 candidates. If none
+   reaches 50, retain the largest cohort found across all attempts, but publish
+   an estimate only if it contains at least five candidates.
+
+For example, during 2026 the first window contains only imported 2026
+transactions. The fallback contains all available 2025 transactions plus the
+incomplete 2026 observations. A property originally sold in 2017 is still
+estimated from these latest windows; 2016–2018 are used only by its separate
+historical transaction-context comparisons, not by the current-market card.
+Because GURS deliveries and the current year can be incomplete, the response
+always warns that the current calendar year is unfinished and adds another
+warning when the previous year was required.
+
+### Comparable search order
+
+The candidate must have the same transaction kind and property group as the
+subject, be representative-eligible, have positive area and amount per m²,
+have coordinates, and not be the subject transaction itself. Sale-land
+comparisons use the strict verified-buildable land population. The query is
+capped at the nearest 250 eligible candidates for each attempted cohort.
+
+The search uses progressively larger radii of 1 km, 2.5 km, 5 km, 10 km, and
+20 km:
+
+1. area within ±15% and construction year within ±10 years;
+2. if that cannot reach 50 within 20 km, area within ±25% and construction year
+   within ±15 years;
+3. if construction year is unavailable, use the corresponding ±15% and ±25%
+   area-only profiles;
+4. if the current year remains too thin, repeat steps 1–3 over the combined
+   current-plus-previous-year window.
+
+The radius is therefore adaptive rather than always 20 km. A result with 50
+strict candidates inside 2.5 km stops there. A sparse market may expand to
+20 km and the previous year. The response records the actual maximum radius,
+area tolerance, construction-year tolerance, candidate count, and reference
+year used by the calculation.
+
+Same-building transactions are displayed separately as direct comparables.
+They receive no special hard-coded priority in the current-market calculation,
+although they can naturally receive high weight when they satisfy the filters
+because their distance and physical similarity are strong.
+
+### Weighting and calculation
 
 Candidates receive a transparent similarity weight:
 
 - 35% relative floor-area similarity;
 - 25% construction-year similarity;
 - 20% straight-line PostGIS distance similarity;
-- 10% contract recency;
+- 10% contract recency over the latest two years;
 - 10% agreement-package component-count similarity.
+
+In implementation terms, a perfect area match contributes 35 points and falls
+linearly to zero at a 25% difference. A perfect construction-year match
+contributes 25 points and falls to zero at a 15-year difference; missing age
+information receives a neutral 12.5 points. Distance contributes 20 points at
+the same location and falls linearly to zero at 20 km. Recency contributes up
+to 10 points and falls to zero after approximately two years. An equal number
+of components in the transaction package contributes 10 points. Every
+candidate receives a minimum total weight of one.
 
 The central estimate is the weighted median amount per m² multiplied by the
 subject area. The displayed lower and upper values are weighted p25 and p75,
-not formal appraisal confidence intervals. When fewer than five current-year
-candidates belong to the subject municipality, the worker compares matched
-transactions in that municipality with the surrounding selected-radius market
-over the preceding three calendar years. A factor is applied only with at
-least five local and twenty surrounding observations and is bounded to
-0.65–1.35. The response exposes the factor and local sample size.
+not formal appraisal confidence intervals. For a sale, the amount is sale
+price per m²; for a rental, it is monthly rent per m². Multiplication by the
+subject's recorded area produces the displayed total sale value or monthly
+rent range. Package transactions can contain additional property components,
+so the result remains an estimate of the recorded package rather than a
+component-level certified valuation.
+
+### Sparse-local-market adjustment
+
+When fewer than five selected current-market candidates belong to the subject
+municipality, the API estimates a historical local-location factor. It compares
+the median of physically matched transactions in the subject municipality with
+the median of the surrounding selected-radius market over the three completed
+calendar years before the current year. For a 2026 request, that adjustment
+window is 2023–2025 and excludes incomplete 2026.
+
+The factor is applied only with at least five local and twenty total matched
+observations, and it is bounded to `0.65–1.35`. Otherwise it remains `1.0`, so
+no unsupported adjustment is invented. The response exposes the factor and
+the local adjustment sample size.
+
+### Confidence and returned evidence
 
 Confidence is moderate only with at least 50 strict matches inside 10 km, low
 with at least 20, and very low otherwise. The current year is explicitly
 marked incomplete. Property condition, renovation, view, exact floor and
 package details can remain unobserved, so the output is not an official
 valuation.
+
+The response exposes:
+
+- weighted p25, median, and p75 in amount per m² and total amount;
+- comparable count and actual maximum radius;
+- area and construction-year tolerances;
+- location-adjustment factor and supporting local sample size;
+- current reference year, confidence label, warnings, and methodology version
+  `adaptive-current-market-v2`.
 
 ## Robust cohort outliers
 
@@ -195,19 +281,63 @@ partial interests, and legitimate repeat transactions can look similar.
 
 ### Model architecture
 
-The valuation component is supervised linear regression with L2
-regularization (`sklearn.linear_model.Ridge`) after numeric scaling and
-categorical one-hot encoding. “Hedonic” means it estimates value from observed
-property, time, and location attributes. Ridge shrinks unstable coefficients
-to improve stability while retaining an interpretable model structure.
+The valuation component is supervised hedonic regression: it estimates the
+conditional sale price or rent from observed property, time, and location
+attributes. Model selection compares three estimator families:
+
+- Ridge regression with ten L2 regularization strengths;
+- Elastic Net with six alpha/L1-ratio combinations;
+- histogram gradient boosting with four bounded configurations.
+
+Ridge and Elastic Net are regularized linear models. Histogram gradient
+boosting can learn nonlinear relationships and interactions. A nonlinear model
+is retained only when its row-weighted future-period MAE improves on the best
+Ridge model by at least 3% **and** it beats Ridge in every valid temporal fold.
+Otherwise the more stable and operationally simpler Ridge model is retained.
+The final untouched holdout is never used to choose the family or parameters.
+
+The evaluated grids are deliberately bounded:
+
+- Ridge `alpha`: `0.01, 0.03, 0.1, 0.3, 1, 2, 5, 10, 30, 100`;
+- Elastic Net `alpha`: `0.01, 0.1, 1`, each with `l1_ratio` `0.2` and `0.8`;
+- histogram gradient boosting: four combinations of learning rate `0.05/0.1`,
+  200/300 iterations, 15/31 leaf nodes, 20–40 minimum rows per leaf, and
+  L2 regularization `0/1/5`.
+
+Primary selection uses row-weighted future-period MAE. Deterministic
+tie-breakers are P90 absolute percentage error, absolute signed bias, lower
+operational complexity, and then the lexical configuration order.
 
 Isolation Forest is a separate unsupervised tree ensemble. It identifies
 unusual combinations for the anomaly-review queue; it does not produce the
 valuation and cannot remove a transaction by itself.
 
-The offline Python worker trains separate sale and rental models for each
-property group. The target is log(price per m²) for sales and log(monthly rent
-per m²) for rentals. Features are:
+### What constitutes one model
+
+The worker does **not** train one model per statistical region or one model per
+municipality. It trains a national model for every available combination of:
+
+```text
+transaction kind × property group
+```
+
+Sales and rentals are always separate. Apartments, houses, commercial
+property, garages, land, and rooms are separated where that kind contains the
+group. For example, the representative run produced five sale model
+populations and five rental model populations. A Slovenian municipality is an
+input category, not a separate model, and statistical region is not currently
+a model feature. Coordinates allow the national model to learn broader spatial
+patterns while municipality one-hot encoding captures municipality-level
+differences supported by training data.
+
+This design pools evidence across Slovenia instead of fitting unstable models
+for small municipalities. Its limitation is that an unseen municipality has
+no learned category coefficient; the encoder safely ignores it and the model
+must rely on its other features. Building and municipality holdouts measure
+this transfer risk separately.
+
+The target is `log(price per m²)` for sales and `log(monthly rent per m²)` for
+rentals. Features are:
 
 - log area;
 - construction year;
@@ -218,32 +348,132 @@ per m²) for rentals. Features are:
 
 Numeric missing values use training-set medians and are standardized.
 Categorical features use one-hot encoding, ignore unseen categories, and group
-categories occurring fewer than 10 times. The estimator is Ridge regression
-with `alpha=2.0`. A fixed seed (`20260723`) makes validation, Isolation Forest,
-and bootstrap sampling reproducible.
+categories occurring fewer than 10 times. All imputation, scaling, and
+encoding are fitted inside each training fold; validation and future rows do
+not influence preprocessing. A fixed seed (`20260723`) makes candidate
+selection, grouped validation, Isolation Forest, and bootstrap sampling
+reproducible.
 
-Ridge is used as an interpretable constant-quality baseline. Its estimate is
-not a certified appraisal and can be weak where attributes are missing or
-micro-location/property condition is unobserved.
+The selected estimator is a constant-quality statistical estimate, not a
+certified appraisal. It can be weak where attributes are missing or where
+condition, renovation quality, exact view, legal state, or micro-location is
+unobserved.
+
+### Which rows are eligible
+
+The training query starts from quality-eligible analytical fact rows with a
+positive amount-per-m² target, positive area, a contract date, and usable
+model features. Sales begin in 2007 and rentals in 2013. The current calendar
+year is excluded from validation because it is incomplete, but it is included
+when the approved production model is finally fitted.
+
+Raw ETN rows remain stored. Model exclusion does not delete source data.
+Persisted near-duplicate pairs cannot inflate folds: the higher transaction ID
+from each candidate pair is excluded. Default sale-land training uses the
+strict land view and therefore includes only verified-buildable ETN land codes
+1 and 2; code 3, mixed, unknown, and non-buildable land are excluded.
+
+Model populations are not fixed-size samples. Every eligible row for the given
+transaction kind and property group is used. The representative 2026 run used:
+
+| Population | Production rows |
+|---|---:|
+| Sale apartments | 153,664 |
+| Sale commercial property | 25,552 |
+| Sale garages | 16,925 |
+| Sale houses | 62,144 |
+| Sale verified-buildable land | 14,048 |
+| Rental apartments | 168,326 |
+| Rental commercial property | 45,675 |
+| Rental garages | 9,738 |
+| Rental houses | 14,212 |
+| Rental rooms | 16,816 |
+
+These counts describe the recorded run, not permanent quotas. They change when
+GURS data, quality rules, or duplicate evidence changes. The authoritative
+counts and exclusions for each run are persisted in
+`analytics.model_runs.metrics` and `selection_metadata`.
 
 ## Honest temporal and spatial validation
 
-For each property group, the latest complete calendar year is the untouched
-test set, the preceding complete year is the conformal-calibration set, and
-earlier years train the validation model. If year cells are too sparse, a
-stable chronological 60/20/20-style split with at least 10 calibration and 10
-test rows is used.
+### Rolling model-selection folds
 
-A separate `GroupShuffleSplit` holds out 20% of municipalities to measure
-spatial generalization. The seed is fixed and held-out municipality count is
-recorded. Reported metrics are:
+Validation is performed independently for each transaction-kind/property-group
+population. Complete calendar years before the latest complete year form
+expanding-window folds:
+
+```text
+Fold k:
+  train       = every eligible year through N
+  calibrate   = year N+1
+  validate    = year N+2
+
+Final evaluation:
+  train       = every year before the calibration year
+  calibrate   = the year immediately before the holdout
+  holdout     = the latest complete calendar year
+```
+
+With an August 2026 run, 2026 is incomplete, 2025 is the untouched holdout,
+and 2024 is its conformal-calibration year. Candidate selection uses only folds
+ending no later than 2024. Changing 2025 target values cannot change the
+selected family or hyperparameters. The selected configuration is evaluated
+exactly once on 2025.
+
+The default minimum sizes are 100 training rows, 30 calibration rows, and 30
+validation/holdout rows. They can be configured with
+`MODEL_MIN_TRAINING_ROWS`, `MODEL_MIN_CALIBRATION_ROWS`, and
+`MODEL_MIN_VALIDATION_ROWS`. A fold below a minimum is skipped with its exact
+reason and row counts persisted. There is no shuffled K-fold or 60/20/20
+fallback. If a property group cannot form valid folds, production uses an
+explicit uncalibrated `Ridge(alpha=2.0)` sparse-group fallback and does not
+claim validated accuracy or calibrated 90% coverage.
+
+In the representative run, sales validated future years 2009–2024 (land
+2012–2024 after three sparse early folds were skipped), and rentals validated
+2015–2024. Exact per-fold training, calibration, and validation row counts are
+stored because an expanding training window means there is no single fixed
+“number used for learning.”
+
+After selection and the one-time holdout evaluation, the approved
+configuration is fitted again on **all** eligible rows for its property group,
+including the holdout and incomplete current year. This is the production
+model used to persist estimates. Its in-sample predictions are operational
+outputs and are never reported as cross-validation or holdout accuracy. The
+90% production interval width retains the conformal calibration result obtained
+without the final holdout.
+
+### Grouped geographic/entity robustness
+
+Temporal validation remains the primary selection evidence. A separate,
+deterministic `GroupShuffleSplit` withholds 20% of entity groups from all
+pre-holdout rows to ask whether the selected configuration transfers to unseen
+entities. The group key is:
+
+1. stable `cadastral_municipality_code:building_number` when available;
+2. municipality identifier when no building identity exists.
+
+Therefore the same known building cannot occur in both grouped training and
+validation. Land commonly uses municipality fallback because it has no
+building identity. This is not “training a municipality model” and it is not a
+combined future-year-plus-unseen-geography test; it is an additional robustness
+diagnostic. The representative run held out 4,582 sale-apartment groups
+(29,275 rows), while verified-buildable land held out 43 municipality groups
+(2,884 rows). Full group counts for every property group are in
+`model-optimization-report.md` and persisted model metadata.
+
+Reported metrics include:
 
 - MAE in original amount-per-m² units;
 - median absolute percentage error;
+- 75th and 90th percentile absolute percentage error;
+- signed median percentage error (directional bias);
 - RMSE of log target;
 - R² of log target;
-- train-only local-median baseline MAE;
-- temporal sample/date ranges and municipality-holdout metrics.
+- empirical interval coverage and mean/median interval width;
+- training-population median baseline metrics;
+- per-fold row counts and fit/prediction durations;
+- grouped building/municipality holdout metrics.
 
 There is no honest single “model accuracy” percentage for this regression
 problem. The logged measures answer different questions:
@@ -256,20 +486,23 @@ problem. The logged measures answer different questions:
   target; lower is better.
 - **Log R²:** improvement over predicting the test-set mean on log scale; 1 is
   perfect, 0 is no better, and a negative value is worse than that baseline.
-- **Local-median baseline improvement:** compares model MAE with a deliberately
-  simple prediction learned only from training data. Positive is useful;
-  negative means the model did not beat that simple baseline.
-- **Spatial R²:** the same generalization check when entire municipalities are
-  withheld, revealing whether the model transfers to unseen locations.
+- **Training-median baseline improvement:** compares model MAE with a
+  deliberately simple prediction learned only from the fold's training
+  population. Positive is useful; negative means the model did not beat that
+  simple baseline.
+- **Grouped R²:** the same generalization check when entire buildings (or
+  fallback municipalities) are withheld, revealing whether the model transfers
+  to unseen entities and locations.
 - **Interval coverage:** share of test observations inside the nominal 90%
   split-conformal range. Close to 90% is desired; higher coverage can merely
   mean excessively wide intervals, so width and point error also matter.
 
-After training, the worker prints these measures overall and by property
-group. It emits warnings when interval coverage is more than three percentage
-points below nominal or when temporal/spatial R² is negative. Full metrics,
-feature schema, split ranges, random seed, and model version are also persisted
-in `analytics.model_runs.metrics` for later auditing.
+After training, the worker prints the main measures overall and by property
+group and warns when overall interval coverage is more than three percentage
+points below nominal. Full candidate, fold, holdout, grouped-robustness and
+interval metrics, feature schema, split ranges, random seed, durations, and
+model version are persisted for auditing; the console is intentionally a
+summary rather than the complete evidence record.
 
 Example output shape:
 
@@ -279,13 +512,15 @@ Model validation — sale price/m²
   latest-complete-year temporal holdout: n=..., MAE=..., median APE=..., log RMSE=..., log R²=...
   split-conformal interval: nominal=90.0%, observed=...
   property-group diagnostics:
-    apartment: test n=..., MAE=..., median APE=..., log R²=..., vs local-median baseline=...; spatial R²=...
+    apartment: test n=..., MAE=..., median APE=..., log R²=..., vs training-median baseline=...; grouped R²=...
   Interpretation: validation error and coverage are diagnostics, not a certified appraisal or a classification accuracy.
 ```
 
-Only temporal test rows receive honest residual anomaly percentiles. Full-data
-models are subsequently trained for production estimates, but in-sample
-residuals are not misrepresented as held-out anomaly evidence.
+Production-model residual percentiles are assigned only to rows from the final
+holdout year for anomaly ranking. Because the production estimator is later
+fitted on the full population, these persisted residual scores are operational
+in-sample signals, not holdout-validation evidence. The honest validation
+errors remain the separately persisted fold and final-holdout metrics.
 
 ## Split-conformal prediction ranges
 
@@ -297,10 +532,10 @@ q = sorted(|actual_log - predicted_log|)[ceil((n + 1) * 0.90) - 1]
 range = [exp(predicted_log - q), exp(predicted_log + q)]
 ```
 
-The implementation records nominal and empirical test coverage and mean log
-interval width. The range quantifies model uncertainty under exchangeability;
-it is not a guarantee and does not include every legal, physical, or market
-risk.
+The implementation records nominal and empirical holdout coverage plus mean
+and median interval width after converting bounds back to EUR/m². The range
+quantifies model uncertainty under exchangeability; it is not a guarantee and
+does not include every legal, physical, or market risk.
 
 ## Isolation Forest
 
@@ -358,9 +593,10 @@ published.
 ### Constant-quality hedonic index
 
 For each property group, at most 5,000 deterministic reference observations
-are held fixed while only contract year/month is changed. The fitted Ridge
-model predicts counterfactual amount per m² for every month. The median
-prediction is indexed to the first month (=100).
+are held fixed while only contract year/month is changed. The selected and
+production-fitted estimator for that property group predicts counterfactual
+amount per m² for every month. The median prediction is indexed to the first
+month (=100).
 
 One hundred deterministic bootstrap resamples of the fixed reference basket
 produce 2.5th/97.5th percentile index bounds. Publication requires at least 30
