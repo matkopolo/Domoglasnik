@@ -48,6 +48,7 @@ class SelectionSettings:
     min_validation_rows: int = 30
     nominal_coverage: float = NOMINAL_INTERVAL_COVERAGE
     random_seed: int = 20260723
+    detailed_progress: bool = False
 
 
 def candidate_configurations() -> list[dict[str, Any]]:
@@ -162,14 +163,32 @@ def optimize_model(
     )
     evaluated = []
     candidates = configurations or candidate_configurations()
+    total_candidate_fits = len(candidates) * len(folds)
+    progress_interval = max(1, (total_candidate_fits + 9) // 10)
+    completed_candidate_fits = 0
+    selection_started = time.monotonic()
+    progress(
+        f"fit plan: {len(candidates)} candidates × {len(folds)} folds = "
+        f"{total_candidate_fits} candidate fits, plus holdout, grouped, and production stages"
+    )
     for candidate_number, configuration in enumerate(candidates, start=1):
         candidate_started = time.monotonic()
-        progress(
-            f"candidate {candidate_number}/{len(candidates)}: "
-            f"{_configuration_label(configuration)} across {len(folds)} folds"
-        )
+        if settings.detailed_progress:
+            progress(
+                f"candidate {candidate_number}/{len(candidates)}: "
+                f"{_configuration_label(configuration)} across {len(folds)} folds"
+            )
         results = []
-        for fold in folds:
+        for fold_number, fold in enumerate(folds, start=1):
+            if settings.detailed_progress:
+                progress(
+                    f"fit {completed_candidate_fits + 1}/{total_candidate_fits}: "
+                    f"candidate {candidate_number}/{len(candidates)}, "
+                    f"fold {fold_number}/{len(folds)} "
+                    f"(train through {fold.train_years[-1]}, "
+                    f"calibrate {fold.calibration_year}, "
+                    f"validate {fold.validation_year})"
+                )
             model = build_pipeline(configuration, settings.random_seed)
             predicted, training_seconds, prediction_seconds = _timed_fit_predict(
                 model, features[fold.training], target[fold.training], features[fold.validation]
@@ -194,13 +213,31 @@ def optimize_model(
                 "training_seconds": training_seconds,
                 "prediction_seconds": prediction_seconds,
             })
+            completed_candidate_fits += 1
+            elapsed = time.monotonic() - selection_started
+            average = elapsed / completed_candidate_fits
+            remaining = average * (total_candidate_fits - completed_candidate_fits)
+            if (
+                settings.detailed_progress
+                or completed_candidate_fits % progress_interval == 0
+                or completed_candidate_fits == total_candidate_fits
+            ):
+                progress(
+                    f"progress {completed_candidate_fits}/{total_candidate_fits} "
+                    f"({100 * completed_candidate_fits / total_candidate_fits:.1f}%): "
+                    f"candidate {candidate_number}/{len(candidates)}, "
+                    f"fold {fold_number}/{len(folds)}; "
+                    f"elapsed={_duration(elapsed)}, ETA={_duration(remaining)}"
+                )
         evaluated.append({"configuration": configuration, "folds": results,
                           "aggregate": _aggregate(results)})
-        progress(
-            f"candidate {candidate_number}/{len(candidates)} complete: "
-            f"weighted MAE={evaluated[-1]['aggregate']['weighted_mae_amount_per_sqm']:.3f}, "
-            f"elapsed={time.monotonic() - candidate_started:.1f}s"
-        )
+        if settings.detailed_progress:
+            progress(
+                f"candidate {candidate_number}/{len(candidates)} complete: "
+                f"weighted MAE="
+                f"{evaluated[-1]['aggregate']['weighted_mae_amount_per_sqm']:.3f}, "
+                f"elapsed={time.monotonic() - candidate_started:.1f}s"
+            )
     selected = select_configuration(evaluated)
     progress(f"selected: {_configuration_label(selected['configuration'])}")
     training, calibration, holdout = final_holdout_split(
@@ -264,6 +301,17 @@ def _configuration_label(configuration: dict[str, Any]) -> str:
         f"{key}={value}" for key, value in configuration.items() if key != "family"
     )
     return f"{configuration['family']}({parameters})"
+
+
+def _duration(seconds: float) -> str:
+    rounded = max(0, round(seconds))
+    minutes, seconds = divmod(rounded, 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours}h {minutes}m {seconds:02d}s"
+    if minutes:
+        return f"{minutes}m {seconds:02d}s"
+    return f"{seconds}s"
 
 
 def grouped_robustness(features, target, groups, configuration, settings):

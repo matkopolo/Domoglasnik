@@ -1,4 +1,6 @@
 from datetime import date, timedelta
+from threading import Lock
+from time import sleep
 
 import numpy as np
 
@@ -10,7 +12,7 @@ from real_estate_etl.model_validation import (
 )
 
 
-def test_model_refresh_marks_first_install_bootstrap_only_after_both_kinds(monkeypatch):
+def test_model_refresh_marks_first_install_bootstrap_only_after_both_kinds(monkeypatch, capsys):
     from unittest.mock import MagicMock
 
     from real_estate_etl import modeling
@@ -26,6 +28,66 @@ def test_model_refresh_marks_first_install_bootstrap_only_after_both_kinds(monke
     cursor = connection.cursor.return_value.__enter__.return_value
     assert "UPDATE analytics.pipeline_state" in cursor.execute.call_args.args[0]
     assert cursor.execute.call_args.args[1] == ("sale-v,rent-v",)
+    output = capsys.readouterr().out
+    assert "transaction kind 1/2 starting: sale" in output
+    assert "transaction kind completion 2/2 (100.0%)" in output
+
+
+def test_property_groups_use_bounded_parallel_workers(monkeypatch, capsys):
+    from unittest.mock import MagicMock
+
+    from real_estate_etl import modeling
+
+    lock = Lock()
+    active = 0
+    maximum_active = 0
+
+    def train(_kind, group, number, _count, *_args):
+        nonlocal active, maximum_active
+        with lock:
+            active += 1
+            maximum_active = max(maximum_active, active)
+        sleep(0.03)
+        with lock:
+            active -= 1
+        indices = np.asarray([number - 1])
+        return modeling.PropertyGroupResult(
+            group, indices, np.asarray([1.0]), np.asarray([0.1]),
+            np.asarray([0.0]), MagicMock(), {"status": "selected"},
+        )
+
+    monkeypatch.setattr(modeling, "_train_property_group", train)
+    results = modeling._train_property_groups(
+        "sale", ["apartment", "house", "land"], 2,
+        np.empty((3, 8), dtype=object), np.zeros(3),
+        [date(2025, 1, 1)] * 3, np.asarray([None] * 3, dtype=object),
+        np.asarray(["apartment", "house", "land"], dtype=object),
+        modeling.SelectionSettings(),
+    )
+
+    assert {result.group for result in results} == {"apartment", "house", "land"}
+    assert maximum_active == 2
+    output = capsys.readouterr().out
+    assert "parallel workers=2" in output
+    assert "group completion 3/3 (100.0%)" in output
+
+
+def test_hedonic_indices_are_generated_in_deterministic_group_order():
+    from real_estate_etl import modeling
+
+    class ConstantModel:
+        def predict(self, values):
+            return np.zeros(len(values))
+
+    rows = modeling._hedonic_indices(
+        np.asarray(["house", "apartment"], dtype=object),
+        np.zeros((2, 8), dtype=object),
+        [date(2025, 1, 1), date(2025, 1, 1)],
+        {"house": ConstantModel(), "apartment": ConstantModel()},
+        np.random.default_rng(42),
+    )
+
+    assert [row[0] for row in rows] == ["apartment", "house"]
 
 
 def test_percentile_scores_are_bounded_and_ranked():

@@ -11,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
-from threading import Event
+from threading import Event, Thread
 
 import psycopg
 
@@ -22,6 +22,7 @@ from .pipeline import refresh_all_national
 REFRESH_LOCK_ID = 724_202_607
 DEFAULT_INTERVAL_DAYS = 14
 DEFAULT_RETRY_HOURS = 1
+DEFAULT_ANALYTICS_PROGRESS_INTERVAL_SECONDS = 15.0
 
 ANALYTICS_REFRESH_FUNCTIONS = (
     "analytics.refresh_sale_facts",
@@ -76,16 +77,56 @@ class SystemRefreshResult:
     model_rows: dict[str, int]
 
 
-def _refresh_functions(connection, functions: tuple[str, ...]) -> dict[str, int]:
+def _analytics_progress_interval() -> float:
+    raw = os.getenv(
+        "ANALYTICS_PROGRESS_INTERVAL_SECONDS",
+        str(DEFAULT_ANALYTICS_PROGRESS_INTERVAL_SECONDS),
+    )
+    try:
+        return max(1.0, float(raw))
+    except ValueError:
+        return DEFAULT_ANALYTICS_PROGRESS_INTERVAL_SECONDS
+
+
+def _log_running_stage(label: str, started: float, done: Event, interval: float) -> None:
+    while not done.wait(interval):
+        print(
+            f"  {label}: PostgreSQL is still processing "
+            f"(elapsed={time.monotonic() - started:.1f}s)",
+            flush=True,
+        )
+
+
+def _refresh_functions(
+    connection,
+    functions: tuple[str, ...],
+    *,
+    progress_interval_seconds: float | None = None,
+) -> dict[str, int]:
     counts: dict[str, int] = {}
+    interval = progress_interval_seconds or _analytics_progress_interval()
     with connection.transaction(), connection.cursor() as cursor:
         for function in functions:
+            label = function.rsplit(".", 1)[-1]
             started = time.monotonic()
-            cursor.execute(f"SELECT {function}()")  # fixed internal allow-list
+            print(f"  {label}: started", flush=True)
+            done = Event()
+            heartbeat = Thread(
+                target=_log_running_stage,
+                args=(label, started, done, interval),
+                name=f"{label}-progress",
+                daemon=True,
+            )
+            heartbeat.start()
+            try:
+                cursor.execute(f"SELECT {function}()")  # fixed internal allow-list
+            finally:
+                done.set()
+                heartbeat.join()
             value = cursor.fetchone()[0]
             counts[function] = int(value or 0)
             print(
-                f"  {function.rsplit('.', 1)[-1]}: "
+                f"  {label}: "
                 f"{int(value or 0):,} rows in {time.monotonic() - started:.1f}s",
                 flush=True,
             )

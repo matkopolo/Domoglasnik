@@ -79,6 +79,12 @@ services:
       - /tmp/pipeline-healthy
     environment:
       DATABASE_URL: postgresql://real_estate:real_estate@db:5432/real_estate
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      NUMEXPR_NUM_THREADS: "1"
+      ANALYTICS_PROGRESS_INTERVAL_SECONDS: ${ANALYTICS_PROGRESS_INTERVAL_SECONDS:-15}
+      MODEL_DETAILED_PROGRESS: ${MODEL_DETAILED_PROGRESS:-false}
     init: true
     mem_limit: 3g
     restart: unless-stopped

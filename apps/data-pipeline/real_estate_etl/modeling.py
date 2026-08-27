@@ -6,6 +6,7 @@ import json
 import os
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 
@@ -22,6 +23,21 @@ RANDOM_SEED = 20260723
 ISOLATION_TRAINING_LIMIT = 50_000
 
 
+def _format_duration(seconds: float) -> str:
+    rounded = max(0, round(seconds))
+    minutes, seconds = divmod(rounded, 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours}h {minutes}m {seconds:02d}s"
+    if minutes:
+        return f"{minutes}m {seconds:02d}s"
+    return f"{seconds}s"
+
+
+def _environment_flag(name: str) -> bool:
+    return os.getenv(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 @dataclass(frozen=True)
 class ModelResult:
     transaction_kind: str
@@ -29,6 +45,161 @@ class ModelResult:
     model_version: str
     elapsed_seconds: float
     metrics: dict[str, object]
+
+
+@dataclass(frozen=True)
+class PropertyGroupResult:
+    group: str
+    indices: np.ndarray
+    predictions: np.ndarray
+    interval_widths: np.ndarray
+    residual_scores: np.ndarray
+    model: Pipeline
+    metrics: dict[str, object]
+
+
+def _train_property_group(
+    kind: str,
+    group: str,
+    group_number: int,
+    group_count: int,
+    features: np.ndarray,
+    target: np.ndarray,
+    contract_dates: list[date],
+    building_identities: np.ndarray,
+    property_groups: np.ndarray,
+    settings: SelectionSettings,
+) -> PropertyGroupResult:
+    group_indices = np.flatnonzero(property_groups == group)
+    group_features = features[group_indices]
+    group_target = target[group_indices]
+    group_dates = [contract_dates[index] for index in group_indices]
+    prefix = f"[{kind} model · {group} · group {group_number}/{group_count}]"
+    print(f"{prefix} population={len(group_indices):,} rows", flush=True)
+    robustness_groups = building_identities[group_indices].copy()
+    missing_identity = np.asarray([not value for value in robustness_groups])
+    robustness_groups[missing_identity] = np.asarray(
+        [f"municipality:{value}" for value in group_features[missing_identity, 7]],
+        dtype=object,
+    )
+    selection = optimize_model(
+        group_features,
+        group_target,
+        group_dates,
+        robustness_groups,
+        settings,
+        progress=lambda message: print(f"{prefix} {message}", flush=True),
+    )
+    predictions = np.empty(len(group_indices), dtype=float)
+    widths = np.empty(len(group_indices), dtype=float)
+    residuals = np.zeros(len(group_indices), dtype=float)
+    if selection["status"] != "selected":
+        fallback = build_pipeline({"family": "ridge", "alpha": 2.0}, RANDOM_SEED)
+        print(f"{prefix} fitting sparse-group production fallback", flush=True)
+        production_started = time.monotonic()
+        fallback.fit(group_features, group_target)
+        production_training_seconds = time.monotonic() - production_started
+        production_started = time.monotonic()
+        predictions[:] = fallback.predict(group_features)
+        production_prediction_seconds = time.monotonic() - production_started
+        widths[:] = float(np.quantile(
+            np.abs(group_target - predictions), NOMINAL_INTERVAL_COVERAGE
+        ))
+        metrics = {
+            **selection,
+            "population_rows": int(len(group_indices)),
+            "production_fallback": {"family": "ridge", "alpha": 2.0},
+            "production": {
+                "training_rows": int(len(group_indices)),
+                "training_seconds": production_training_seconds,
+                "prediction_seconds": production_prediction_seconds,
+            },
+            "interval_status": "uncalibrated_sparse_group_fallback",
+        }
+        return PropertyGroupResult(
+            group, group_indices, predictions, widths, residuals, fallback, metrics
+        )
+
+    widths[:] = float(selection["interval_half_width_log"])
+    final_model = build_pipeline(selection["selected_configuration"], RANDOM_SEED)
+    print(f"{prefix} fitting selected production model", flush=True)
+    production_started = time.monotonic()
+    final_model.fit(group_features, group_target)
+    production_training_seconds = time.monotonic() - production_started
+    production_started = time.monotonic()
+    predictions[:] = final_model.predict(group_features)
+    production_prediction_seconds = time.monotonic() - production_started
+    holdout_year = selection["final_holdout_year"]
+    holdout_indices = np.flatnonzero(
+        np.asarray([value.year for value in group_dates]) == holdout_year
+    )
+    holdout_prediction = final_model.predict(group_features[holdout_indices])
+    residuals[holdout_indices] = percentile_scores(
+        np.abs(group_target[holdout_indices] - holdout_prediction)
+    )
+    metrics = {
+        "population_rows": int(len(group_indices)),
+        **selection,
+        "production": {
+            "training_rows": int(len(group_indices)),
+            "training_seconds": production_training_seconds,
+            "prediction_seconds": production_prediction_seconds,
+        },
+    }
+    return PropertyGroupResult(
+        group, group_indices, predictions, widths, residuals, final_model, metrics
+    )
+
+
+def _train_property_groups(
+    kind: str,
+    groups: list[str],
+    workers: int,
+    features: np.ndarray,
+    target: np.ndarray,
+    contract_dates: list[date],
+    building_identities: np.ndarray,
+    property_groups: np.ndarray,
+    settings: SelectionSettings,
+) -> list[PropertyGroupResult]:
+    group_workers = min(workers, len(groups))
+    print(
+        f"[{kind} model] property groups={len(groups)}; parallel workers={group_workers}; "
+        "database persistence remains single-threaded",
+        flush=True,
+    )
+    started = time.monotonic()
+    results: list[PropertyGroupResult] = []
+    with ThreadPoolExecutor(
+        max_workers=group_workers, thread_name_prefix=f"{kind}-model"
+    ) as executor:
+        futures = [
+            executor.submit(
+                _train_property_group,
+                kind,
+                group,
+                number,
+                len(groups),
+                features,
+                target,
+                contract_dates,
+                building_identities,
+                property_groups,
+                settings,
+            )
+            for number, group in enumerate(groups, start=1)
+        ]
+        for completed, future in enumerate(as_completed(futures), start=1):
+            results.append(future.result())
+            elapsed = time.monotonic() - started
+            remaining = elapsed / completed * (len(groups) - completed)
+            print(
+                f"[{kind} model] group completion {completed}/{len(groups)} "
+                f"({100 * completed / len(groups):.1f}%); "
+                f"elapsed={_format_duration(elapsed)}; ETA={_format_duration(remaining)}",
+                flush=True,
+            )
+    return results
 
 
 def _query(kind: str) -> str:
@@ -68,8 +239,23 @@ def refresh_models(
 ) -> list[ModelResult]:
     workers = workers or max(1, min(6, os.cpu_count() or 1))
     results = []
-    for kind in ("sale", "rent"):
+    all_started = time.monotonic()
+    print(
+        f"[models] training plan: sale then rent; up to {workers} parallel "
+        "property-group workers per transaction kind",
+        flush=True,
+    )
+    for kind_number, kind in enumerate(("sale", "rent"), start=1):
+        print(f"[models] transaction kind {kind_number}/2 starting: {kind}", flush=True)
         results.append(_refresh_kind(connection, kind, workers))
+        elapsed = time.monotonic() - all_started
+        remaining = elapsed / kind_number * (2 - kind_number)
+        print(
+            f"[models] transaction kind completion {kind_number}/2 "
+            f"({50 * kind_number:.1f}%); elapsed={_format_duration(elapsed)}; "
+            f"ETA={_format_duration(remaining)}",
+            flush=True,
+        )
     with connection.transaction(), connection.cursor() as cursor:
         cursor.execute(
             """
@@ -131,85 +317,19 @@ def _refresh_kind(
         min_calibration_rows=int(os.getenv("MODEL_MIN_CALIBRATION_ROWS", "30")),
         min_validation_rows=int(os.getenv("MODEL_MIN_VALIDATION_ROWS", "30")),
         random_seed=RANDOM_SEED,
+        detailed_progress=_environment_flag("MODEL_DETAILED_PROGRESS"),
     )
-    for group in sorted(set(property_groups)):
-        group_indices = np.flatnonzero(property_groups == group)
-        group_features = features[group_indices]
-        group_target = target[group_indices]
-        group_dates = [contract_dates[index] for index in group_indices]
-        prefix = f"[{kind} model · {group}]"
-        print(f"{prefix} population={len(group_indices):,} rows", flush=True)
-        robustness_groups = building_identities[group_indices].copy()
-        missing_identity = np.asarray([not value for value in robustness_groups])
-        robustness_groups[missing_identity] = np.asarray(
-            [f"municipality:{value}" for value in group_features[missing_identity, 7]],
-            dtype=object,
-        )
-        selection = optimize_model(
-            group_features, group_target, group_dates, robustness_groups,
-            selection_settings,
-            progress=lambda message, prefix=prefix: print(
-                f"{prefix} {message}", flush=True
-            ),
-        )
-        if selection["status"] != "selected":
-            # Preserve production coverage for sparse groups without presenting
-            # this fit as validated or calibrated model selection.
-            fallback = build_pipeline({"family": "ridge", "alpha": 2.0}, RANDOM_SEED)
-            print(f"{prefix} fitting sparse-group production fallback", flush=True)
-            production_started = time.monotonic()
-            fallback.fit(group_features, group_target)
-            production_training_seconds = time.monotonic() - production_started
-            production_started = time.monotonic()
-            fallback_predictions = fallback.predict(group_features)
-            production_prediction_seconds = time.monotonic() - production_started
-            fallback_width = float(np.quantile(
-                np.abs(group_target - fallback_predictions), NOMINAL_INTERVAL_COVERAGE
-            ))
-            fitted_predictions[group_indices] = fallback_predictions
-            interval_widths[group_indices] = fallback_width
-            final_models[str(group)] = fallback
-            group_metrics[str(group)] = {
-                **selection,
-                "population_rows": int(len(group_indices)),
-                "production_fallback": {"family": "ridge", "alpha": 2.0},
-                "production": {
-                    "training_rows": int(len(group_indices)),
-                    "training_seconds": production_training_seconds,
-                    "prediction_seconds": production_prediction_seconds,
-                },
-                "interval_status": "uncalibrated_sparse_group_fallback",
-            }
-            continue
-        group_interval = float(selection["interval_half_width_log"])
-        interval_widths[group_indices] = group_interval
-        configuration = selection["selected_configuration"]
-        final_model = build_pipeline(configuration, RANDOM_SEED)
-        print(f"{prefix} fitting selected production model", flush=True)
-        production_started = time.monotonic()
-        final_model.fit(group_features, group_target)
-        production_training_seconds = time.monotonic() - production_started
-        final_models[str(group)] = final_model
-        production_started = time.monotonic()
-        fitted_predictions[group_indices] = final_model.predict(group_features)
-        production_prediction_seconds = time.monotonic() - production_started
-        holdout_year = selection["final_holdout_year"]
-        holdout_indices = np.flatnonzero(
-            np.asarray([value.year for value in group_dates]) == holdout_year
-        )
-        holdout_prediction = final_model.predict(group_features[holdout_indices])
-        residual_scores[group_indices[holdout_indices]] = percentile_scores(
-            np.abs(group_target[holdout_indices] - holdout_prediction)
-        )
-        group_metrics[str(group)] = {
-            "population_rows": int(len(group_indices)),
-            **selection,
-            "production": {
-                "training_rows": int(len(group_indices)),
-                "training_seconds": production_training_seconds,
-                "prediction_seconds": production_prediction_seconds,
-            },
-        }
+    groups = sorted(str(value) for value in set(property_groups))
+    group_workers = min(workers, len(groups))
+    for result in _train_property_groups(
+        kind, groups, workers, features, target, contract_dates,
+        building_identities, property_groups, selection_settings,
+    ):
+        fitted_predictions[result.indices] = result.predictions
+        interval_widths[result.indices] = result.interval_widths
+        residual_scores[result.indices] = result.residual_scores
+        final_models[result.group] = result.model
+        group_metrics[result.group] = result.metrics
 
     isolation_features = np.column_stack([target, features])
     print(f"[{kind} model] fitting separate Isolation Forest", flush=True)
@@ -255,6 +375,12 @@ def _refresh_kind(
         "nominal_interval_coverage": NOMINAL_INTERVAL_COVERAGE,
         "interval_method": "split_conformal_absolute_log_residual",
         "validation_method": "rolling_expanding_temporal_cv_plus_untouched_latest_complete_year",
+        "training_parallelism": {
+            "requested_workers": workers,
+            "property_group_workers": group_workers,
+            "database_persistence_workers": 1,
+            "native_threads_per_fit": 1,
+        },
         "property_groups": group_metrics,
         "excluded_rows_and_reasons": {
             "quality_ineligible": "excluded_by_is_quality_eligible",
@@ -541,7 +667,8 @@ def _hedonic_indices(
 ) -> list[tuple[str, date, float, int, int, date, float, float]]:
     rows: list[tuple[str, date, float, int, int, date, float, float]] = []
     date_values = np.asarray(contract_dates, dtype=object)
-    for group, model in models.items():
+    for group in sorted(models):
+        model = models[group]
         indices = np.flatnonzero(property_groups == group)
         reference_size = min(5_000, len(indices))
         reference_indices = generator.choice(indices, size=reference_size, replace=False)

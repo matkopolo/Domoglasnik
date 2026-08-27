@@ -1,5 +1,6 @@
 from pathlib import Path
 from threading import Barrier, Event
+from time import sleep
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -12,12 +13,32 @@ from real_estate_etl.operations import (
     SALE_ANALYTICS_REFRESH_FUNCTIONS,
     SHARED_ANALYTICS_REFRESH_FUNCTIONS,
     SystemRefreshResult,
+    _refresh_functions,
     _refresh_system_unlocked,
     refresh_analytics,
     refresh_system,
     reset_market_data,
     scheduled_refresh_loop,
 )
+
+
+def test_long_analytics_refresh_emits_periodic_heartbeat(capsys):
+    connection = MagicMock()
+    cursor = connection.cursor.return_value.__enter__.return_value
+    cursor.fetchone.return_value = (456_585,)
+    cursor.execute.side_effect = lambda _statement: sleep(0.035)
+
+    counts = _refresh_functions(
+        connection,
+        ("analytics.refresh_rental_facts",),
+        progress_interval_seconds=0.01,
+    )
+
+    assert counts == {"analytics.refresh_rental_facts": 456_585}
+    output = capsys.readouterr().out
+    assert "refresh_rental_facts: started" in output
+    assert output.count("PostgreSQL is still processing") >= 2
+    assert "refresh_rental_facts: 456,585 rows in" in output
 
 
 def test_scheduler_defaults_to_every_fourteen_days():

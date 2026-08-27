@@ -69,6 +69,14 @@ Refresh only deterministic SQL analytics:
 docker compose run --rm pipeline-worker refresh-analytics
 ```
 
+Long-running SQL analytics stages print a heartbeat every 15 seconds with the
+stage name and elapsed time, followed by the exact affected-row count when the
+atomic PostgreSQL statement completes. Set
+`ANALYTICS_PROGRESS_INTERVAL_SECONDS` on the worker to use a different
+interval. PostgreSQL does not expose a reliable intermediate inserted-row
+count for these set-based transactional refreshes, so the heartbeat does not
+claim an estimated percentage.
+
 Reset and rebuild imported/derived market data:
 
 ```bash
@@ -98,6 +106,37 @@ transaction-kind population. The detailed execution sequence, split rules,
 fit-count formula, and persistence behavior are documented under “End-to-end
 training execution and fit count” in
 [../../docs/statistical-methodology.md](../../docs/statistical-methodology.md).
+
+`--workers` controls bounded property-group concurrency during model
+selection and Isolation Forest parallelism. Independent property groups run in
+parallel, while database persistence remains single-threaded and transactional.
+The Docker worker pins native BLAS/OpenMP pools to one thread per fit to avoid
+nested oversubscription. For example:
+
+```bash
+docker compose run --rm pipeline-worker refresh-models --workers 6
+```
+
+Progress output reports the transaction kind, property-group position,
+candidate position, progress at approximately 10% intervals, elapsed time, and
+rolling ETA. A typical sequence is:
+
+```text
+[models] transaction kind 1/2 starting: sale
+[sale model] property groups=5; parallel workers=5; database persistence remains single-threaded
+[sale model · apartment · group 1/5] fit plan: 20 candidates × 16 folds = 320 candidate fits, plus holdout, grouped, and production stages
+[sale model · apartment · group 1/5] progress 96/320 (30.0%): candidate 6/20, fold 16/16; elapsed=..., ETA=...
+[sale model] group completion 3/5 (60.0%); elapsed=...; ETA=...
+[models] transaction kind completion 1/2 (50.0%); elapsed=...; ETA=...
+```
+
+Each property group's ETA is based on its completed candidate fits; group and
+transaction-kind ETAs are rolling estimates and may change when differently
+sized populations or estimator families complete.
+
+Set `MODEL_DETAILED_PROGRESS=true` when diagnosing model training to restore a
+line for every temporal-fold fit. Concise milestone logging is the default
+because several property groups write progress concurrently.
 
 Each completed sale/rent model prints overall temporal-holdout metrics,
 90% interval coverage, property-group diagnostics, comparison with a simple

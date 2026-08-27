@@ -377,6 +377,24 @@ holdout metrics, grouped robustness, and hedonic-index vintages. Validation
 predictions and full-population production predictions remain conceptually
 separate.
 
+Property groups are computationally independent, so the worker runs up to
+`--workers` groups concurrently for one transaction kind. Sales and rentals
+remain sequential to bound peak memory, and all database writes remain on the
+main connection after the parallel fits finish. The Docker runtime restricts
+BLAS, OpenMP, MKL, and NumExpr to one native thread per fit, preventing nested
+thread pools from multiplying the configured concurrency. This parallelism
+changes wall-clock time only; it does not change rows, folds, seed, candidate
+order, selection rules, or persisted predictions.
+
+Progress logs expose candidate-fit totals and completion rather than implying
+one opaque training operation. They report transaction kind, property group,
+candidate, completed/total candidate fits at approximately 10% milestones,
+elapsed time, and a rolling ETA. Per-fold years are available through the
+`MODEL_DETAILED_PROGRESS` diagnostic setting but are suppressed by default to
+keep concurrent group output readable. Holdout, grouped robustness, production
+fitting, Isolation Forest, index generation, and persistence are named stages
+because they are outside the `20 × F` candidate-fit counter.
+
 Isolation Forest is a separate unsupervised tree ensemble. It identifies
 unusual combinations for the anomaly-review queue; it does not produce the
 valuation and cannot remove a transaction by itself.

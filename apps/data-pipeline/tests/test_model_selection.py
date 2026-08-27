@@ -122,6 +122,36 @@ def test_progress_reports_candidate_holdout_and_grouped_stages():
     )
 
     assert any("candidate 1/1" in message for message in messages)
+    assert any("fit plan: 1 candidates" in message for message in messages)
+    assert not any(message.startswith("fit 1/") for message in messages)
+    assert any("progress" in message and "ETA=" in message for message in messages)
     assert any("selected: ridge(alpha=1.0)" in message for message in messages)
     assert any("final holdout" in message for message in messages)
     assert any("grouped robustness" in message for message in messages)
+
+
+def test_detailed_progress_reports_each_temporal_fold():
+    features, target, dates, groups = population()
+    messages = []
+    detailed = SelectionSettings(
+        min_training_rows=30,
+        min_calibration_rows=30,
+        min_validation_rows=30,
+        random_seed=17,
+        detailed_progress=True,
+    )
+
+    optimize_model(
+        features,
+        target,
+        dates,
+        groups,
+        detailed,
+        [{"family": "ridge", "alpha": 1.0}],
+        progress=messages.append,
+    )
+
+    assert any(
+        message.startswith("fit 1/") and "train through" in message
+        for message in messages
+    )

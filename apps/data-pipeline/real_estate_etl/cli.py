@@ -42,7 +42,7 @@ def build_parser() -> argparse.ArgumentParser:
         "refresh-models",
         help="Cross-fit hedonic and Isolation Forest models and refresh anomaly scores",
     )
-    _add_workers(models, "Isolation Forest workers")
+    _add_workers(models, "Parallel property-group and Isolation Forest workers")
 
     fetch = commands.add_parser("fetch")
     fetch.add_argument("--municipality", type=int, required=True)
