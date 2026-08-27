@@ -17,8 +17,10 @@ curl http://localhost:8080/api/v1/meta
 curl 'http://localhost:8080/api/v1/geographies?level=municipality'
 ```
 
-`make api-up` starts PostGIS, applies all API/analytics migrations, builds the
-Go service, and waits for both services to become healthy.
+`make api-up` starts PostGIS, applies migrations, starts the pipeline worker if
+needed, builds the Go service, and waits for its Compose dependency chain to
+become healthy. On an empty database this includes the initial data and model
+bootstrap and can take substantially longer than an API rebuild.
 
 ## Local Go development
 
@@ -140,26 +142,8 @@ geography filters are shared with the statistics routes.
 Populate or refresh the geography hierarchy with `real-estate-etl
 sync-geographies`.
 
-After importing source sales and synchronizing boundaries, rebuild the
-database-backed facts with:
-
-```bash
-docker compose exec -T db psql -U real_estate -d real_estate \
-  -c "SELECT analytics.refresh_sale_facts();" \
-  -c "SELECT analytics.refresh_land_transaction_facts();" \
-  -c "SELECT analytics.refresh_sale_outliers();" \
-  -c "SELECT analytics.refresh_rental_facts();" \
-  -c "SELECT analytics.refresh_rental_outliers();" \
-  -c "SELECT analytics.refresh_anomaly_signals();" \
-  -c "SELECT analytics.refresh_near_duplicate_candidates();" \
-  -c "SELECT analytics.refresh_missingness_profiles();" \
-  -c "SELECT analytics.refresh_repeat_sales_indices();"
-```
-
-The calculation runs inside PostgreSQL/PostGIS; the API never caches the full
-transaction or geography dataset in application memory.
-
-The root shortcut is:
+After source import and geography synchronization, use the orchestrated root
+commands rather than invoking individual SQL refresh functions out of order:
 
 ```bash
 make analytics-refresh
@@ -169,9 +153,12 @@ make models-refresh WORKERS=6
 The first command refreshes sale/rental facts, strict land readiness, robust
 outliers, missingness, duplicate candidates, and the accurately named
 matched-pair median index. The second evaluates property-group hedonic models
-on the latest complete year and municipality holdouts, calibrates intervals
-on the preceding year, trains deterministic Isolation Forest models, and
-appends a hedonic-index vintage.
+with expanding-window temporal folds, reserves the latest complete year as the
+final holdout, performs building-first grouped robustness validation with a
+municipality fallback, trains deterministic Isolation Forest models, and
+appends a hedonic-index vintage. The calculations run in
+PostgreSQL/PostGIS and the offline worker; the API never caches the full
+transaction or geography dataset in application memory.
 Rental amounts are treated as monthly, and only homogeneous market-rent
 packages passing explicit quality and robust comparable-cohort rules are
 representative. Raw source observations are never removed.

@@ -82,8 +82,9 @@ messages.
 - Use strict TypeScript, accessible native controls, visible focus states, and
   responsive layouts that keep the map and primary evidence ahead of filters
   on mobile.
-- Treat sample size, outlier exclusions, source state, loading, and offline
-  fallback as part of the visualization—not incidental metadata.
+- Treat sample size, outlier exclusions, source state, loading, and API error
+  states as part of the visualization—not incidental metadata. Do not replace
+  unavailable live statistics with demo values.
 - Keep charts and analytical map layers code-native. Do not require a
   commercial map token for the baseline dashboard.
 - Every change must pass ESLint, Vitest, the Next.js production build, and

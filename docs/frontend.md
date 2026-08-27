@@ -66,8 +66,8 @@ commercial deployment.
 `NEXT_PUBLIC_API_URL` selects the backend (default local value
 `http://localhost:8080`). Requests use abort signals to prevent stale filter
 responses from overwriting a newer selection. API errors and unavailable
-statistics produce visible states. Representative demo data is used only for
-the explicit standalone preview fallback and is labelled as such.
+statistics produce visible states. The frontend never replaces unavailable
+live statistics with demo values.
 
 The checked-in TypeScript transport schema is generated from
 `apps/real-estate-api/openapi/openapi.yaml`. CI fails on contract drift.
@@ -99,3 +99,12 @@ Open <http://localhost:3000>. A local Node installation is optional because
 the Make targets execute in Docker. UI changes should include an interaction
 test, API-boundary changes an API helper/contract test, and map behavior a
 focused map/helper test where practical.
+
+To rebuild only the frontend without starting the scheduled pipeline workflow:
+
+```bash
+docker compose up -d --build --force-recreate --no-deps web
+```
+
+`docker compose up --wait web` includes Compose dependencies and can recreate
+`pipeline-worker`; that worker performs a refresh immediately when it starts.

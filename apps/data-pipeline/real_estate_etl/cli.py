@@ -78,7 +78,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     system = commands.add_parser(
         "refresh-system",
-        help="Incrementally import GURS data, synchronize geography, and refresh analytics/models",
+        help=(
+            "Incrementally import GURS data, synchronize geography, refresh analytics, "
+            "and bootstrap models only on a new database"
+        ),
     )
     system.add_argument("--end-year", type=int, default=date.today().year)
     _add_refresh_options(system, "Download current source versions even when already imported")

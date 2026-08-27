@@ -101,9 +101,12 @@ analytical rebuilds. Independent sale and rental chains run concurrently on two
 connections; shared anomaly, duplicate, missingness, and repeat-index stages run
 only after both chains succeed. Each chain is transactional, but the complete
 cross-chain refresh is not one transaction, so readers can briefly observe mixed
-generations during a scheduled rebuild. The worker prints each completed stage
-with row count and wall-clock duration. Individual `analytics.refresh_runs`
-stages also use wall-clock start timestamps.
+generations during a scheduled rebuild. Fact-table refresh functions truncate
+and repopulate their tables in a transaction; API reads of those tables can
+wait on PostgreSQL relation locks until the corresponding sale or rental branch
+commits. The worker prints a periodic heartbeat for long SQL stages, followed
+by the exact row count and duration. Individual `analytics.refresh_runs` stages
+also use wall-clock start timestamps.
 
 ## Access and integrity
 

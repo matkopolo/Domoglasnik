@@ -1,5 +1,10 @@
 # Valuation model optimization report
 
+This is the measured snapshot of the optimization run identified below, not a
+live report regenerated on every scheduled import. Current operational rules
+are documented in `docs/statistical-methodology.md`; exact results for a newer
+training run are persisted in `analytics.model_runs`.
+
 Run date: 2026-08-03  
 Code base commit: `9783ba2981418bd7bfc7bb72f4adc87ff5544aff` (the checked-out HEAD before this change set)  
 Random seed: `20260723`
@@ -176,4 +181,6 @@ Executed successfully:
 - Signed holdout errors are negative for every group, showing material underprediction during a rising market. Calendar-year and location features do not fully model regime shifts.
 - Commercial, land, and house errors remain high and heavy-tailed. More domain features may help, but feature work needs a fresh predeclared selection cycle and a new untouched future holdout.
 - Grouped robustness is not a temporal-geographic double holdout; it measures entity/geographic transfer separately as intended.
-- The full offline search is computationally expensive and CLI progress is reported only after both transaction kinds complete.
+- The full offline search remains computationally expensive. Current CLI
+  progress reports transaction kind and parallel property-group milestones;
+  per-fold detail is available with `MODEL_DETAILED_PROGRESS=true`.

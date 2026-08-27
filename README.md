@@ -13,6 +13,8 @@ This project downloads national yearly ZIP archives from GURS JGP, preserves the
 - `docs/frontend.md`: implemented frontend architecture and user behavior
 - `docs/real-estate-api.md`: API-service architecture and contract overview
 - `docs/statistical-methodology.md`: statistical populations, equations, models, validation, and limitations
+- `docs/model-optimization-report.md`: dated evidence from the representative model-selection run
+- `docs/data-licensing-privacy.md`: source attribution, privacy minimization, and use limitations
 - `docs/development-guidelines.md`: Go/Python conventions and test-layout policy
 - `infrastructure/docker/`: service-specific Docker assets
 - `data/raw/`: local downloaded archives, excluded from Git
@@ -218,10 +220,10 @@ make models-refresh WORKERS=6
 robust outliers, missingness profiles, exact/near-duplicate signals, and the
 matched-pair median index. It prints every completed stage with its row count
 and elapsed time. The independent sale and rental chains use two PostgreSQL
-connections; shared analytical stages start after both finish. On the documented
-617,679-sale/456,448-rental development dataset, the optimized analytics phase
-measured about 4m46s; hardware and Docker resource allocation will change that
-result. Only `models-refresh` evaluates and selects hedonic models, calibrates
+connections; shared analytical stages start after both finish. Long atomic SQL
+stages print an elapsed-time heartbeat because PostgreSQL does not expose a
+reliable intermediate inserted-row count. Only `models-refresh` evaluates and
+selects hedonic models, calibrates
 prediction ranges, trains Isolation Forest models, persists predictions, and
 appends a new hedonic-index vintage. After the one-time database bootstrap,
 normal startup, the 14-day scheduled run, `refresh-system`, and
@@ -230,10 +232,12 @@ normal startup, the 14-day scheduled run, `refresh-system`, and
 Model refresh logs report temporal holdout MAE, median absolute percentage
 error, log RMSE/R², observed coverage of the 90% prediction interval,
 property-group performance against a local-median baseline, and performance
-on held-out groups. During the run they also show the current sale/rental
-property group, candidate number and hyperparameters, fold count, candidate
-MAE and duration, selected configuration, final-holdout evaluation, grouped
-robustness, Isolation Forest fit, and persistence stage. They deliberately do not print one generic
+on held-out groups. Concise progress is the default: transaction kind,
+property group, total fits, approximately 10% milestones, elapsed time, ETA,
+selected configuration, final-holdout evaluation, grouped robustness,
+Isolation Forest fit, and persistence stage. Set
+`MODEL_DETAILED_PROGRESS=true` only when per-fold diagnostics are needed. The
+reports deliberately do not print one generic
 “accuracy” number because this is regression, not classification. Full
 definitions and interpretation are in
 [docs/statistical-methodology.md](docs/statistical-methodology.md).
@@ -244,9 +248,12 @@ opts into codes 1–3 and `landScope=all` explicitly requests every retained lan
 class. Raw and analytical land transactions are never deleted.
 
 The initial analytical refresh takes several minutes; indexed API queries then
-complete in milliseconds. The API role cannot mutate imported transactions or
-run refreshes. It has narrowly scoped writes only for users, sessions,
-preferences, and authenticated anomaly review decisions.
+complete quickly. During fact-table replacement, reads of the affected
+analytics tables can wait for the sale/rental refresh transaction to commit;
+the previous source data is not deleted by a normal container rebuild. The API
+role cannot mutate imported transactions or run refreshes. It has narrowly
+scoped writes only for users, sessions, preferences, and authenticated anomaly
+review decisions.
 
 The full local contract and developer instructions are in [apps/real-estate-api/README.md](apps/real-estate-api/README.md). The API can be built and tested through Docker even when Go is not installed on the host:
 
@@ -326,10 +333,16 @@ open http://localhost:3000
 ```
 
 The browser calls the Go API at `http://localhost:8080`. When an API is not
-reachable—such as the standalone hosted design preview—the interface clearly
-labels and uses representative demo data. Configure a deployed API with
-`NEXT_PUBLIC_API_URL`. Frontend implementation and testing details are in
+reachable, the interface shows an explicit error and does not substitute demo
+statistics. Configure a deployed API with `NEXT_PUBLIC_API_URL`. Frontend
+implementation and testing details are in
 [apps/web/README.md](apps/web/README.md).
+
+For a frontend-only rebuild that must not restart the scheduled worker:
+
+```bash
+docker compose up -d --build --force-recreate --no-deps web
+```
 
 The checked-in MapLibre basemaps use public development tile services and need
 no local secret or API key. They are suitable for this repository's current
@@ -377,10 +390,14 @@ The primary command downloads and imports every national yearly dataset:
 make import-data
 ```
 
-For 2007–2026 this is only 34 archives:
+For 2007–2026 there are up to 34 product-years:
 
 - 20 national BUY archives for 2007–2026
 - 14 national RENT archives for 2013–2026
+
+The newest product-year may be listed by GURS before its ZIP is ready. Such a
+`WARNING`/missing-size response is reported as `unavailable`, does not fail the
+run, and is checked again by the next scheduled refresh.
 
 The command skips national dataset/year combinations already recorded in `source_files`, so it is safe to stop and restart. To retrieve current source versions again and replace existing snapshots, add `--force`:
 

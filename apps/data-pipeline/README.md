@@ -25,8 +25,9 @@ Compose starts `pipeline-worker` with:
 real-estate-etl schedule --interval-days 14
 ```
 
-It runs once immediately, writes its health marker only after the complete
-source/geography/analytics/model chain succeeds, then waits 14 days. Failures
+It runs once immediately, writes its health marker after the required
+source/geography/analytics chain succeeds, then waits 14 days. A new database
+also performs the one-time model bootstrap before becoming healthy. Failures
 retry after one hour. A PostgreSQL session advisory lock prevents a scheduled
 run, manual refresh, and reset from executing concurrently.
 
@@ -38,7 +39,8 @@ Each incremental run:
 - keeps valid ZIPs in the `pipeline_data` Docker volume;
 - refreshes GURS RPE boundaries;
 - refreshes all deterministic analytics in dependency order;
-- trains and persists the versioned sale and rental models.
+- trains models only when the database bootstrap marker is empty; later
+  scheduled runs leave model versions unchanged.
 
 Configure the loop in the repository `.env`:
 
@@ -87,7 +89,10 @@ docker compose run --rm pipeline-worker \
 Reset is intentionally explicit and destructive. It removes source-file
 ledger rows, imported transactions/components, analytical facts, anomaly
 signals, model runs/predictions, and index vintages. It preserves users,
-sessions, preferences, classification tables, and cached ZIP archives.
+sessions, preferences, classification tables, the completed-bootstrap marker,
+and cached ZIP archives. Consequently, reset/repopulate does not retrain the
+models; run `refresh-models` explicitly afterward if valuation outputs are
+required.
 
 Follow model training and validation output with:
 

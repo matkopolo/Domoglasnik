@@ -1,8 +1,9 @@
 # Analitika nepremičnin
 
 Next.js frontend for the Slovenian real-estate analytics platform. It consumes
-the Go API from `NEXT_PUBLIC_API_URL` and falls back to clearly labelled
-representative demo data when that API is unavailable.
+the Go API from `NEXT_PUBLIC_API_URL`. If that API is unavailable, the
+dashboard shows an explicit error state; it does not substitute generated or
+demo market values.
 
 ## Local development
 
@@ -58,13 +59,3 @@ no API key. Their URLs and attribution live in `lib/map-styles.ts`, isolated
 from the map component so a licensed production provider can replace them
 later. Live clusters, property points, boundaries, and statistics come from
 the Go API.
-
-## Future: AI comparator
-
-The planned comparator will accept natural-language opportunities, such as
-buildable land with an existing building permit. Before analysis, the UI will
-show the interpreted location and attributes for confirmation. Results will
-show the estimated premium or discount against suitable nearby comparables,
-price range, sample size, confidence, assumptions, and comparable transactions.
-Building-permit status must be verified through an authoritative future source
-or clearly labelled user evidence; it will not be inferred from ETN prices.
