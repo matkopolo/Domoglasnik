@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { APIError, loadDashboard, loadGeographyComparisons, loadMapFeatures, marketQuery } from "./api";
+import { APIError, loadDashboard, loadGeographyComparisons, loadMapFeatures, mapGeographyLevel, marketQuery } from "./api";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -10,6 +10,13 @@ it("adds inclusive area bounds to every market query", () => {
 });
 
 describe("loadMapFeatures", () => {
+  it.each([
+    [6.5, "country"], [7.8, "statistical_region"], [10, "municipality"],
+    [12.5, "city_district"],
+  ] as const)("maps zoom %s to the %s analytical level", (zoom, level) => {
+    expect(mapGeographyLevel(zoom)).toBe(level);
+  });
+
   it("requests zoom-aware sale clusters for broad map views", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       void input;

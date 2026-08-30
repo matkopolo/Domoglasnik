@@ -3,7 +3,7 @@
 import { Layers3, LocateFixed, Mountain, Search, X } from "lucide-react";
 import maplibregl, { type GeoJSONSource, type LngLatBoundsLike } from "maplibre-gl";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { loadMapFeatures, loadRegionBoundaries, loadTransaction, searchBuildings } from "@/lib/api";
+import { loadMapFeatures, loadRegionBoundaries, loadTransaction, mapGeographyLevel, searchBuildings } from "@/lib/api";
 import { buildMapPopup, mapAmountLabel } from "@/lib/map-popup";
 import { mapStyle, type MapStyleId } from "@/lib/map-styles";
 import type {
@@ -77,6 +77,7 @@ interface SloveniaMapProps {
   selectedId?: number;
   years: YearRange;
   area: AreaRange;
+  refreshing?: boolean;
   onContextChange: (context: MarketContext) => void;
 }
 
@@ -89,6 +90,7 @@ export function SloveniaMap({
   selectedId,
   years,
   area,
+  refreshing,
   onContextChange,
 }: SloveniaMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -104,9 +106,11 @@ export function SloveniaMap({
   const [styleId, setStyleId] = useState<MapStyleId>("street");
   const [mapStatus, setMapStatus] = useState<"ready" | "loading" | "offline">("loading");
   const [visiblePointCount, setVisiblePointCount] = useState(clusters.length);
+  const [visibleLevel, setVisibleLevel] = useState<GeographyLevel | "property">("country");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<BuildingSearchResult[]>([]);
   const [locationNotice, setLocationNotice] = useState<string>();
+  const styleIdRef = useRef<MapStyleId>("street");
 
   useEffect(() => { contextRef.current = onContextChange; }, [onContextChange]);
   useEffect(() => { modeRef.current = mode; }, [mode]);
@@ -126,6 +130,7 @@ export function SloveniaMap({
       element.className = `market-map-marker ${modeRef.current} ${
         isBuilding || isProperty ? "property" : "cluster geography"
       } ${isBuilding ? "building" : ""}`;
+      if (!isBuilding && !isProperty) element.dataset.level = String(feature.properties.level ?? "");
       element.ariaLabel = isBuilding
         ? `Odpri stavbo z ${count} posli`
         : isProperty
@@ -232,6 +237,24 @@ export function SloveniaMap({
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-left");
     map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
     map.on("style.load", () => {
+      if (styleIdRef.current === "street") {
+        for (const layer of map.getStyle().layers ?? []) {
+          try {
+            if (layer.type === "background") {
+              map.setPaintProperty(layer.id, "background-color", "#ebe9e2");
+            } else if (layer.type === "fill" && /water/i.test(layer.id)) {
+              map.setPaintProperty(layer.id, "fill-color", "#d7e0df");
+            } else if (layer.type === "fill" && /land|park|landcover/i.test(layer.id)) {
+              map.setPaintProperty(layer.id, "fill-color", "#eeece5");
+            } else if (layer.type === "line" && /road|highway|street|transport/i.test(layer.id)) {
+              map.setPaintProperty(layer.id, "line-color", "#c9c9c2");
+              map.setPaintProperty(layer.id, "line-opacity", 0.72);
+            }
+          } catch {
+            // Provider styles differ; unsupported paint properties stay unchanged.
+          }
+        }
+      }
       if (!map.getSource("regions")) {
         map.addSource("regions", { type: "geojson", data: boundariesRef.current });
         map.addLayer({
@@ -348,6 +371,8 @@ export function SloveniaMap({
       const requestGeneration = ++generation;
       timer = setTimeout(() => {
         const bounds = map.getBounds();
+        const nextLevel = map.getZoom() >= 13.5 ? "property" : mapGeographyLevel(map.getZoom());
+        setVisibleLevel(nextLevel);
         setMapStatus("loading");
         loadMapFeatures(
           mode,
@@ -360,6 +385,10 @@ export function SloveniaMap({
           area,
         ).then((data) => {
           if (requestGeneration !== generation) return;
+          const returnedLevel = data.features[0]?.properties.level;
+          if (nextLevel !== "property" && typeof returnedLevel === "string") {
+            setVisibleLevel(returnedLevel as GeographyLevel);
+          }
           pointsRef.current = data;
           setVisiblePointCount(data.features.length);
           renderMarkers(data);
@@ -390,18 +419,30 @@ export function SloveniaMap({
 
   function changeStyle(next: MapStyleId) {
     setStyleId(next);
+    styleIdRef.current = next;
     setMapStatus("loading");
     mapRef.current?.setStyle(mapStyle(next));
   }
 
+  const visibleLevelLabel = {
+    country: "Slovenija",
+    statistical_region: "statistične regije",
+    municipality: "občine",
+    city_district: "mestne četrti in krajevna območja",
+    local_community: "krajevna območja",
+    settlement: "naselja",
+    property: "stavbe in posli",
+  }[visibleLevel];
+
   return (
-    <section className="map-panel real-map-panel" aria-labelledby="map-title">
+    <section className={`map-panel real-map-panel ${context.kind === "building" || context.kind === "transaction" ? "map-focus-mode" : ""}`} aria-labelledby="map-title">
       <header className="panel-heading map-heading">
         <div><h2 id="map-title">Poiščite lokacijo ali raziščite trg</h2></div>
         <div className="map-key"><span className={`legend-dot ${mode}`} />
-          <span>{mapStatus === "loading" ? "Osvežujem …"
+          <span role="status">{refreshing || mapStatus === "loading" ? "Osvežujem zemljevid …"
             : mapStatus === "offline" ? "Zemljevid ni dosegljiv"
-              : `${visiblePointCount.toLocaleString("sl-SI")} skupin`}</span>
+              : visiblePointCount === 0 ? "Ni prikazanih poslov"
+                : `${visibleLevelLabel} · ${visiblePointCount.toLocaleString("sl-SI")} prikazanih`}</span>
         </div>
       </header>
       <div ref={containerRef} className="maplibre-canvas" aria-label="Interaktivni zemljevid nepremičninskih poslov v Sloveniji" />

@@ -68,9 +68,9 @@ Transaction context is returned by
 every sale and rental. It first
 returns quality-eligible transactions from the same building: same year and
 area within ±15%, adjacent year within ±15%, then other same-year units. A
-nearby benchmark is selected only from units within ±15% area and ±10
-construction years; when that is too thin it widens to ±25% area and ±15
-construction years. Settlement and other small-area context is likewise
+nearby benchmark is selected only from units within ±15% area and ±8
+construction years; these physical tolerances are not widened to fill a thin
+cohort. Settlement and other small-area context is likewise
 physically matched. Municipality, statistical-region, and national medians are
 deliberately broader market context. Each aggregate response exposes the
 matching profile and tolerances that produced it. The model estimate remains a
@@ -78,8 +78,8 @@ separate final reference rather than being mixed into observed comparables.
 The same response adds an adaptive current-market estimate based on weighted
 latest-market transactions. This is a backend comparable calculation, not the
 trained model returned in the separate `valuation` field. It first uses the
-current calendar year, expanding through 1, 2.5, 5, 10, and 20 km and from
-strict to wider area/building-age tolerances. Only if no current-year cohort
+current calendar year, expanding through 1, 2.5, 5, 10, and 20 km while
+retaining ±15% area and ±8 construction-year tolerances. Only if no current-year cohort
 reaches the 50-comparable target does it combine the previous and current
 calendar years. It is not a ±1-year window around the subject transaction.
 The result returns weighted p25/median/p75 values, sample size, actual radius,

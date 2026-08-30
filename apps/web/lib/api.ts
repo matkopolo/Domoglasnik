@@ -122,13 +122,7 @@ export async function loadMapFeatures(
   const showProperties = zoom >= 13.5;
   if (showProperties) query.set("limit", "500");
   else {
-    query.set("level", zoom < 7
-      ? "country"
-      : zoom < 9
-        ? "statistical_region"
-        : zoom < 11.5
-          ? "municipality"
-          : "city_district");
+    query.set("level", mapGeographyLevel(zoom));
   }
   let response = await getJSON<MapFeatureCollection>(
     `${mapPrefix}/${showProperties ? "properties" : "geographies"}?${query}`,
@@ -173,6 +167,13 @@ export async function loadMapFeatures(
     }
   });
   return { ...decorated, features: [...grouped.values()] };
+}
+
+export function mapGeographyLevel(zoom: number): Geography["level"] {
+  if (zoom < 7.6) return "country";
+  if (zoom < 9.4) return "statistical_region";
+  if (zoom < 12) return "municipality";
+  return "city_district";
 }
 
 export function loadTransaction(mode: MarketMode, id: number, signal: AbortSignal) {

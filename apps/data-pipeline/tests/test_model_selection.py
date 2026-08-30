@@ -3,13 +3,16 @@ from datetime import date
 
 import numpy as np
 
+import real_estate_etl.model_selection as model_selection
+from real_estate_etl.model_features import preprocessor
 from real_estate_etl.model_selection import (
     SelectionSettings,
+    build_estimator,
     build_pipeline,
     grouped_robustness,
     optimize_model,
 )
-from real_estate_etl.model_validation import interval_metrics, regression_metrics
+from real_estate_etl.model_validation import interval_metrics, regression_metrics, temporal_folds
 
 
 def population(seed=4):
@@ -155,3 +158,47 @@ def test_detailed_progress_reports_each_temporal_fold():
         message.startswith("fit 1/") and "train through" in message
         for message in messages
     )
+
+
+def test_fold_preprocessing_is_shared_without_crossing_fold_boundaries(monkeypatch):
+    features, target, dates, groups = population()
+    original = model_selection.preprocessor
+    calls = []
+
+    def counting_preprocessor(*args, **kwargs):
+        calls.append((args, kwargs))
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(model_selection, "preprocessor", counting_preprocessor)
+    result = optimize_model(features, target, dates, groups, settings(), configs())
+    folds, _, _ = temporal_folds(
+        dates,
+        min_training_rows=settings().min_training_rows,
+        min_calibration_rows=settings().min_calibration_rows,
+        min_validation_rows=settings().min_validation_rows,
+    )
+
+    assert result["status"] == "selected"
+    # One transformer per temporal fold, plus final-holdout and grouped checks.
+    # Candidate estimators reuse only the matrices produced inside their fold.
+    assert len(calls) == len(folds) + 2
+    assert len(calls) < len(folds) * len(configs()) + 2
+
+
+def test_shared_fold_preprocessing_matches_full_candidate_pipelines():
+    features, target, _, _ = population()
+    training, validation = np.arange(210), np.arange(210, len(features))
+    transformer = preprocessor(list(range(6)), [6, 7], dense=True)
+    transformed_training = transformer.fit_transform(features[training])
+    transformed_validation = transformer.transform(features[validation])
+
+    for configuration in configs():
+        pipeline = build_pipeline(configuration, settings().random_seed)
+        pipeline.fit(features[training], target[training])
+        expected = pipeline.predict(features[validation])
+
+        estimator = build_estimator(configuration, settings().random_seed)
+        estimator.fit(transformed_training, target[training])
+        actual = estimator.predict(transformed_validation)
+
+        assert np.allclose(actual, expected)

@@ -122,6 +122,12 @@ nested oversubscription. For example:
 docker compose run --rm pipeline-worker refresh-models --workers 6
 ```
 
+Candidate models share only fold-local transformed feature matrices. Imputation,
+scaling, category-frequency decisions, and one-hot encoding are fitted once per
+temporal fold instead of once per candidate, while remaining isolated from all
+later folds and the final holdout. This is an accuracy-neutral runtime
+optimization; it does not reduce candidates, years, rows, or validation work.
+
 Progress output reports the transaction kind, property-group position,
 candidate position, progress at approximately 10% intervals, elapsed time, and
 rolling ETA. A typical sequence is:

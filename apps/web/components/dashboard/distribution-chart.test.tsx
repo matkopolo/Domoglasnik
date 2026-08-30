@@ -1,8 +1,9 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
 import { DistributionChart } from "./distribution-chart";
 
 describe("DistributionChart", () => {
+  afterEach(cleanup);
   it("exposes the exact transaction count and price range for every bar", () => {
     render(<DistributionChart mode="sale" data={{
       metric: "price_per_sqm",
@@ -22,5 +23,15 @@ describe("DistributionChart", () => {
     expect(screen.getByText("43 poslov")).toBeInTheDocument();
     expect(screen.getByText("Število poslov")).toBeInTheDocument();
     expect(screen.getByText("Cena na m²")).toBeInTheDocument();
+    expect(screen.getByText("1250 €/m²")).toBeInTheDocument();
+    expect(screen.getByText("1700 €/m²")).toBeInTheDocument();
+  });
+
+  it("keeps a suppressed distribution suppressed", () => {
+    render(<DistributionChart mode="sale" data={{ metric: "price_per_sqm", sampleSize: 17,
+      isPublishable: false, suppressionReason: "below_minimum_sample_30",
+      belowBoundCount: 0, aboveBoundCount: 0, buckets: [] }}/>)
+    expect(screen.getByText("Premalo podatkov")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /€\/m²/ })).not.toBeInTheDocument();
   });
 });

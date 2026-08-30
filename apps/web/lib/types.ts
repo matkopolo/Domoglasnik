@@ -235,7 +235,7 @@ export interface ContextBenchmark {
   radiusMeters?: number;
   reliability: "very_low" | "low" | "moderate";
   isPublishable: boolean;
-  comparisonProfile: "area_15_age_10" | "area_25_age_15" | "area_15" | "area_25" | "unadjusted";
+  comparisonProfile: "area_15_age_8" | "area_15" | "unadjusted";
   areaTolerancePercent?: number;
   constructionYearTolerance?: number;
 }
@@ -371,15 +371,24 @@ export interface CurrentMarketEstimate {
   lowerTotal: number;
   centralTotal: number;
   upperTotal: number;
+  unadjustedLowerTotal: number;
+  unadjustedCentralTotal: number;
+  unadjustedUpperTotal: number;
   lowerAmountPerSqm: number;
   centralAmountPerSqm: number;
   upperAmountPerSqm: number;
+  unadjustedLowerAmountPerSqm: number;
+  unadjustedCentralAmountPerSqm: number;
+  unadjustedUpperAmountPerSqm: number;
   comparableCount: number;
   maximumRadiusMeters: number;
   areaTolerancePercent: number;
   constructionYearTolerance?: number;
   locationAdjustmentFactor: number;
+  rawLocationAdjustmentFactor: number;
+  locationAdjustmentApplied: boolean;
   localAdjustmentSampleSize: number;
+  packageCompositionMatched: boolean;
   referenceYear: number;
   confidence: "moderate" | "low" | "very_low";
   warnings: string[];

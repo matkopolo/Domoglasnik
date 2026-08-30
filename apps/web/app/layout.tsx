@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./globals.css";
+import "./redesign.css";
+import "./atlas.css";
 
 export const metadata: Metadata = {
   title: "Analitika nepremičnin | Pregled trga",

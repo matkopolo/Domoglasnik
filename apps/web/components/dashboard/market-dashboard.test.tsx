@@ -78,8 +78,9 @@ describe("MarketDashboard", () => {
     render(<MarketDashboard />);
     expect(screen.getByRole("heading", { name: "Je cena nepremičnine realna?" })).toBeInTheDocument();
     expect(screen.getByRole("application", { name: "Interaktivni zemljevid nepremičninskih poslov v Sloveniji" })).toBeInTheDocument();
-    const metric = await screen.findByText("Srednja cena / m²");
-    expect(metric.nextElementSibling).toHaveTextContent("2596");
+    const metrics = await screen.findAllByText("Mediana cene / m²");
+    expect(metrics.length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/2[.\s]?596 €\/m²/).length).toBeGreaterThan(0);
     expect(screen.getByText(/Geodetska uprava Republike Slovenije/)).toBeInTheDocument();
     expect(screen.getByText(/GURS te aplikacije ne podpira/)).toBeInTheDocument();
     expect(screen.getByText(/niso uradna ali certificirana cenitev/)).toBeInTheDocument();
@@ -100,8 +101,8 @@ describe("MarketDashboard", () => {
   it("switches to rental metrics", async () => {
     render(<MarketDashboard />);
     fireEvent.click(screen.getByRole("button", { name: "Najem" }));
-    const metric = await screen.findByText("Srednja mesečna najemnina");
-    expect(metric.nextElementSibling).toHaveTextContent("650");
+    const metrics = await screen.findAllByText("Mediana mesečne najemnine");
+    expect(metrics.some((metric) => metric.nextElementSibling?.textContent?.includes("650"))).toBe(true);
   });
 
   it("allows the analysis year range to be changed", () => {
@@ -139,9 +140,28 @@ describe("MarketDashboard", () => {
       .mockResolvedValueOnce(demoDashboard("rent"));
     render(<MarketDashboard />);
     fireEvent.click(screen.getByRole("button", { name: "Najem" }));
-    await screen.findByText("Srednja mesečna najemnina");
+    await screen.findAllByText("Mediana mesečne najemnine");
     await act(async () => resolveFirst(demoDashboard("sale")));
-    expect(screen.getByText("Srednja mesečna najemnina")).toBeInTheDocument();
+    expect(screen.getAllByText("Mediana mesečne najemnine").length).toBeGreaterThan(0);
+  });
+
+  it("offers rooms only for rentals and never rental land", () => {
+    render(<MarketDashboard />);
+    const property = screen.getByRole("combobox", { name: "Vrsta nepremičnine" });
+    expect(screen.queryByRole("option", { name: "Sobe" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Najem" }));
+    expect(screen.getByRole("option", { name: "Sobe" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "Zemljišča" })).not.toBeInTheDocument();
+    fireEvent.change(property, { target: { value: "room" } });
+    expect(window.location.search).toContain("propertyGroup=room");
+  });
+
+  it("provides a functional mobile navigation control", () => {
+    render(<MarketDashboard />);
+    const menu = screen.getByRole("button", { name: "Odpri navigacijo" });
+    fireEvent.click(menu);
+    expect(screen.getByRole("navigation", { name: "Glavna navigacija" })).toHaveClass("open");
+    expect(menu).toHaveAttribute("aria-expanded", "true");
   });
 
   it("returns statistics to the transaction municipality when reopening it", async () => {

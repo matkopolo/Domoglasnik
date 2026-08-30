@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Menu, RefreshCw, SearchCheck } from "lucide-react";
+import { ArrowRight, Menu, RefreshCw, SearchCheck, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { loadBuildingStatistics, loadDashboard, loadTransaction } from "@/lib/api";
 import type {
@@ -19,7 +19,7 @@ import { AnalyticsWorkspace } from "./analytics-workspace";
 import { DistributionChart } from "./distribution-chart";
 import { FilterBar } from "./filter-bar";
 import { SloveniaMap } from "./slovenia-map";
-import { SummaryPanel } from "./summary-panel";
+import { MarketSnapshot } from "./market-snapshot";
 import { TrendChart } from "./trend-chart";
 
 const EMPTY_DATA: DashboardData = {
@@ -131,9 +131,23 @@ export function MarketDashboard() {
   const [data, setData] = useState<DashboardData>(EMPTY_DATA);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
+  const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
+  const mobileNavigationButton = useRef<HTMLButtonElement>(null);
   const generation = useRef(0);
   const contextGeographyGeneration = useRef(0);
   const geographyId = geographyContext?.id;
+
+  useEffect(() => {
+    if (!mobileNavigationOpen) return;
+    const close = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMobileNavigationOpen(false);
+        mobileNavigationButton.current?.focus();
+      }
+    };
+    document.addEventListener("keydown", close);
+    return () => document.removeEventListener("keydown", close);
+  }, [mobileNavigationOpen]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -243,27 +257,33 @@ export function MarketDashboard() {
   };
 
   return (
-    <div className={`app-shell ${loading ? "is-loading" : ""}`}>
+    <div className="app-shell">
       <header className="topbar">
-        <button className="mobile-menu" aria-label="Odpri navigacijo"><Menu /></button>
+        <button ref={mobileNavigationButton} type="button" className="mobile-menu"
+          aria-label={mobileNavigationOpen ? "Zapri navigacijo" : "Odpri navigacijo"}
+          aria-expanded={mobileNavigationOpen} aria-controls="mobile-navigation"
+          onClick={() => setMobileNavigationOpen((value) => !value)}>
+          {mobileNavigationOpen ? <X /> : <Menu />}
+        </button>
         <Brand />
-        <nav aria-label="Glavna navigacija">
+        <nav id="mobile-navigation" className={mobileNavigationOpen ? "open" : ""} aria-label="Glavna navigacija">
           <a href="#overview" className="active">Pregled trga</a>
           <a href="#trends">Gibanje</a>
           <a href="#distribution">Porazdelitev</a>
+          <a href="#detailed-analytics">Podrobna analiza</a>
         </nav>
         <div className="updated">
           <RefreshCw size={14} className={loading ? "spin" : ""} />
-          <span>Vir: GURS ETN in RPE · do {years.to}</span>
+          <span>Vir: GURS ETN in RPE</span>
           <i className={error ? "offline" : "live"} />
-          <small>{error ? "API ni dosegljiv" : "podatki iz API"}</small>
+          <small>{error ? "API ni dosegljiv" : loading ? "osvežujem podatke" : "podatki iz API"}</small>
         </div>
       </header>
       <main id="overview">
         <div className="page-intro">
           <div><span className="page-eyebrow">Dejansko sklenjeni posli · GURS ETN</span>
             <h1>Je cena nepremičnine realna?</h1>
-            <p>Preverite trg, poiščite stavbo in primerjajte prodaje ali najeme v njeni okolici.</p>
+            <p>Preverite dejansko stanje trga, poiščite stavbo in primerjajte prodaje ali najeme.</p>
           </div>
           <button type="button" className="primary-action" onClick={() => {
             document.querySelector<HTMLElement>(".map-panel")?.scrollIntoView({
@@ -283,6 +303,7 @@ export function MarketDashboard() {
           onModeChange={(next) => {
             setMode(next);
             if (next === "rent" && propertyGroup === "land") setPropertyGroup("apartment");
+            if (next === "sale" && propertyGroup === "room") setPropertyGroup("apartment");
           }}
           propertyGroup={propertyGroup}
           onPropertyChange={setPropertyGroup}
@@ -298,8 +319,16 @@ export function MarketDashboard() {
           onYearsChange={setYears}
           area={area}
           onAreaChange={setArea}
+          onReset={() => {
+            setPropertyGroup("apartment");
+            setYears({ from: 2018, to: 2025 });
+            setArea({});
+            handleContext({ kind: "country" });
+          }}
         />
-        <div className="primary-grid contextual">
+        <div className={`primary-grid ${context.kind === "building" || context.kind === "transaction" ? "selection-active" : ""}`}>
+          <MarketSnapshot title={selectedName} mode={mode} propertyGroup={propertyGroup}
+            overview={data.overview} series={data.timeSeries} years={years} loading={loading} />
           <SloveniaMap
             mode={mode}
             context={context}
@@ -309,10 +338,10 @@ export function MarketDashboard() {
             selectedId={geographyId}
             years={years}
             area={area}
+            refreshing={loading}
             onContextChange={handleContext}
           />
           <div className="context-column" id="market-context">
-            <SummaryPanel title={selectedName} mode={mode} overview={data.overview} series={data.timeSeries} />
             <ContextPanel
               context={context}
               mode={mode}

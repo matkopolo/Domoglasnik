@@ -1,6 +1,9 @@
 package analytics
 
-import "testing"
+import (
+	"math"
+	"testing"
+)
 
 func TestBenchmarkDifference(t *testing.T) {
 	value, ok := benchmarkDifference(125, 100)
@@ -46,13 +49,13 @@ func TestDirectComparableTier(t *testing.T) {
 func TestNearbyBenchmarkProfiles(t *testing.T) {
 	year := 2001
 	withAge := nearbyBenchmarkProfiles(&year)
-	if len(withAge) != 2 || withAge[0].name != "area_15_age_10" ||
-		withAge[1].name != "area_25_age_15" {
+	if len(withAge) != 1 || withAge[0].name != "area_15_age_8" ||
+		withAge[0].areaTolerancePercent != 15 || withAge[0].constructionYearTolerance != 8 {
 		t.Fatalf("nearbyBenchmarkProfiles(with age)=%+v", withAge)
 	}
 	withoutAge := nearbyBenchmarkProfiles(nil)
-	if len(withoutAge) != 2 || withoutAge[0].name != "area_15" ||
-		withoutAge[1].name != "area_25" {
+	if len(withoutAge) != 1 || withoutAge[0].name != "area_15" ||
+		withoutAge[0].areaTolerancePercent != 15 {
 		t.Fatalf("nearbyBenchmarkProfiles(without age)=%+v", withoutAge)
 	}
 }
@@ -64,5 +67,15 @@ func TestWeightedQuantile(t *testing.T) {
 	}
 	if got := weightedQuantile(values, .9); got != 200 {
 		t.Fatalf("weightedQuantile(.9)=%v want=200", got)
+	}
+}
+
+func TestShrinkLocationFactorPullsSmallSamplesTowardNeutral(t *testing.T) {
+	got := shrinkLocationFactor(.70, 20)
+	if math.Abs(got-.88) > .0001 {
+		t.Fatalf("shrinkLocationFactor(.70, 20)=%v want=.88", got)
+	}
+	if got <= .70 || got >= 1 {
+		t.Fatalf("shrunk factor %v must remain between raw factor and neutral", got)
 	}
 }

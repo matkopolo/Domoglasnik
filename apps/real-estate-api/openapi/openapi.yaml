@@ -1887,7 +1887,7 @@ components:
         isPublishable: {type: boolean}
         comparisonProfile:
           type: string
-          enum: [area_15_age_10, area_25_age_15, area_15, area_25, unadjusted]
+          enum: [area_15_age_8, area_15, unadjusted]
         areaTolerancePercent: {type: integer}
         constructionYearTolerance: {type: integer}
     DirectComparable:
@@ -1995,14 +1995,23 @@ components:
         - lowerTotal
         - centralTotal
         - upperTotal
+        - unadjustedLowerTotal
+        - unadjustedCentralTotal
+        - unadjustedUpperTotal
         - lowerAmountPerSqm
         - centralAmountPerSqm
         - upperAmountPerSqm
+        - unadjustedLowerAmountPerSqm
+        - unadjustedCentralAmountPerSqm
+        - unadjustedUpperAmountPerSqm
         - comparableCount
         - maximumRadiusMeters
         - areaTolerancePercent
         - locationAdjustmentFactor
+        - rawLocationAdjustmentFactor
+        - locationAdjustmentApplied
         - localAdjustmentSampleSize
+        - packageCompositionMatched
         - referenceYear
         - confidence
         - warnings
@@ -2011,15 +2020,24 @@ components:
         lowerTotal: {type: number}
         centralTotal: {type: number}
         upperTotal: {type: number}
+        unadjustedLowerTotal: {type: number}
+        unadjustedCentralTotal: {type: number}
+        unadjustedUpperTotal: {type: number}
         lowerAmountPerSqm: {type: number}
         centralAmountPerSqm: {type: number}
         upperAmountPerSqm: {type: number}
+        unadjustedLowerAmountPerSqm: {type: number}
+        unadjustedCentralAmountPerSqm: {type: number}
+        unadjustedUpperAmountPerSqm: {type: number}
         comparableCount: {type: integer}
         maximumRadiusMeters: {type: integer}
         areaTolerancePercent: {type: integer}
         constructionYearTolerance: {type: integer}
         locationAdjustmentFactor: {type: number}
+        rawLocationAdjustmentFactor: {type: number}
+        locationAdjustmentApplied: {type: boolean}
         localAdjustmentSampleSize: {type: integer}
+        packageCompositionMatched: {type: boolean}
         referenceYear: {type: integer}
         confidence: {type: string, enum: [moderate, low, very_low]}
         warnings:

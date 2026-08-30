@@ -90,15 +90,14 @@ shows the actual transaction, total amount, amount per m², area difference,
 date, and representative/outlier state. One transaction is useful direct
 evidence but is not presented as a reliable market median.
 
-Broader same-year benchmarks remain separate. Nearby candidates first require
-area within ±15% and construction year within ±10 years and search radii of
-500 m, 1 km, 2.5 km, then 5 km. If no radius reaches the minimum sample of
-five, the filter widens to ±25% area and ±15 construction years and repeats
-the radii. When construction year is absent, the corresponding area-only
-profile is used. No unmatched nearby median is silently substituted.
+Broader same-year benchmarks remain separate. Nearby candidates require area
+within ±15% and construction year within ±8 years and search radii of 500 m,
+1 km, 2.5 km, then 5 km. The physical tolerances are not widened when the
+cohort is sparse. When construction year is absent, the corresponding ±15%
+area-only profile is used. No unmatched nearby median is silently substituted.
 
-Settlement, city-district, and other small-area comparisons use ±25% area and
-±15 construction years (or area only when age is absent). Municipality,
+Settlement, city-district, and other small-area comparisons use ±15% area and
+±8 construction years (or area only when age is absent). Municipality,
 statistical-region, and national medians are intentionally unadjusted, broader
 market context. Every benchmark states its profile and numeric tolerances in
 the API and interface. The hierarchy therefore ends with the broader
@@ -150,21 +149,24 @@ subject, be representative-eligible, have positive area and amount per m²,
 have coordinates, and not be the subject transaction itself. Sale-land
 comparisons use the strict verified-buildable land population. The query is
 capped at the nearest 250 eligible candidates for each attempted cohort.
+Candidates with the same number of contractual package components are searched
+first. A mixed-package cohort is allowed only when fewer than five exact-count
+matches exist, and the fallback is returned as an explicit warning.
 
 The search uses progressively larger radii of 1 km, 2.5 km, 5 km, 10 km, and
 20 km:
 
-1. area within ±15% and construction year within ±10 years;
-2. if that cannot reach 50 within 20 km, area within ±25% and construction year
-   within ±15 years;
-3. if construction year is unavailable, use the corresponding ±15% and ±25%
-   area-only profiles;
-4. if the current year remains too thin, repeat steps 1–3 over the combined
+1. area within ±15% and construction year within ±8 years;
+2. do not widen those physical tolerances merely to reach the target sample;
+3. if construction year is unavailable, use the corresponding ±15%
+   area-only profile;
+4. if the current year remains too thin, repeat the search over the combined
    current-plus-previous-year window.
 
 The radius is therefore adaptive rather than always 20 km. A result with 50
 strict candidates inside 2.5 km stops there. A sparse market may expand to
-20 km and the previous year. The response records the actual maximum radius,
+20 km and the previous year, but remains physically strict and may therefore
+return fewer than 50 candidates. The response records the actual maximum radius,
 area tolerance, construction-year tolerance, candidate count, and reference
 year used by the calculation.
 
@@ -210,10 +212,13 @@ the median of the surrounding selected-radius market over the three completed
 calendar years before the current year. For a 2026 request, that adjustment
 window is 2023–2025 and excludes incomplete 2026.
 
-The factor is applied only with at least five local and twenty total matched
-observations, and it is bounded to `0.65–1.35`. Otherwise it remains `1.0`, so
-no unsupported adjustment is invented. The response exposes the factor and
-the local adjustment sample size.
+The factor is applied only with at least twenty local and fifty total matched
+historical observations. The raw municipality-to-surrounding-market ratio is
+then shrunk toward `1.0` with weight `local_n / (local_n + 30)` and the applied
+factor is bounded to `0.80–1.20`. Otherwise the applied factor remains `1.0`.
+The response exposes the raw factor, applied factor, whether adjustment was
+applied, and the local sample size. It also returns both the unadjusted
+comparable range and the adjusted range, so the effect remains inspectable.
 
 ### Confidence and returned evidence
 
@@ -230,7 +235,7 @@ The response exposes:
 - area and construction-year tolerances;
 - location-adjustment factor and supporting local sample size;
 - current reference year, confidence label, warnings, and methodology version
-  `adaptive-current-market-v2`.
+  `adaptive-current-market-v4`.
 
 ## Robust cohort outliers
 
@@ -385,6 +390,16 @@ BLAS, OpenMP, MKL, and NumExpr to one native thread per fit, preventing nested
 thread pools from multiplying the configured concurrency. This parallelism
 changes wall-clock time only; it does not change rows, folds, seed, candidate
 order, selection rules, or persisted predictions.
+
+Within a temporal fold, all 20 candidates use the same training rows and the
+same preprocessing definition. The worker therefore fits median imputation,
+scaling, categorical-frequency thresholds, and one-hot encoding **once inside
+that fold**, transforms that fold's calibration and validation rows, and then
+reuses those matrices for the 20 candidate estimators. It never reuses a
+transformer between folds. This removes 19 duplicate preprocessing fits per
+fold without exposing future rows or changing a candidate's inputs, fitted
+estimator, predictions, or selection metrics. The transformed matrices are
+released as the worker advances to the next fold to keep memory bounded.
 
 Progress logs expose candidate-fit totals and completion rather than implying
 one opaque training operation. They report transaction kind, property group,

@@ -18,21 +18,25 @@ The dashboard provides:
   municipalities/local areas to property/building points;
 - street/satellite basemaps, clustering, address search, boundary selection,
   and building-grouped transactions;
-- overview metrics with cleaned/raw sample sizes and publication warnings;
+- a market snapshot with explicit median terminology, transaction depth,
+  representative share, eligible population, and excluded outliers;
 - price/rent trends, year-over-year context, distributions and percentiles;
 - a shared trend card with tabs for median amount per m², transaction volume,
   and official Slovenian inflation, selectable by month, quarter, or year;
 - geography comparisons, highest/lowest representative transactions,
   anomaly context, indices, and model valuation context;
-- detailed sale/rental package composition and building history.
+- detailed sale/rental package composition and building history;
 - building-first direct comparables ranked by year and relative area;
 - nearby and small-area comparisons matched by floor area and construction
   year, with their actual matching tolerances displayed in the card;
 - broad market medians and model estimates kept visually separate from direct
   and physically matched evidence.
-- a separate current-market estimate card showing its weighted p25–median–p75
+- a separate current-market estimate range showing its weighted P25–median–P75
   range, actual adaptive radius, comparable count, physical tolerances,
-  location adjustment, confidence and limitations.
+  location adjustment, confidence and limitations;
+- a transaction inspector with progressively disclosed `Pregled`, `Primerljivi
+  posli`, `Podrobnosti`, and `Kakovost in model` tabs. Direct observed evidence
+  precedes wider benchmarks and the trained model.
 
 Filters define one market population for dashboard and map requests and are
 stored in URL query parameters so an analysis can be refreshed or shared.
@@ -48,14 +52,21 @@ commercial deployment.
 
 ## Structure
 
-- `app/` contains the Next.js entry point, layout, and global design tokens.
+- `app/` contains the Next.js entry point, layout, global foundations, and the
+  semantic redesign stylesheet.
 - `components/dashboard/market-dashboard.tsx` owns URL/filter/selection state
   and request cancellation.
-- `filter-bar.tsx` owns accessible market controls.
+- `filter-bar.tsx` owns primary/secondary market controls and the accessible
+  mobile filter sheet, including focus restoration and Escape handling.
 - `slovenia-map.tsx` owns MapLibre sources, semantic zoom, clusters,
   boundaries, search, and selection.
-- summary, trend, distribution, context, and analytics-workspace components
-  render focused analytical views.
+- `market-snapshot.tsx` renders the selected population's primary evidence.
+- `context-panel.tsx` loads selection data and delegates transaction rendering
+  to `components/dashboard/inspector/`; reusable evidence primitives live in
+  `components/ui/`.
+- trend, distribution, and analytics-workspace components render focused
+  analytical views. Detailed analytics fetch only the active tab and cache
+  previously loaded tab/filter combinations.
 - `lib/api.ts` is the typed HTTP boundary; `lib/types.ts` contains UI-facing
   domain types and generated OpenAPI types live under `lib/generated`.
 - colocated Vitest/Testing Library tests characterize components; pure display
@@ -68,6 +79,10 @@ commercial deployment.
 responses from overwriting a newer selection. API errors and unavailable
 statistics produce visible states. The frontend never replaces unavailable
 live statistics with demo values.
+
+Refreshes are local to the affected panel. Existing successful data remains
+readable while a newer request is running. Suppressed periods create gaps in
+price lines, and suppressed distributions do not render synthetic histograms.
 
 The checked-in TypeScript transport schema is generated from
 `apps/real-estate-api/openapi/openapi.yaml`. CI fails on contract drift.

@@ -61,6 +61,15 @@ def candidate_configurations() -> list[dict[str, Any]]:
 
 
 def build_pipeline(configuration: dict[str, Any], seed: int) -> Pipeline:
+    estimator = build_estimator(configuration, seed)
+    return Pipeline([
+        ("features", preprocessor(list(range(6)), [6, 7], dense=True)),
+        ("regression", estimator),
+    ])
+
+
+def build_estimator(configuration: dict[str, Any], seed: int):
+    """Build only the regressor for already fold-local preprocessed features."""
     family = configuration["family"]
     if family == "ridge":
         estimator = Ridge(alpha=configuration["alpha"])
@@ -76,10 +85,7 @@ def build_pipeline(configuration: dict[str, Any], seed: int) -> Pipeline:
         )
     else:
         raise ValueError(f"unknown model family: {family}")
-    return Pipeline([
-        ("features", preprocessor(list(range(6)), [6, 7], dense=True)),
-        ("regression", estimator),
-    ])
+    return estimator
 
 
 def _timed_fit_predict(model, train_x, train_y, validation_x):
@@ -163,6 +169,7 @@ def optimize_model(
     )
     evaluated = []
     candidates = configurations or candidate_configurations()
+    candidate_results: list[list[dict[str, Any]]] = [[] for _ in candidates]
     total_candidate_fits = len(candidates) * len(folds)
     progress_interval = max(1, (total_candidate_fits + 9) // 10)
     completed_candidate_fits = 0
@@ -171,15 +178,22 @@ def optimize_model(
         f"fit plan: {len(candidates)} candidates × {len(folds)} folds = "
         f"{total_candidate_fits} candidate fits, plus holdout, grouped, and production stages"
     )
-    for candidate_number, configuration in enumerate(candidates, start=1):
-        candidate_started = time.monotonic()
+    preprocessing_seconds = 0.0
+    for fold_number, fold in enumerate(folds, start=1):
+        preprocessing_started = time.monotonic()
+        fold_preprocessor = preprocessor(list(range(6)), [6, 7], dense=True)
+        training_features = fold_preprocessor.fit_transform(features[fold.training])
+        calibration_features = fold_preprocessor.transform(features[fold.calibration])
+        validation_features = fold_preprocessor.transform(features[fold.validation])
+        fold_preprocessing_seconds = time.monotonic() - preprocessing_started
+        preprocessing_seconds += fold_preprocessing_seconds
         if settings.detailed_progress:
             progress(
-                f"candidate {candidate_number}/{len(candidates)}: "
-                f"{_configuration_label(configuration)} across {len(folds)} folds"
+                f"fold {fold_number}/{len(folds)} preprocessing complete "
+                f"(train through {fold.train_years[-1]}, "
+                f"calibrate {fold.calibration_year}, validate {fold.validation_year})"
             )
-        results = []
-        for fold_number, fold in enumerate(folds, start=1):
+        for candidate_number, configuration in enumerate(candidates, start=1):
             if settings.detailed_progress:
                 progress(
                     f"fit {completed_candidate_fits + 1}/{total_candidate_fits}: "
@@ -189,15 +203,15 @@ def optimize_model(
                     f"calibrate {fold.calibration_year}, "
                     f"validate {fold.validation_year})"
                 )
-            model = build_pipeline(configuration, settings.random_seed)
+            model = build_estimator(configuration, settings.random_seed)
             predicted, training_seconds, prediction_seconds = _timed_fit_predict(
-                model, features[fold.training], target[fold.training], features[fold.validation]
+                model, training_features, target[fold.training], validation_features
             )
-            calibration_prediction = model.predict(features[fold.calibration])
+            calibration_prediction = model.predict(calibration_features)
             half_width = interval_half_width(
                 target[fold.calibration], calibration_prediction, settings.nominal_coverage
             )
-            results.append({
+            candidate_results[candidate_number - 1].append({
                 "name": fold.name, "train_years": list(fold.train_years),
                 "calibration_year": fold.calibration_year,
                 "validation_year": fold.validation_year,
@@ -210,8 +224,9 @@ def optimize_model(
                     target[fold.validation],
                     np.full(len(fold.validation), np.median(target[fold.training])),
                 ),
-                "training_seconds": training_seconds,
+                "training_seconds": training_seconds + fold_preprocessing_seconds,
                 "prediction_seconds": prediction_seconds,
+                "shared_preprocessing_seconds": fold_preprocessing_seconds,
             })
             completed_candidate_fits += 1
             elapsed = time.monotonic() - selection_started
@@ -229,15 +244,13 @@ def optimize_model(
                     f"fold {fold_number}/{len(folds)}; "
                     f"elapsed={_duration(elapsed)}, ETA={_duration(remaining)}"
                 )
+    for configuration, results in zip(candidates, candidate_results):
         evaluated.append({"configuration": configuration, "folds": results,
                           "aggregate": _aggregate(results)})
-        if settings.detailed_progress:
-            progress(
-                f"candidate {candidate_number}/{len(candidates)} complete: "
-                f"weighted MAE="
-                f"{evaluated[-1]['aggregate']['weighted_mae_amount_per_sqm']:.3f}, "
-                f"elapsed={time.monotonic() - candidate_started:.1f}s"
-            )
+    progress(
+        f"shared fold preprocessing: {len(folds)} fits instead of "
+        f"{total_candidate_fits}; elapsed={_duration(preprocessing_seconds)}"
+    )
     selected = select_configuration(evaluated)
     progress(f"selected: {_configuration_label(selected['configuration'])}")
     training, calibration, holdout = final_holdout_split(

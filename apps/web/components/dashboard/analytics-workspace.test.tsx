@@ -100,7 +100,7 @@ describe("AnalyticsWorkspace", () => {
     expect(screen.getByText("#501")).toBeInTheDocument();
     expect(screen.getByText("#502")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /Indeksi in modeli/ }));
+    fireEvent.click(screen.getByRole("tab", { name: "Indeksi" }));
     expect((await screen.findAllByText("Približno 21 % višje kot leta 2018")).length).toBeGreaterThan(0);
     expect(screen.getAllByText("Približno 18 % višje kot leta 2018").length).toBeGreaterThan(0);
     expect(screen.getByText(/indeks 121/)).toBeInTheDocument();
@@ -112,9 +112,9 @@ describe("AnalyticsWorkspace", () => {
     expect(screen.getByText(/Hedonski indeks · 2025-01 · indeks 121/)).toBeInTheDocument();
     expect(screen.getByText(/Približno 21 % višje kot leta 2018 · n=80/)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /Primerjava območij/ }));
-    expect(screen.getByText("Podravska")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Nazaj na zemljevid/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: /Primerjava območij/ }));
+    expect(await screen.findByText("Podravska")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Prikaži na zemljevidu/ })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /Podravska/ }));
     expect(onContextChange).toHaveBeenCalledWith({
@@ -125,8 +125,8 @@ describe("AnalyticsWorkspace", () => {
     });
     await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
 
-    fireEvent.click(screen.getByRole("button", { name: /Odstopanja/ }));
-    expect(screen.getByText("#99")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: /Kakovost podatkov/ }));
+    expect(await screen.findByText("#99")).toBeInTheDocument();
     expect(screen.getByText("7,2")).toBeInTheDocument();
   });
 });

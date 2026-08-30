@@ -1,5 +1,5 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ContextPanel } from "./context-panel";
 
 vi.mock("@/lib/api", () => ({
@@ -62,15 +62,24 @@ vi.mock("@/lib/api", () => ({
       lowerTotal: 150000,
       centralTotal: 157000,
       upperTotal: 165000,
+      unadjustedLowerTotal: 160000,
+      unadjustedCentralTotal: 172500,
+      unadjustedUpperTotal: 181000,
       lowerAmountPerSqm: 2885,
       centralAmountPerSqm: 3019,
       upperAmountPerSqm: 3173,
+      unadjustedLowerAmountPerSqm: 3077,
+      unadjustedCentralAmountPerSqm: 3317,
+      unadjustedUpperAmountPerSqm: 3481,
       comparableCount: 60,
       maximumRadiusMeters: 20000,
       areaTolerancePercent: 15,
-      constructionYearTolerance: 10,
+      constructionYearTolerance: 8,
       locationAdjustmentFactor: 0.91,
+      rawLocationAdjustmentFactor: 0.78,
+      locationAdjustmentApplied: true,
       localAdjustmentSampleSize: 7,
+      packageCompositionMatched: true,
       referenceYear: 2026,
       confidence: "low",
       warnings: ["statistična tržna ocena, ne uradna cenitev"],
@@ -89,6 +98,7 @@ vi.mock("@/lib/api", () => ({
 }));
 
 describe("ContextPanel", () => {
+  afterEach(cleanup);
   it("renders rental detail and backend-computed context", async () => {
     const onChange = vi.fn();
     render(<ContextPanel
@@ -101,18 +111,30 @@ describe("ContextPanel", () => {
     />);
     expect(await screen.findByText("700 €")).toBeInTheDocument();
     expect(screen.getByText("14 €/m²")).toBeInTheDocument();
-    expect(screen.getByText("+16,67 %")).toBeInTheDocument();
-    expect(screen.getByText(/n=31/)).toBeInTheDocument();
-    expect(screen.getByText(/širši tržni vzorec/)).toBeInTheDocument();
     expect(screen.getByText("157.000 €")).toBeInTheDocument();
     expect(screen.getAllByText("primerljivih poslov", { exact: false }).length).toBeGreaterThan(0);
+    expect(screen.getByText(/P25–P75 je srednjih 50 %/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Primerljivi posli" }));
+    expect(screen.getByText(/\+16,67 % nad mediano/)).toBeInTheDocument();
+    expect(screen.getByText(/n=31/)).toBeInTheDocument();
+    expect(screen.getByText(/širši tržni vzorec/)).toBeInTheDocument();
     expect(screen.getByText("750 €")).toBeInTheDocument();
     expect(screen.getByText(/Ista stavba · isto leto/)).toBeInTheDocument();
     expect(screen.getByText("Primerjava z okolico")).toBeInTheDocument();
-    expect(screen.getByText("Premalo primerljivih poslov za oceno odstopanja")).toBeInTheDocument();
-    expect(screen.queryByText(/insufficient_cohort/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByText("750 €"));
     expect(onChange).toHaveBeenCalledWith({ kind: "transaction", mode: "rent", id: 78 });
+    fireEvent.click(screen.getByRole("tab", { name: "Kakovost in model" }));
+    expect(screen.getByText("Premalo primerljivih poslov za oceno odstopanja")).toBeInTheDocument();
+    expect(screen.queryByText(/insufficient_cohort/)).not.toBeInTheDocument();
     expect(screen.queryByText("Ni podatka")).not.toBeInTheDocument();
+  });
+
+  it("supports keyboard navigation between inspector tabs", async () => {
+    render(<ContextPanel context={{ kind: "transaction", mode: "rent", id: 77 }} mode="rent"
+      propertyGroup="apartment" years={{ from: 2024, to: 2024 }}
+      overview={{ transactionCount: 0, eligibleCount: 0, includedSampleSize: 0, excludedOutlierCount: 0 }} onChange={vi.fn()}/>);
+    const first = await screen.findByRole("tab", { name: "Pregled" });
+    fireEvent.keyDown(first, { key: "ArrowRight" });
+    expect(screen.getByRole("tab", { name: "Primerljivi posli" })).toHaveAttribute("aria-selected", "true");
   });
 });

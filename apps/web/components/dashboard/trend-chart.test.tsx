@@ -23,7 +23,7 @@ describe("TrendChart", () => {
     expect(screen.getByText(/2024 · 2[.\s]?500 €\/m²/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("tab", { name: "Število poslov" }));
-    expect(screen.getByRole("button", { name: "2024: 12 poslov" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /2024: 12 poslov/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Mesec" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Inflacija" })).toBeInTheDocument();
     expect(screen.getByText("poslov")).toBeInTheDocument();

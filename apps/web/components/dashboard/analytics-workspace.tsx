@@ -2,14 +2,13 @@
 
 import {
   AlertTriangle,
-  ArrowDown,
-  ArrowUp,
   BarChart3,
   BrainCircuit,
   MapPinned,
   TrendingUp,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Tabs } from "@/components/ui/tabs";
 import {
   loadAnomalySummary,
   loadDetailedTimeSeries,
@@ -37,6 +36,11 @@ import type {
 
 type WorkspaceTab = "market" | "indices" | "geographies" | "outliers";
 type Interval = "month" | "quarter" | "year";
+type WorkspacePayload = {
+  points?: TimePoint[]; extremes?: TransactionExtreme[]; indices?: MarketIndex[];
+  rankings?: GeographyComparison[]; outliers?: StatisticalOutlier[];
+  outlierTotal?: number; anomalySummary?: AnomalySummary;
+};
 
 interface AnalyticsWorkspaceProps {
   mode: MarketMode;
@@ -96,7 +100,7 @@ function MarketDepth({
           <small>{overview.includedSampleSize.toLocaleString("sl-SI")} od {overview.transactionCount.toLocaleString("sl-SI")} poslov</small></article>
         <article><span>Statistična odstopanja</span><strong>{percentage(outlierRate)}</strong>
           <small>{overview.excludedOutlierCount.toLocaleString("sl-SI")} izločenih iz reprezentativne statistike</small></article>
-        <article><span>Sprememba obdobja</span><strong className={(periodGrowth ?? 0) >= 0 ? "positive" : "negative"}>
+        <article><span>Sprememba obdobja</span><strong className="direction-neutral">
           {periodGrowth == null ? "—" : `${periodGrowth > 0 ? "+" : ""}${decimal.format(periodGrowth)} %`}
         </strong><small>prva proti zadnji objavljeni točki</small></article>
         <article><span>Objavljivost</span><strong>{overview.isPublishable === false ? "Ne" : "Da"}</strong>
@@ -146,7 +150,7 @@ function MarketDepth({
           return (
             <div className="period-row" key={point.period}>
               <strong>{point.period.slice(0, 7)}{point.incomplete ? " *" : ""}</strong>
-              <span>{value == null ? "—" : `${decimal.format(value)} €`}</span>
+              <span>{value == null ? "—" : mode === "sale" ? `${decimal.format(value)} €/m²` : `${euro.format(value)} / mesec`}</span>
               <span>{point.includedSampleSize.toLocaleString("sl-SI")}</span>
               <span>{point.excludedOutlierCount?.toLocaleString("sl-SI") ?? "—"}</span>
             </div>
@@ -277,13 +281,6 @@ function GeographyExplorer({
     : item.medianAmountPerSqm;
   const sorted = [...rankings].sort((a, b) => (amount(b) ?? -1) - (amount(a) ?? -1));
   const max = Math.max(...sorted.map((item) => amount(item) ?? 0), 1);
-  const scrollList = (position: "top" | "bottom") => {
-    const body = document.querySelector<HTMLElement>(".analytics-body");
-    body?.scrollTo({
-      top: position === "top" ? 0 : body.scrollHeight,
-      behavior: "smooth",
-    });
-  };
   const showOnMap = () => {
     document.querySelector<HTMLElement>(".map-panel")?.scrollIntoView({
       behavior: "smooth",
@@ -297,11 +294,8 @@ function GeographyExplorer({
   return (
     <>
       <div className="geography-navigation" aria-label="Navigacija primerjave območij">
-        <span>Pomik po seznamu</span>
-        <button type="button" onClick={() => scrollList("top")}><ArrowUp size={14} /> Na vrh</button>
-        <button type="button" onClick={() => scrollList("bottom")}><ArrowDown size={14} /> Na dno</button>
         <button type="button" className="map-return" onClick={showOnMap}>
-          <MapPinned size={14} /> Nazaj na zemljevid
+          <MapPinned size={14} /> Prikaži na zemljevidu
         </button>
       </div>
       <div className="ranking-table">
@@ -358,8 +352,8 @@ function OutlierExplorer({
           return <button type="button" className="outlier-row" key={item.transactionId}
             onClick={() => onContextChange({ kind: "transaction", mode, id: item.transactionId })}>
             <strong>#{item.transactionId}<small>{item.contractDate}</small></strong>
-            <span>{value == null ? "—" : `${decimal.format(value)} €`}</span>
-            <span>{decimal.format(item.cohortMedian)} €</span>
+            <span>{value == null ? "—" : `${decimal.format(value)} ${mode === "sale" ? "€/m²" : "€/m² na mesec"}`}</span>
+            <span>{decimal.format(item.cohortMedian)} {mode === "sale" ? "€/m²" : "€/m² na mesec"}</span>
             <span>{item.modifiedZScore == null ? "—" : decimal.format(item.modifiedZScore)}</span>
             <span>{item.cohortSize}</span>
           </button>;
@@ -388,70 +382,68 @@ export function AnalyticsWorkspace({
   const [extremes, setExtremes] = useState<TransactionExtreme[]>([]);
   const [loading, setLoading] = useState(false);
   const generation = useRef(0);
+  const cache = useRef(new Map<string, WorkspacePayload>());
   const geographyId = context.kind === "geography" ? context.id : undefined;
 
   useEffect(() => {
     const controller = new AbortController();
     const requestGeneration = ++generation.current;
+    const cacheKey = JSON.stringify({ tab, mode, propertyGroup, geographyId, years, interval: tab === "market" ? interval : undefined, context: context.kind === "geography" ? context.id : "country" });
+    const apply = (payload: WorkspacePayload) => {
+      if (payload.points) setPoints(payload.points);
+      if (payload.extremes) setExtremes(payload.extremes);
+      if (payload.indices) setIndices(payload.indices);
+      if (payload.rankings) setRankings(payload.rankings);
+      if (payload.outliers) setOutliers(payload.outliers);
+      if (payload.outlierTotal != null) setOutlierTotal(payload.outlierTotal);
+      if (payload.anomalySummary) setAnomalySummary(payload.anomalySummary);
+    };
+    const cached = cache.current.get(cacheKey);
+    if (cached) { apply(cached); setLoading(false); return () => controller.abort(); }
     queueMicrotask(() => { if (!controller.signal.aborted) setLoading(true); });
-    const rankingRequest = context.kind === "country"
-      ? loadGeographyRankings(
-          mode, "statistical_region", [13.3, 45.4, 16.7, 46.9],
-          propertyGroup, years, controller.signal,
-        )
-      : context.kind === "geography"
-        ? Promise.all([
-            loadGeography(context.id, controller.signal),
-            loadGeographyChildren(context.id, controller.signal),
-          ]).then(([geography, children]) => {
-            if (!geography.bounds || children.items.length === 0) return [];
-            return loadGeographyRankings(
-              mode, children.items[0].level, geography.bounds,
-              propertyGroup, years, controller.signal, geography.id,
-            );
-          })
-        : Promise.resolve([]);
-    Promise.all([
+    let request: Promise<WorkspacePayload>;
+    if (tab === "market") request = Promise.all([
       loadDetailedTimeSeries(mode, propertyGroup, geographyId, years, interval, controller.signal),
-      loadMarketIndices(mode, propertyGroup, controller.signal),
-      loadStatisticalOutliers(mode, propertyGroup, geographyId, years, controller.signal),
-      loadAnomalySummary(mode, controller.signal),
       loadTransactionExtremes(mode, propertyGroup, geographyId, years, controller.signal),
-      rankingRequest,
-    ]).then(([series, indexResult, outlierResult, anomalyResult, extremesResult, rankingResult]) => {
+    ]).then(([series, result]) => ({ points: series.items, extremes: result.items }));
+    else if (tab === "indices") request = loadMarketIndices(mode, propertyGroup, controller.signal).then((result) => ({ indices: result.items }));
+    else if (tab === "outliers") request = Promise.all([
+      loadStatisticalOutliers(mode, propertyGroup, geographyId, years, controller.signal), loadAnomalySummary(mode, controller.signal),
+    ]).then(([result, summary]) => ({ outliers: result.items, outlierTotal: result.total, anomalySummary: summary }));
+    else {
+      const rankingRequest = context.kind === "country"
+        ? loadGeographyRankings(mode, "statistical_region", [13.3, 45.4, 16.7, 46.9], propertyGroup, years, controller.signal)
+        : context.kind === "geography" ? Promise.all([loadGeography(context.id, controller.signal), loadGeographyChildren(context.id, controller.signal)]).then(([geography, children]) => {
+          if (!geography.bounds || children.items.length === 0) return [];
+          return loadGeographyRankings(mode, children.items[0].level, geography.bounds, propertyGroup, years, controller.signal, geography.id);
+        }) : Promise.resolve([]);
+      request = rankingRequest.then((result) => ({ rankings: result }));
+    }
+    request.then((payload) => {
       if (requestGeneration !== generation.current) return;
-      setPoints(series.items);
-      setIndices(indexResult.items);
-      setOutliers(outlierResult.items);
-      setOutlierTotal(outlierResult.total);
-      setAnomalySummary(anomalyResult);
-      setExtremes(extremesResult.items);
-      setRankings(rankingResult);
+      cache.current.set(cacheKey, payload);
+      apply(payload);
     }).catch(() => undefined).finally(() => {
       if (!controller.signal.aborted && requestGeneration === generation.current) setLoading(false);
     });
     return () => controller.abort();
-  }, [context, geographyId, interval, mode, propertyGroup, years]);
+  }, [context, geographyId, interval, mode, propertyGroup, tab, years]);
 
-  const tabs: Array<{ id: WorkspaceTab; label: string; icon: typeof BarChart3 }> = [
-    { id: "market", label: "Globina trga", icon: BarChart3 },
-    { id: "indices", label: "Indeksi in modeli", icon: TrendingUp },
+  const tabOptions: Array<{ id: WorkspaceTab; label: string; icon: typeof BarChart3 }> = [
+    { id: "market", label: "Tržna slika", icon: BarChart3 },
     { id: "geographies", label: "Primerjava območij", icon: MapPinned },
-    { id: "outliers", label: "Odstopanja", icon: AlertTriangle },
+    { id: "indices", label: "Indeksi", icon: TrendingUp },
+    { id: "outliers", label: "Kakovost podatkov", icon: AlertTriangle },
   ];
   return (
-    <section className={`analytics-workspace ${loading ? "loading" : ""}`} aria-labelledby="analytics-title">
+    <section id="detailed-analytics" className={`analytics-workspace ${loading ? "loading" : ""}`} aria-labelledby="analytics-title" aria-busy={loading}>
       <header className="analytics-header">
-        <div><span>Podrobna analiza</span><h2 id="analytics-title">Podrobna slika izbranega trga</h2>
-          <p>Gibanje cen, primerjava območij, modeli in statistična odstopanja.</p></div>
+        <div><span>Podrobna analiza</span><h2 id="analytics-title">Podrobnejši pogled na izbrani trg</h2>
+          <p>Tržna globina, območja, indeksi ter kakovost podatkov.</p></div>
         <div className="analytics-context">{mode === "sale" ? "Prodaja" : "Najem"} · {propertyGroupLabel(propertyGroup)} · {years.from}–{years.to}</div>
       </header>
-      <nav className="analytics-tabs" aria-label="Analitični pogledi">
-        {tabs.map(({ id, label, icon: Icon }) => <button type="button" key={id}
-          className={tab === id ? "active" : ""} onClick={() => setTab(id)}>
-          <Icon size={16} />{label}</button>)}
-      </nav>
-      <div className="analytics-body">
+      <Tabs label="analytics" className="analytics-tabs-container" tabs={tabOptions.map(({ id, label }) => ({ id, label }))} active={tab} onChange={setTab}>
+      <div className="analytics-body">{loading && <span className="localized-loading analytics-refresh" role="status">Osvežujem izbrani pogled …</span>}
         {tab === "market" && <>
           <div className="interval-switch">
             {(["month", "quarter", "year"] as Interval[]).map((value) => <button type="button"
@@ -467,6 +459,7 @@ export function AnalyticsWorkspace({
         {tab === "outliers" && <OutlierExplorer items={outliers} total={outlierTotal}
           summary={anomalySummary} mode={mode} onContextChange={onContextChange} />}
       </div>
+      </Tabs>
     </section>
   );
 }

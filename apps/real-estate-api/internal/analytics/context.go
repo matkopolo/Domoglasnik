@@ -65,15 +65,24 @@ type CurrentMarketEstimate struct {
 	LowerTotal                float64  `json:"lowerTotal"`
 	CentralTotal              float64  `json:"centralTotal"`
 	UpperTotal                float64  `json:"upperTotal"`
+	UnadjustedLowerTotal      float64  `json:"unadjustedLowerTotal"`
+	UnadjustedCentralTotal    float64  `json:"unadjustedCentralTotal"`
+	UnadjustedUpperTotal      float64  `json:"unadjustedUpperTotal"`
 	LowerAmountPerSQM         float64  `json:"lowerAmountPerSqm"`
 	CentralAmountPerSQM       float64  `json:"centralAmountPerSqm"`
 	UpperAmountPerSQM         float64  `json:"upperAmountPerSqm"`
+	UnadjustedLowerPerSQM     float64  `json:"unadjustedLowerAmountPerSqm"`
+	UnadjustedCentralPerSQM   float64  `json:"unadjustedCentralAmountPerSqm"`
+	UnadjustedUpperPerSQM     float64  `json:"unadjustedUpperAmountPerSqm"`
 	ComparableCount           int      `json:"comparableCount"`
 	MaximumRadiusMeters       int      `json:"maximumRadiusMeters"`
 	AreaTolerancePercent      int      `json:"areaTolerancePercent"`
 	ConstructionYearTolerance *int     `json:"constructionYearTolerance,omitempty"`
 	LocationAdjustmentFactor  float64  `json:"locationAdjustmentFactor"`
+	RawLocationFactor         float64  `json:"rawLocationAdjustmentFactor"`
+	LocationAdjustmentApplied bool     `json:"locationAdjustmentApplied"`
 	LocalAdjustmentSampleSize int      `json:"localAdjustmentSampleSize"`
+	PackageCompositionMatched bool     `json:"packageCompositionMatched"`
 	ReferenceYear             int      `json:"referenceYear"`
 	Confidence                string   `json:"confidence"`
 	Warnings                  []string `json:"warnings"`
@@ -335,6 +344,9 @@ type marketCandidate struct {
 const (
 	currentMarketMinimumSample = 5
 	currentMarketTargetSample  = 50
+	locationMinimumLocalSample = 20
+	locationMinimumTotalSample = 50
+	locationShrinkageStrength  = 30.0
 )
 
 func loadCurrentMarketEstimate(
@@ -349,20 +361,26 @@ func loadCurrentMarketEstimate(
 	var selectedProfile benchmarkProfile
 	selectedRadius := 0
 	selectedStartYear := time.Now().Year()
-	targetReached := false
-	for _, startYear := range []int{time.Now().Year(), time.Now().Year() - 1} {
-		for _, profile := range profiles {
-			for _, radius := range radii {
-				candidates, err := queryCurrentCandidates(ctx, tx, input, profile, radius, startYear)
-				if err != nil {
-					return nil, err
+	packageCompositionMatched := true
+	search := func(requirePackageMatch bool) error {
+		targetReached := false
+		for _, startYear := range []int{time.Now().Year(), time.Now().Year() - 1} {
+			for _, profile := range profiles {
+				for _, radius := range radii {
+					candidates, err := queryCurrentCandidates(ctx, tx, input, profile, radius, startYear, requirePackageMatch)
+					if err != nil {
+						return err
+					}
+					if len(candidates) > len(selected) {
+						selected, selectedProfile, selectedRadius, selectedStartYear = candidates, profile, radius, startYear
+					}
+					if len(candidates) >= currentMarketTargetSample {
+						selected, selectedProfile, selectedRadius, selectedStartYear = candidates, profile, radius, startYear
+						targetReached = true
+						break
+					}
 				}
-				if len(candidates) > len(selected) {
-					selected, selectedProfile, selectedRadius, selectedStartYear = candidates, profile, radius, startYear
-				}
-				if len(candidates) >= currentMarketTargetSample {
-					selected, selectedProfile, selectedRadius, selectedStartYear = candidates, profile, radius, startYear
-					targetReached = true
+				if targetReached {
 					break
 				}
 			}
@@ -370,8 +388,16 @@ func loadCurrentMarketEstimate(
 				break
 			}
 		}
-		if targetReached {
-			break
+		return nil
+	}
+	if err := search(true); err != nil {
+		return nil, err
+	}
+	if len(selected) < currentMarketMinimumSample {
+		selected = nil
+		packageCompositionMatched = false
+		if err := search(false); err != nil {
+			return nil, err
 		}
 	}
 	if len(selected) < currentMarketMinimumSample {
@@ -385,10 +411,13 @@ func loadCurrentMarketEstimate(
 			*input.municipalityID == *candidate.municipalityID {
 			localCurrent++
 		}
-		areaScore := math.Max(0, 1-math.Abs(candidate.area/input.area-1)/.25)
+		areaTolerance := float64(selectedProfile.areaTolerancePercent) / 100
+		areaScore := math.Max(0, 1-math.Abs(candidate.area/input.area-1)/areaTolerance)
 		ageScore := .5
-		if input.constructionYear != nil && candidate.constructionYear != nil {
-			ageScore = math.Max(0, 1-math.Abs(float64(*candidate.constructionYear-*input.constructionYear))/15)
+		if input.constructionYear != nil && candidate.constructionYear != nil &&
+			selectedProfile.constructionYearTolerance > 0 {
+			ageScore = math.Max(0, 1-math.Abs(float64(*candidate.constructionYear-*input.constructionYear))/
+				float64(selectedProfile.constructionYearTolerance))
 		}
 		distanceScore := math.Max(0, 1-candidate.distance/20000)
 		recencyScore := math.Max(0, 1-time.Since(candidate.contractDate).Hours()/(24*730))
@@ -400,15 +429,18 @@ func loadCurrentMarketEstimate(
 		weighted = append(weighted, weightedValue{candidate.amountPerSQM, math.Max(weight, 1)})
 	}
 
-	locationFactor, localSample, adjustmentErr := currentMarketLocationFactor(
+	locationFactor, rawLocationFactor, localSample, adjustmentErr := currentMarketLocationFactor(
 		ctx, tx, input, selectedProfile, selectedRadius, localCurrent,
 	)
 	if adjustmentErr != nil {
 		return nil, adjustmentErr
 	}
-	lower := weightedQuantile(weighted, .25) * locationFactor
-	central := weightedQuantile(weighted, .5) * locationFactor
-	upper := weightedQuantile(weighted, .75) * locationFactor
+	unadjustedLower := weightedQuantile(weighted, .25)
+	unadjustedCentral := weightedQuantile(weighted, .5)
+	unadjustedUpper := weightedQuantile(weighted, .75)
+	lower := unadjustedLower * locationFactor
+	central := unadjustedCentral * locationFactor
+	upper := unadjustedUpper * locationFactor
 	warnings := []string{"statistična tržna ocena, ne uradna cenitev", "tekoče leto še ni zaključeno"}
 	if selectedStartYear < time.Now().Year() {
 		warnings = append(warnings, "za doseganje ciljnega vzorca so vključeni tudi posli prejšnjega koledarskega leta")
@@ -418,6 +450,11 @@ func loadCurrentMarketEstimate(
 	}
 	if locationFactor != 1 {
 		warnings = append(warnings, "uporabljena zgodovinska prilagoditev med domačo občino in okoliškim trgom")
+	} else if rawLocationFactor != 1 {
+		warnings = append(warnings, "lokalna prilagoditev ni uporabljena zaradi premajhnega podpornega vzorca")
+	}
+	if !packageCompositionMatched {
+		warnings = append(warnings, "premalo poslov z enakim številom sestavin paketa; uporabljena je mešana sestava paketov")
 	}
 	confidence := "very_low"
 	if len(selected) >= 20 {
@@ -432,21 +469,33 @@ func loadCurrentMarketEstimate(
 	}
 	return &CurrentMarketEstimate{
 		LowerTotal: lower * input.area, CentralTotal: central * input.area, UpperTotal: upper * input.area,
-		LowerAmountPerSQM: lower, CentralAmountPerSQM: central, UpperAmountPerSQM: upper,
-		ComparableCount: len(selected), MaximumRadiusMeters: selectedRadius,
+		UnadjustedLowerTotal: unadjustedLower * input.area, UnadjustedCentralTotal: unadjustedCentral * input.area,
+		UnadjustedUpperTotal: unadjustedUpper * input.area,
+		LowerAmountPerSQM:    lower, CentralAmountPerSQM: central, UpperAmountPerSQM: upper,
+		UnadjustedLowerPerSQM: unadjustedLower, UnadjustedCentralPerSQM: unadjustedCentral,
+		UnadjustedUpperPerSQM: unadjustedUpper,
+		ComparableCount:       len(selected), MaximumRadiusMeters: selectedRadius,
 		AreaTolerancePercent:      selectedProfile.areaTolerancePercent,
 		ConstructionYearTolerance: ageTolerance, LocationAdjustmentFactor: locationFactor,
-		LocalAdjustmentSampleSize: localSample, ReferenceYear: time.Now().Year(),
-		Confidence: confidence, Warnings: warnings,
-		MethodologyVersion: "adaptive-current-market-v2",
+		RawLocationFactor: rawLocationFactor, LocationAdjustmentApplied: locationFactor != 1,
+		LocalAdjustmentSampleSize: localSample, PackageCompositionMatched: packageCompositionMatched,
+		ReferenceYear: time.Now().Year(),
+		Confidence:    confidence, Warnings: warnings,
+		MethodologyVersion: "adaptive-current-market-v4",
 	}, nil
 }
 
 func queryCurrentCandidates(
 	ctx context.Context, tx pgx.Tx, input currentMarketQuery, profile benchmarkProfile, radius, startYear int,
+	requirePackageMatch bool,
 ) ([]marketCandidate, error) {
 	args := []any{input.subjectID, input.propertyGroup, startYear, input.area, radius, time.Now().Year() + 1}
 	ageClause := "TRUE"
+	packageClause := "TRUE"
+	if requirePackageMatch {
+		args = append(args, input.packageCount)
+		packageClause = fmt.Sprintf("(%s)=$%d", input.packageColumn, len(args))
+	}
 	if profile.constructionYearTolerance > 0 && input.constructionYear != nil {
 		args = append(args, *input.constructionYear)
 		ageClause = fmt.Sprintf("fact.construction_year IS NOT NULL AND abs(fact.construction_year-$%d)<=%d",
@@ -461,10 +510,10 @@ func queryCurrentCandidates(
 	  AND fact.representative_eligible AND fact.%s>0 AND fact.area>0
 	  AND subject.location IS NOT NULL AND fact.location IS NOT NULL
 	  AND ST_DWithin(fact.location,subject.location,$5)
-	  AND abs(fact.area/$4-1)<=%f AND %s
+	  AND abs(fact.area/$4-1)<=%f AND %s AND %s
 	ORDER BY ST_Distance(fact.location,subject.location),fact.transaction_id LIMIT 250`,
 		input.amountColumn, input.packageColumn, input.table, input.subjectTable,
-		input.amountColumn, float64(profile.areaTolerancePercent)/100, ageClause)
+		input.amountColumn, float64(profile.areaTolerancePercent)/100, ageClause, packageClause)
 	rows, err := tx.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("load current market candidates: %w", err)
@@ -486,9 +535,9 @@ func queryCurrentCandidates(
 func currentMarketLocationFactor(
 	ctx context.Context, tx pgx.Tx, input currentMarketQuery, profile benchmarkProfile,
 	radius, localCurrent int,
-) (float64, int, error) {
+) (float64, float64, int, error) {
 	if input.municipalityID == nil || localCurrent >= 5 {
-		return 1, localCurrent, nil
+		return 1, 1, localCurrent, nil
 	}
 	args := []any{input.subjectID, input.propertyGroup, time.Now().Year() - 3,
 		time.Now().Year(), input.area, radius, *input.municipalityID}
@@ -513,12 +562,22 @@ func currentMarketLocationFactor(
 	var localN, allN int
 	var localMedian, allMedian *float64
 	if err := tx.QueryRow(ctx, query, args...).Scan(&localN, &allN, &localMedian, &allMedian); err != nil {
-		return 1, 0, fmt.Errorf("load current market location adjustment: %w", err)
+		return 1, 1, 0, fmt.Errorf("load current market location adjustment: %w", err)
 	}
-	if localN < 5 || allN < 20 || localMedian == nil || allMedian == nil || *allMedian <= 0 {
-		return 1, localN, nil
+	if localMedian == nil || allMedian == nil || *allMedian <= 0 {
+		return 1, 1, localN, nil
 	}
-	return math.Max(.65, math.Min(1.35, *localMedian / *allMedian)), localN, nil
+	rawFactor := math.Max(.65, math.Min(1.35, *localMedian / *allMedian))
+	if localN < locationMinimumLocalSample || allN < locationMinimumTotalSample {
+		return 1, rawFactor, localN, nil
+	}
+	return shrinkLocationFactor(rawFactor, localN), rawFactor, localN, nil
+}
+
+func shrinkLocationFactor(rawFactor float64, localSample int) float64 {
+	weight := float64(localSample) / (float64(localSample) + locationShrinkageStrength)
+	shrunkFactor := 1 + weight*(rawFactor-1)
+	return math.Max(.8, math.Min(1.2, shrunkFactor))
 }
 
 type weightedValue struct{ value, weight float64 }
@@ -631,19 +690,18 @@ type benchmarkProfile struct {
 
 func nearbyBenchmarkProfiles(constructionYear *int) []benchmarkProfile {
 	if constructionYear == nil {
-		return []benchmarkProfile{{name: "area_15", areaTolerancePercent: 15}, {name: "area_25", areaTolerancePercent: 25}}
+		return []benchmarkProfile{{name: "area_15", areaTolerancePercent: 15}}
 	}
 	return []benchmarkProfile{
-		{name: "area_15_age_10", areaTolerancePercent: 15, constructionYearTolerance: 10},
-		{name: "area_25_age_15", areaTolerancePercent: 25, constructionYearTolerance: 15},
+		{name: "area_15_age_8", areaTolerancePercent: 15, constructionYearTolerance: 8},
 	}
 }
 
 func matchedGeographyProfile(constructionYear *int) benchmarkProfile {
 	if constructionYear == nil {
-		return benchmarkProfile{name: "area_25", areaTolerancePercent: 25}
+		return benchmarkProfile{name: "area_15", areaTolerancePercent: 15}
 	}
-	return benchmarkProfile{name: "area_25_age_15", areaTolerancePercent: 25, constructionYearTolerance: 15}
+	return benchmarkProfile{name: "area_15_age_8", areaTolerancePercent: 15, constructionYearTolerance: 8}
 }
 
 func unadjustedBenchmarkProfile() benchmarkProfile {

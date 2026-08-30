@@ -47,12 +47,20 @@ The dashboard uses MapLibre GL JS for a real interactive map:
   selectable sale transactions;
 - street-level sales sharing a cadastral building are consolidated into one
   marker whose popup lists the complete building sale history;
-- transaction context ranks individual same-building transactions by same
-  year and ±15%/±25% area similarity before showing wider market benchmarks;
+- transaction context ranks individual same-building transactions first,
+  then uses strict ±15% area and ±8 construction-year similarity for nearby evidence;
+- source ETN values, deterministic calculations, and trained model evidence
+  use distinct provenance treatments;
+- the transaction inspector separates overview, direct comparables, source
+  details, and quality/model diagnostics without discarding fields on mobile;
+- the current-market estimate is visualized as a weighted P25–median–P75
+  range and is explicitly distinguished from a formal confidence interval;
 - viewport-aware API requests switch to individual properties at street zoom.
 
-Trend charts include formatted price-axis ticks and mouse, focus, and keyboard
-accessible point tooltips.
+Trend charts include formatted axes, bars for volume, explicit incomplete and
+suppressed periods, and mouse/focus/click-pinned keyboard-accessible tooltips.
+Detailed analytics fetches the active tab on demand and caches already loaded
+tab/filter combinations.
 
 The current public tile sources are intended for local development and require
 no API key. Their URLs and attribution live in `lib/map-styles.ts`, isolated
