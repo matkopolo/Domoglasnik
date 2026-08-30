@@ -2077,6 +2077,10 @@ export interface operations {
             query: {
                 q: string;
                 limit?: number;
+                /** @description Inclusive contract-date lower bound. */
+                from?: components["parameters"]["FromDate"];
+                /** @description Inclusive contract-date upper bound. */
+                to?: components["parameters"]["ToDate"];
             };
             header?: never;
             path?: never;
