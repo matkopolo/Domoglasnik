@@ -157,23 +157,25 @@ func (r *StatisticsRepository) ValuationPrediction(
 	result.PredictedTotal = result.PredictedAmountPerSQM * result.Area
 	result.LowerTotal = result.LowerAmountPerSQM * result.Area
 	result.UpperTotal = result.UpperAmountPerSQM * result.Area
-	result.Warnings = []string{
-		"statistical estimate, not an official valuation",
-		"range is empirical and does not include every property-specific condition",
+	result.Reliability, result.Warnings = valuationAssessment(medianAPE)
+	return result, nil
+}
+
+func valuationAssessment(medianAPE *float64) (string, []string) {
+	warnings := []string{
+		"Statistična ocena ni uradna cenitev.",
+		"Razpon je empiričen in ne vključuje vseh posebnosti posamezne nepremičnine.",
 	}
 	switch {
 	case medianAPE == nil:
-		result.Reliability = "very_low"
-		result.Warnings = append(result.Warnings,
-			"model error is unavailable for this property group")
+		return "very_low", append(warnings,
+			"Napaka modela za to skupino nepremičnin ni na voljo.")
 	case *medianAPE <= 0.25:
-		result.Reliability = "moderate"
+		return "moderate", warnings
 	case *medianAPE <= 0.45:
-		result.Reliability = "low"
+		return "low", warnings
 	default:
-		result.Reliability = "very_low"
-		result.Warnings = append(result.Warnings,
-			"model error for this property group is too high for decision-grade valuation")
+		return "very_low", append(warnings,
+			"Napaka modela za to skupino nepremičnin je previsoka za zanesljivo podporo odločitvi.")
 	}
-	return result, nil
 }
