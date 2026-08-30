@@ -17,7 +17,10 @@ The dashboard provides:
 - semantic MapLibre navigation from country and statistical regions through
   municipalities/local areas to property/building points;
 - street/satellite basemaps, clustering, address search, boundary selection,
-  and building-grouped transactions;
+  and building-grouped transactions; address results show the active market's
+  transaction count within the selected year range and offer an explicit
+  one-click filter suggestion when the building has no matching transactions
+  but another property group or mode does;
 - a market snapshot with explicit median terminology, transaction depth,
   representative share, eligible population, and excluded outliers;
 - price/rent trends, year-over-year context, distributions and percentiles;
@@ -52,8 +55,12 @@ commercial deployment.
 
 ## Structure
 
-- `app/` contains the Next.js entry point, layout, global foundations, and the
-  semantic redesign stylesheet.
+- `app/` contains the Next.js entry point and three ordered style layers:
+  `globals.css` holds legacy-compatible structural foundations,
+  `redesign.css` owns reusable semantic components and responsive data
+  preservation, and `atlas.css` owns the final cartographic composition. Old
+  viewport rules must not hide analytical fields and are removed rather than
+  counteracted in a later layer.
 - `components/dashboard/market-dashboard.tsx` owns URL/filter/selection state
   and request cancellation.
 - `filter-bar.tsx` owns primary/secondary market controls and the accessible

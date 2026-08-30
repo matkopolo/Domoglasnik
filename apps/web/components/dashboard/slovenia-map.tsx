@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { loadMapFeatures, loadRegionBoundaries, loadTransaction, mapGeographyLevel, searchBuildings } from "@/lib/api";
 import { buildMapPopup, mapAmountLabel } from "@/lib/map-popup";
 import { mapStyle, type MapStyleId } from "@/lib/map-styles";
+import { propertyGroupLabels, suggestedBuildingMarket } from "@/lib/building-search";
 import type {
   BoundaryFeatureCollection,
   AreaRange,
@@ -79,7 +80,10 @@ interface SloveniaMapProps {
   area: AreaRange;
   refreshing?: boolean;
   onContextChange: (context: MarketContext) => void;
+  onMarketSuggestion: (mode: MarketMode, propertyGroup: PropertyGroup) => void;
+  resetVersion?: number;
 }
+
 
 export function SloveniaMap({
   mode,
@@ -92,6 +96,8 @@ export function SloveniaMap({
   area,
   refreshing,
   onContextChange,
+  onMarketSuggestion,
+  resetVersion = 0,
 }: SloveniaMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -111,10 +117,18 @@ export function SloveniaMap({
   const [searchResults, setSearchResults] = useState<BuildingSearchResult[]>([]);
   const [locationNotice, setLocationNotice] = useState<string>();
   const styleIdRef = useRef<MapStyleId>("street");
+  const previousResetVersion = useRef(resetVersion);
 
   useEffect(() => { contextRef.current = onContextChange; }, [onContextChange]);
   useEffect(() => { modeRef.current = mode; }, [mode]);
   useEffect(() => { regionsRef.current = regions; }, [regions]);
+
+  useEffect(() => {
+    if (previousResetVersion.current === resetVersion) return;
+    previousResetVersion.current = resetVersion;
+    popupRef.current?.remove();
+    mapRef.current?.fitBounds(SLOVENIA_BOUNDS, { padding: 20, duration: 650 });
+  }, [resetVersion]);
 
   const renderMarkers = useCallback((data: MapFeatureCollection) => {
     const map = mapRef.current;
@@ -194,7 +208,7 @@ export function SloveniaMap({
     if (query.length < 3) return;
     const controller = new AbortController();
     const timer = setTimeout(() => {
-      searchBuildings(query, controller.signal)
+      searchBuildings(query, years, controller.signal)
         .then((response) => setSearchResults(response.items))
         .catch(() => { if (!controller.signal.aborted) setSearchResults([]); });
     }, 250);
@@ -202,7 +216,7 @@ export function SloveniaMap({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [searchQuery]);
+  }, [searchQuery, years]);
 
   function chooseBuilding(result: BuildingSearchResult) {
     popupRef.current?.remove();
@@ -457,13 +471,22 @@ export function SloveniaMap({
             onClick={() => { setSearchQuery(""); setSearchResults([]); }}><X size={15} /></button>}
         </label>
         {searchResults.length > 0 && <div className="building-search-results">
-          {searchResults.map((result) => (
-            <button type="button" key={`${result.cadastralMunicipalityCode}-${result.buildingNumber}`}
-              onClick={() => chooseBuilding(result)}>
-              <strong>{[result.street, result.houseNumber].filter(Boolean).join(" ")}</strong>
-              <span>{result.settlement} · {result.saleCount.toLocaleString("sl-SI")} prodaj</span>
-            </button>
-          ))}
+          {searchResults.map((result) => {
+            const activeCount = mode === "sale"
+              ? result.saleCounts[propertyGroup] ?? 0
+              : result.rentalCounts[propertyGroup] ?? 0;
+            const suggestion = suggestedBuildingMarket(result, mode, propertyGroup);
+            return <div className="building-search-result" key={`${result.cadastralMunicipalityCode}-${result.buildingNumber}`}>
+              <button type="button" onClick={() => chooseBuilding(result)}>
+                <strong>{[result.street, result.houseNumber].filter(Boolean).join(" ")}</strong>
+                <span>{result.settlement} · {activeCount.toLocaleString("sl-SI")} poslov ({mode === "sale" ? "prodaja" : "najem"} · {propertyGroupLabels[propertyGroup]})</span>
+              </button>
+              {suggestion && <button type="button" className="building-filter-suggestion" onClick={() => {
+                onMarketSuggestion(suggestion.mode, suggestion.group);
+                chooseBuilding(result);
+              }}>Ni poslov za trenutni filter. Prikaži: {suggestion.mode === "sale" ? "prodaja" : "najem"} · {propertyGroupLabels[suggestion.group]} ({suggestion.count.toLocaleString("sl-SI")})</button>}
+            </div>;
+          })}
         </div>}
       </div>
       <div className="map-style-control" role="group" aria-label="Vrsta zemljevida">

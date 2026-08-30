@@ -112,6 +112,7 @@ export interface QualityDecision {
   isQualityEligible: boolean;
   isRepresentative: boolean;
   reasons: string[];
+  anomalyFlags: string[];
 }
 
 export interface OutlierEvidence {
@@ -405,6 +406,9 @@ export interface BuildingSearchResult {
   longitude: number;
   latitude: number;
   saleCount: number;
+  rentalCount: number;
+  saleCounts: Partial<Record<PropertyGroup, number>>;
+  rentalCounts: Partial<Record<PropertyGroup, number>>;
 }
 
 export interface BuildingTransaction {

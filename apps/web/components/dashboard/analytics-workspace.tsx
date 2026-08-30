@@ -222,7 +222,7 @@ function IndexExplorer({ items }: { items: MarketIndex[] }) {
                 points={coords.map((point) => `${point.x},${point.y}`).join(" ")} />
               {coords.map(({ x, y, point }) => <circle key={point.period} cx={x} cy={y}
                 r={hovered?.method === method && hovered.point.period === point.period ? "6" : "4"}
-                fill={colors[method as keyof typeof colors]} className="index-point" tabIndex={0} role="button"
+                fill={colors[method as keyof typeof colors]} className="index-point" tabIndex={0} role="img"
                 aria-label={`${methodLabel(method)}, ${point.period.slice(0, 7)}: indeks ${decimal.format(point.indexValue)}, ${indexChangeInterpretation(point.indexValue, point.basePeriod)}, ${point.sampleSize} poslov`}
                 onMouseEnter={() => setHovered({ method, point, x, y })}
                 onMouseLeave={() => setHovered(undefined)}

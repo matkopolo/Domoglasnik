@@ -1,6 +1,6 @@
-export function Brand() {
+export function Brand({ onHome }: { onHome?: () => void }) {
   return (
-    <div className="brand" aria-label="Analitika nepremičnin">
+    <button type="button" className="brand" aria-label="Analitika nepremičnin — začetni pogled" onClick={onHome}>
       <span className="brand-mark" aria-hidden="true">
         <svg viewBox="0 0 40 40" focusable="false">
           <path className="brand-house" d="M8.5 18.4 20 8.5l11.5 9.9v12.1a2 2 0 0 1-2 2h-19a2 2 0 0 1-2-2Z" />
@@ -10,6 +10,6 @@ export function Brand() {
         </svg>
       </span>
       <span>Analitika nepremičnin</span>
-    </div>
+    </button>
   );
 }

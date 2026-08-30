@@ -132,6 +132,7 @@ export function MarketDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
+  const [mapResetVersion, setMapResetVersion] = useState(0);
   const mobileNavigationButton = useRef<HTMLButtonElement>(null);
   const generation = useRef(0);
   const contextGeographyGeneration = useRef(0);
@@ -265,7 +266,18 @@ export function MarketDashboard() {
           onClick={() => setMobileNavigationOpen((value) => !value)}>
           {mobileNavigationOpen ? <X /> : <Menu />}
         </button>
-        <Brand />
+        <Brand onHome={() => {
+          contextGeographyGeneration.current += 1;
+          setMode("sale");
+          setPropertyGroup("apartment");
+          setYears({ from: 2018, to: 2025 });
+          setArea({});
+          setGeographyContext(undefined);
+          setContext({ kind: "country" });
+          setMobileNavigationOpen(false);
+          setMapResetVersion((value) => value + 1);
+          document.getElementById("overview")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }} />
         <nav id="mobile-navigation" className={mobileNavigationOpen ? "open" : ""} aria-label="Glavna navigacija">
           <a href="#overview" className="active">Pregled trga</a>
           <a href="#trends">Gibanje</a>
@@ -340,6 +352,11 @@ export function MarketDashboard() {
             area={area}
             refreshing={loading}
             onContextChange={handleContext}
+            onMarketSuggestion={(nextMode, nextPropertyGroup) => {
+              setMode(nextMode);
+              setPropertyGroup(nextPropertyGroup);
+            }}
+            resetVersion={mapResetVersion}
           />
           <div className="context-column" id="market-context">
             <ContextPanel

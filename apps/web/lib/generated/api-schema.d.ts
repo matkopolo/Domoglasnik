@@ -823,6 +823,7 @@ export interface components {
             isQualityEligible: boolean;
             isRepresentative: boolean;
             reasons: string[];
+            anomalyFlags: string[];
         };
         OutlierEvidence: {
             status?: string;

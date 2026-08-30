@@ -52,6 +52,14 @@ export function TransactionInspector({ detail, context, model, onChange }: {
   const address = [part?.street ?? space?.street, part?.houseNumber ?? space?.houseNumber, part?.settlement ?? space?.settlement].filter(meaningfulText).join(", ");
   const amount = sale?.price ?? rental?.monthlyRentExVat;
   const amountPerSqm = sale?.pricePerSqm ?? rental?.monthlyRentPerSqm;
+  const anomalyFlags = context.quality.anomalyFlags ?? [];
+  const possibleDuplicate = anomalyFlags.some((flag) =>
+    flag === "possible_duplicate" || flag === "possible_near_duplicate"
+  );
+  const qualitySignals = Array.from(new Set([
+    ...context.quality.reasons,
+    ...anomalyFlags.filter((flag) => flag !== "possible_duplicate" && flag !== "possible_near_duplicate"),
+  ]));
   const evidence = [
     { label: "Izbrani dejanski posel", detail: "GURS ETN", available: true },
     { label: "Ista stavba", detail: `${context.directComparables.length} neposredno primerljivih poslov`, available: context.directComparables.length > 0 },
@@ -102,6 +110,7 @@ export function TransactionInspector({ detail, context, model, onChange }: {
         <section className="transaction-identity"><ProvenanceBadge kind="source" /><span>{sale ? "Prodaja" : "Najem"} #{detail.transactionId}</span>
           <div className="transaction-amount"><strong>{amount == null ? "Cena ni objavljena" : euro.format(amount)}</strong>{amountPerSqm != null && <b>{decimal.format(amountPerSqm)} €/m²</b>}</div>
           <p>{detail.contractDate ?? "Datum ni objavljen"}{address ? ` · ${address}` : ""}</p>
+          {possibleDuplicate && <p className="context-warning"><CircleAlert aria-hidden="true"/> Možen podvojen zapis</p>}
           <QualityBadge representative={context.quality.isRepresentative}/></section>
         {context.currentMarketEstimate && <><div className="historical-current-divider">
           <div><span>{sale ? "Zabeležena prodajna cena" : "Zabeležena mesečna najemnina"}</span><strong>{detail.contractDate?.slice(0, 4) ?? context.contractYear}</strong></div>
@@ -121,7 +130,7 @@ export function TransactionInspector({ detail, context, model, onChange }: {
         {context.benchmarks.length === 0 ? <p className="empty-state">Za enako vrsto nepremičnine in isto leto ni dovolj primerljivih poslov.</p> : context.benchmarks.map((item) => <article className="benchmark-card" key={`${item.scope}-${item.geographyId ?? item.radiusMeters ?? 0}`}><div><strong>{item.label}</strong><span>{item.period} · n={item.sampleSize}</span></div><b className="direction-neutral">{item.differencePercent > 0 ? "+" : ""}{decimal.format(item.differencePercent)} % {item.differencePercent >= 0 ? "nad" : "pod"} mediano</b><small>mediana {decimal.format(item.medianAmountPerSqm)} €/m² · zanesljivost {reliabilityLabel(item.reliability)}</small><small>izbor: {benchmarkProfile(item)}</small></article>)}
       </section></div>}
       {tab === "details" && <div className="inspector-tab-content"><section className="context-section"><ProvenanceBadge kind="source"/><h3>Podrobnosti pogodbenega posla</h3>{details}</section></div>}
-      {tab === "quality" && <div className="inspector-tab-content"><section className="context-section quality-evidence"><h3>Kakovost podatka</h3><QualityBadge representative={context.quality.isRepresentative}/><FieldList fields={[{ label: "Kakovostno ustrezen", value: context.quality.isQualityEligible ? "Da" : "Ne" }, { label: "Status odstopanja", value: anomalyStatusLabel(context.outlierStatus) }]}/>{context.quality.reasons.length > 0 && <ul>{context.quality.reasons.map((reason) => <li key={reason}>{qualityReasonLabel(reason)}</li>)}</ul>}<strong className="quality-principle">Statistično odstopanje ni nujno napaka.</strong></section>
+      {tab === "quality" && <div className="inspector-tab-content"><section className="context-section quality-evidence"><h3>Kakovost podatka</h3>{possibleDuplicate && <p className="context-warning"><CircleAlert aria-hidden="true"/> Možen podvojen zapis</p>}<QualityBadge representative={context.quality.isRepresentative}/><FieldList fields={[{ label: "Kakovostno ustrezen", value: context.quality.isQualityEligible ? "Da" : "Ne" }, { label: "Status odstopanja", value: anomalyStatusLabel(context.outlierStatus) }]}/>{qualitySignals.length > 0 && <ul>{qualitySignals.map((reason) => <li key={reason}>{qualityReasonLabel(reason)}</li>)}</ul>}<strong className="quality-principle">Statistično odstopanje ni nujno napaka.</strong></section>
         {context.valuation && <section className="context-section model-evidence"><ProvenanceBadge kind="model"/><h3>Statistična ocena</h3><strong>{decimal.format(context.valuation.predictedAmountPerSqm)} €/m²</strong><p>Razpon {decimal.format(context.valuation.lowerAmountPerSqm)}–{decimal.format(context.valuation.upperAmountPerSqm)} €/m²</p><ConfidenceBadge confidence={context.valuation.reliability}/>{context.valuation.warnings.length > 0 && <ul>{context.valuation.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}<small>Statistična ocena ni uradna cenitev.</small></section>}
         {model && <details className="model-diagnostics"><summary>Prikaži diagnostiko modela</summary><ProvenanceBadge kind="model"/><FieldList fields={[
           { label: "Model", value: model.modelType }, { label: "Različica", value: model.modelVersion }, { label: "Učni vzorec", value: model.trainingRows.toLocaleString("sl-SI") },

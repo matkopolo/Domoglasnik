@@ -32,7 +32,7 @@ export function MarketEstimateRange({ estimate, mode }: { estimate: CurrentMarke
       {estimate.constructionYearTolerance != null && <div><dt>Leto gradnje</dt><dd>±{estimate.constructionYearTolerance} let</dd></div>}
       <div><dt>Referenčno leto</dt><dd>{estimate.referenceYear}</dd></div>
     </dl>
-    <p className="estimate-adjustment">Sestava paketa: {estimate.packageCompositionMatched ? "ujemajoče število sestavin" : "mešana sestava zaradi premajhnega vzorca"}.</p>
+    <p className="estimate-adjustment">Sestava paketa: {estimate.packageCompositionMatched ? "ujemajoče vrste sestavin" : "mešana sestava zaradi premajhnega vzorca"}.</p>
     {estimate.rawLocationAdjustmentFactor !== 1 && <p className="estimate-adjustment">Surovo lokalno razmerje ×{decimal.format(estimate.rawLocationAdjustmentFactor)} · lokalni podporni vzorec n={estimate.localAdjustmentSampleSize}{estimate.locationAdjustmentApplied ? ` · skrčeno na ×${decimal.format(estimate.locationAdjustmentFactor)}` : " · prilagoditev ni uporabljena"}</p>}
     {estimate.warnings.length > 0 && <ul className="estimate-warnings">{estimate.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
   </section>;

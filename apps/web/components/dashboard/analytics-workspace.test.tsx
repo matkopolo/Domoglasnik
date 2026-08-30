@@ -107,7 +107,7 @@ describe("AnalyticsWorkspace", () => {
     expect(screen.getByText("Indeks ponovnih prodaj")).toBeInTheDocument();
     expect(screen.getByText("Raven cen (začetno leto = 100)")).toBeInTheDocument();
     expect(screen.getByText("Leto")).toBeInTheDocument();
-    const hedonicPoint = screen.getByRole("button", { name: /Hedonski indeks, 2025-01: indeks 121/ });
+    const hedonicPoint = screen.getByLabelText(/Hedonski indeks, 2025-01: indeks 121/);
     fireEvent.mouseEnter(hedonicPoint);
     expect(screen.getByText(/Hedonski indeks · 2025-01 · indeks 121/)).toBeInTheDocument();
     expect(screen.getByText(/Približno 21 % višje kot leta 2018 · n=80/)).toBeInTheDocument();

@@ -319,9 +319,9 @@ export async function loadGeographyRankings(
   }));
 }
 
-export function searchBuildings(query: string, signal: AbortSignal) {
+export function searchBuildings(query: string, years: YearRange, signal: AbortSignal) {
   return getJSON<{ items: BuildingSearchResult[] }>(
-    `/api/v1/buildings/search?q=${encodeURIComponent(query)}&limit=10`,
+    `/api/v1/buildings/search?q=${encodeURIComponent(query)}&limit=10&from=${years.from}-01-01&to=${years.to}-12-31`,
     signal,
   );
 }

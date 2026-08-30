@@ -14,7 +14,7 @@ vi.mock("@/lib/api", () => ({
     rentDerivation: "reported",
     rentalTerm: "fixed",
     isMarketRent: true,
-    quality: { isQualityEligible: true, isRepresentative: true, reasons: [] },
+    quality: { isQualityEligible: true, isRepresentative: true, reasons: [], anomalyFlags: ["possible_near_duplicate"] },
     geographies: [{ id: 2, level: "statistical_region", name: "Podravska" }],
     spaces: [{
       id: 1,
@@ -85,10 +85,28 @@ vi.mock("@/lib/api", () => ({
       warnings: ["statistična tržna ocena, ne uradna cenitev"],
       methodologyVersion: "test",
     },
-    quality: { isQualityEligible: true, isRepresentative: true, reasons: [] },
+    quality: { isQualityEligible: true, isRepresentative: true, reasons: [], anomalyFlags: ["possible_near_duplicate"] },
     methodologyVersion: "test",
   })),
-  loadBuildingStatistics: vi.fn(),
+  loadBuildingStatistics: vi.fn(async () => ({
+    cadastralMunicipalityCode: 665,
+    buildingNumber: "8",
+    constructionYear: 2001,
+    knownBuildingPartCount: 4,
+    sales: { transactionCount: 1, representativeCount: 1 },
+    rentals: { transactionCount: 0, representativeCount: 0 },
+    saleHistory: [],
+    rentalHistory: [],
+    saleTransactions: [{
+      transactionId: 501,
+      contractDate: "2025-06-12",
+      propertyGroup: "apartment",
+      area: 72,
+      amount: 194000,
+      amountPerSqm: 2694.44,
+    }],
+    rentalTransactions: [],
+  })),
   loadGeography: vi.fn(),
   loadGeographyChildren: vi.fn(),
   loadMarketIndices: vi.fn(async () => ({ items: [] })),
@@ -110,6 +128,7 @@ describe("ContextPanel", () => {
       onChange={onChange}
     />);
     expect(await screen.findByText("700 €")).toBeInTheDocument();
+    expect(screen.getByText("Možen podvojen zapis")).toBeInTheDocument();
     expect(screen.getByText("14 €/m²")).toBeInTheDocument();
     expect(screen.getByText("157.000 €")).toBeInTheDocument();
     expect(screen.getAllByText("primerljivih poslov", { exact: false }).length).toBeGreaterThan(0);
@@ -136,5 +155,19 @@ describe("ContextPanel", () => {
     const first = await screen.findByRole("tab", { name: "Pregled" });
     fireEvent.keyDown(first, { key: "ArrowRight" });
     expect(screen.getByRole("tab", { name: "Primerljivi posli" })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("presents building sales as actionable evidence with key values", async () => {
+    const onChange = vi.fn();
+    render(<ContextPanel context={{ kind: "building", cadastralCode: 665, buildingNumber: "8" }} mode="sale"
+      propertyGroup="apartment" years={{ from: 2024, to: 2025 }}
+      overview={{ transactionCount: 0, eligibleCount: 0, includedSampleSize: 0, excludedOutlierCount: 0 }} onChange={onChange}/>);
+    const sale = await screen.findByRole("button", { name: "Odpri analizo prodaje #501" });
+    expect(sale).toHaveTextContent("194.000 €");
+    expect(sale).toHaveTextContent("2694,44 €/m²");
+    expect(sale).toHaveTextContent("72 m²");
+    expect(sale).toHaveTextContent("Odpri analizo posla");
+    fireEvent.click(sale);
+    expect(onChange).toHaveBeenCalledWith({ kind: "transaction", mode: "sale", id: 501 });
   });
 });

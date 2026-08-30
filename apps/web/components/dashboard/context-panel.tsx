@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight, X } from "lucide-react";
+import { ArrowRight, ChevronRight, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
   loadBuildingStatistics, loadFullValuation, loadGeography, loadGeographyChildren,
@@ -66,7 +66,11 @@ function BuildingInspector({ building, mode, onChange }: { building: BuildingSta
     <div className="building-market-kpis"><div><span>Vsi posli</span><strong>{summary.transactionCount.toLocaleString("sl-SI")}</strong></div><div><span>Reprezentativni</span><strong>{summary.representativeCount.toLocaleString("sl-SI")}</strong></div><div><span>{mode === "sale" ? "Mediana / m²" : "Mesečna mediana"}</span><strong>{(mode === "sale" ? summary.medianAmountPerSqm : summary.medianAmount) == null ? "—" : mode === "sale" ? `${decimal.format(summary.medianAmountPerSqm!)} €/m²` : `${euro.format(summary.medianAmount!)} / mesec`}</strong></div></div>
     {history.length > 0 && <section className="context-section"><h3>Zgodovina stavbe</h3><div className="building-history">{history.map((point) => <div key={point.year}><span>{point.year}</span><i style={{ height: `${Math.max(8, 100 * (amount(point) ?? 0) / max)}%` }}/><strong>{amount(point) == null ? "—" : mode === "sale" ? decimal.format(amount(point)!) : euro.format(amount(point)!)}</strong><small>n={point.representativeCount}</small></div>)}</div></section>}
     <FieldList fields={[{ label: "Prvi posel", value: summary.firstContractDate }, { label: "Zadnji posel", value: summary.lastContractDate }]}/>
-    <section className="context-section"><h3>{mode === "sale" ? "Prodaje" : "Najemi"} v stavbi</h3>{transactions.length === 0 ? <p className="empty-state">V izbranem obdobju ni poslov.</p> : transactions.map((item) => <button className="context-transaction" type="button" key={item.transactionId} onClick={() => onChange({ kind: "transaction", mode, id: item.transactionId })}><span>#{item.transactionId} · {item.contractDate ?? "datum ni objavljen"}</span><strong>{item.amount == null ? "cena ni objavljena" : euro.format(item.amount)}{item.amountPerSqm == null ? "" : ` · ${decimal.format(item.amountPerSqm)} €/m²`}</strong></button>)}</section>
+    <section className="context-section building-transactions"><h3>{mode === "sale" ? "Prodaje" : "Najemi"} v stavbi</h3>{transactions.length === 0 ? <p className="empty-state">V izbranem obdobju ni poslov.</p> : <><p className="building-transactions-hint">Izberite posel za celotne podatke, primerljive posle in tržno oceno.</p><div className="building-transaction-list">{transactions.map((item) => <button className="building-transaction" type="button" key={item.transactionId} aria-label={`Odpri analizo ${mode === "sale" ? "prodaje" : "najema"} #${item.transactionId}`} onClick={() => onChange({ kind: "transaction", mode, id: item.transactionId })}>
+      <span className="building-transaction-heading"><strong>{mode === "sale" ? "Prodaja" : "Najem"} #{item.transactionId}</strong><span>{item.contractDate ?? "Datum ni objavljen"}</span></span>
+      <span className="building-transaction-evidence"><strong>{item.amount == null ? "Cena ni objavljena" : euro.format(item.amount)}</strong><span>{item.amountPerSqm == null ? "Cena / m² ni objavljena" : `${decimal.format(item.amountPerSqm)} €/m²`}{item.area == null ? "" : ` · ${decimal.format(item.area)} m²`}</span></span>
+      <span className="building-transaction-action">Odpri analizo posla <ArrowRight aria-hidden="true"/></span>
+    </button>)}</div></>}</section>
   </div>;
 }
 

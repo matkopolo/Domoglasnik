@@ -106,6 +106,7 @@ const qualityReasons: Record<string, string> = {
   implausible_rent_for_property_group: "Najemnina je neobičajna za to vrsto nepremičnine",
   extreme_price_per_m2: "Cena na kvadratni meter izrazito odstopa od primerljivih poslov",
   possible_duplicate: "Posel je morda podvojen",
+  possible_near_duplicate: "Posel je morda podvojen",
   missing_coordinates: "Lokacijske koordinate niso na voljo",
   coordinate_outside_slovenia: "Koordinate so zunaj območja Slovenije",
   coordinate_outside_municipality: "Koordinate se ne ujemajo z navedeno občino",

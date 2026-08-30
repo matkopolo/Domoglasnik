@@ -98,6 +98,19 @@ describe("MarketDashboard", () => {
     });
   });
 
+  it("returns to the default Slovenian market from the brand", async () => {
+    window.history.replaceState(null, "", "/?mode=rent&propertyGroup=house&from=2022&to=2024&context=country");
+    render(<MarketDashboard />);
+    fireEvent.click(screen.getByRole("button", { name: /Analitika nepremičnin — začetni pogled/ }));
+    await waitFor(() => {
+      expect(window.location.search).toContain("mode=sale");
+      expect(window.location.search).toContain("propertyGroup=apartment");
+      expect(window.location.search).toContain("from=2018");
+      expect(window.location.search).toContain("to=2025");
+      expect(window.location.search).toContain("context=country");
+    });
+  });
+
   it("switches to rental metrics", async () => {
     render(<MarketDashboard />);
     fireEvent.click(screen.getByRole("button", { name: "Najem" }));
