@@ -2,6 +2,7 @@ package analytics
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -38,15 +39,18 @@ type BuildingTransaction struct {
 }
 
 type BuildingSearchResult struct {
-	CadastralMunicipalityCode int32   `json:"cadastralMunicipalityCode"`
-	BuildingNumber            string  `json:"buildingNumber"`
-	Settlement                *string `json:"settlement"`
-	Street                    *string `json:"street"`
-	HouseNumber               *string `json:"houseNumber"`
-	HouseNumberSuffix         *string `json:"houseNumberSuffix"`
-	Longitude                 float64 `json:"longitude"`
-	Latitude                  float64 `json:"latitude"`
-	SaleCount                 int64   `json:"saleCount"`
+	CadastralMunicipalityCode int32            `json:"cadastralMunicipalityCode"`
+	BuildingNumber            string           `json:"buildingNumber"`
+	Settlement                *string          `json:"settlement"`
+	Street                    *string          `json:"street"`
+	HouseNumber               *string          `json:"houseNumber"`
+	HouseNumberSuffix         *string          `json:"houseNumberSuffix"`
+	Longitude                 float64          `json:"longitude"`
+	Latitude                  float64          `json:"latitude"`
+	SaleCount                 int64            `json:"saleCount"`
+	RentalCount               int64            `json:"rentalCount"`
+	SaleCounts                map[string]int64 `json:"saleCounts"`
+	RentalCounts              map[string]int64 `json:"rentalCounts"`
 }
 
 type BuildingStatistics struct {
@@ -72,11 +76,11 @@ type BuildingFilter struct {
 
 type BuildingStore interface {
 	BuildingStatistics(context.Context, int32, string, BuildingFilter) (BuildingStatistics, error)
-	SearchBuildings(context.Context, string, int) ([]BuildingSearchResult, error)
+	SearchBuildings(context.Context, string, int, BuildingFilter) ([]BuildingSearchResult, error)
 }
 
 func (r *StatisticsRepository) SearchBuildings(
-	ctx context.Context, search string, limit int,
+	ctx context.Context, search string, limit int, filter BuildingFilter,
 ) ([]BuildingSearchResult, error) {
 	rows, err := r.pool.Query(ctx, `
 		WITH buildings AS (
@@ -94,15 +98,34 @@ func (r *StatisticsRepository) SearchBuildings(
 		)
 		SELECT b.cadastral_municipality_code,b.building_number,b.settlement,b.street,
 		  b.house_number,b.house_number_suffix,ST_X(ST_Transform(b.location,4326)),
-		  ST_Y(ST_Transform(b.location,4326)),count(f.transaction_id)::bigint
+		  ST_Y(ST_Transform(b.location,4326)),
+		  coalesce(sales.total,0),coalesce(rentals.total,0),
+		  coalesce(sales.by_group,'{}'::jsonb),coalesce(rentals.by_group,'{}'::jsonb)
 		FROM buildings b
-		LEFT JOIN analytics.sale_facts f
-		  ON f.cadastral_municipality_code=b.cadastral_municipality_code
-		  AND f.building_number=b.building_number
-		GROUP BY b.cadastral_municipality_code,b.building_number,b.settlement,b.street,
-		  b.house_number,b.house_number_suffix,b.location
-		ORDER BY count(f.transaction_id) DESC,b.settlement,b.street,b.house_number
-		LIMIT $2`, search, limit)
+		LEFT JOIN LATERAL (
+		  SELECT sum(group_count)::bigint total,
+		    jsonb_object_agg(property_group,group_count) by_group
+		  FROM (SELECT property_group,count(*)::bigint group_count
+		    FROM analytics.sale_facts f
+		    WHERE f.cadastral_municipality_code=b.cadastral_municipality_code
+		      AND f.building_number=b.building_number
+		      AND ($3::date IS NULL OR f.contract_date>=$3)
+		      AND ($4::date IS NULL OR f.contract_date<=$4)
+		    GROUP BY property_group) grouped
+		) sales ON true
+		LEFT JOIN LATERAL (
+		  SELECT sum(group_count)::bigint total,
+		    jsonb_object_agg(property_group,group_count) by_group
+		  FROM (SELECT property_group,count(*)::bigint group_count
+		    FROM analytics.rental_facts f
+		    WHERE f.cadastral_municipality_code=b.cadastral_municipality_code
+		      AND f.building_number=b.building_number
+		      AND ($3::date IS NULL OR f.contract_date>=$3)
+		      AND ($4::date IS NULL OR f.contract_date<=$4)
+		    GROUP BY property_group) grouped
+		) rentals ON true
+		ORDER BY coalesce(sales.total,0) DESC,b.settlement,b.street,b.house_number
+		LIMIT $2`, search, limit, filter.FromDate, filter.ToDate)
 	if err != nil {
 		return nil, fmt.Errorf("search buildings: %w", err)
 	}
@@ -110,13 +133,20 @@ func (r *StatisticsRepository) SearchBuildings(
 	items := make([]BuildingSearchResult, 0)
 	for rows.Next() {
 		var item BuildingSearchResult
+		var saleCounts, rentalCounts []byte
 		if err := rows.Scan(
 			&item.CadastralMunicipalityCode, &item.BuildingNumber,
 			&item.Settlement, &item.Street, &item.HouseNumber,
 			&item.HouseNumberSuffix, &item.Longitude, &item.Latitude,
-			&item.SaleCount,
+			&item.SaleCount, &item.RentalCount, &saleCounts, &rentalCounts,
 		); err != nil {
 			return nil, fmt.Errorf("scan building search result: %w", err)
+		}
+		if err := json.Unmarshal(saleCounts, &item.SaleCounts); err != nil {
+			return nil, fmt.Errorf("decode building sale counts: %w", err)
+		}
+		if err := json.Unmarshal(rentalCounts, &item.RentalCounts); err != nil {
+			return nil, fmt.Errorf("decode building rental counts: %w", err)
 		}
 		items = append(items, item)
 	}

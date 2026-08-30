@@ -127,6 +127,8 @@ scaling, category-frequency decisions, and one-hot encoding are fitted once per
 temporal fold instead of once per candidate, while remaining isolated from all
 later folds and the final holdout. This is an accuracy-neutral runtime
 optimization; it does not reduce candidates, years, rows, or validation work.
+Estimator fit time, shared fold-preprocessing time, and total optimization wall
+time are persisted separately, avoiding duplicated runtime accounting.
 
 Progress output reports the transaction kind, property-group position,
 candidate position, progress at approximately 10% intervals, elapsed time, and

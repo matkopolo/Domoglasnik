@@ -224,7 +224,7 @@ def optimize_model(
                     target[fold.validation],
                     np.full(len(fold.validation), np.median(target[fold.training])),
                 ),
-                "training_seconds": training_seconds + fold_preprocessing_seconds,
+                "training_seconds": training_seconds,
                 "prediction_seconds": prediction_seconds,
                 "shared_preprocessing_seconds": fold_preprocessing_seconds,
             })
@@ -306,6 +306,16 @@ def optimize_model(
         "skipped_folds": skipped, "final_holdout_year": holdout_year,
         "final_holdout": final_metrics, "grouped_robustness": robustness,
         "interval_half_width_log": half_width,
+        "selection_runtime": {
+            "wall_seconds": time.monotonic() - selection_started,
+            "shared_preprocessing_seconds": preprocessing_seconds,
+            "candidate_estimator_training_seconds": float(sum(
+                candidate["aggregate"]["training_seconds"] for candidate in evaluated
+            )),
+            "candidate_prediction_seconds": float(sum(
+                candidate["aggregate"]["prediction_seconds"] for candidate in evaluated
+            )),
+        },
     }
 
 

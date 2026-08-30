@@ -138,7 +138,7 @@ type contextSubject struct {
 	cadastralCode    *int32
 	buildingNumber   *string
 	constructionYear *int
-	packageCount     int
+	packageSignature string
 }
 
 func (r *StatisticsRepository) TransactionContext(
@@ -163,30 +163,35 @@ func (r *StatisticsRepository) TransactionContext(
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	var subject contextSubject
-	packageExpression := "fact.building_part_count+fact.land_parcel_count"
+	packageSignatureExpression := "analytics.sale_package_signature(fact.transaction_id)"
 	if kind == "rent" {
-		packageExpression = "fact.space_count"
+		packageSignatureExpression = "analytics.rental_package_signature(fact.transaction_id)"
 	}
 	query := fmt.Sprintf(`
 		SELECT extract(year FROM fact.contract_date)::integer,fact.property_group,
 		  fact.%s::float8,fact.is_quality_eligible,
-		  fact.representative_eligible,fact.quality_reasons,evaluation.status,
+		  fact.representative_eligible,fact.quality_reasons,
+		  coalesce(signal.flags,ARRAY[]::text[]),evaluation.status,
 		  fact.statistical_region_id,fact.municipality_id,fact.city_district_id,
 		  fact.local_community_id,fact.settlement_id,fact.area::float8,
 		  fact.cadastral_municipality_code,fact.building_number,
 		  fact.construction_year,%s
 		FROM %s fact
 		LEFT JOIN %s evaluation USING(transaction_id)
+		LEFT JOIN analytics.anomaly_signals signal
+		  ON signal.transaction_kind='%s' AND signal.transaction_id=fact.transaction_id
 		WHERE fact.transaction_id=$1 AND fact.contract_date IS NOT NULL
-		  AND fact.%s>0`, amountColumn, packageExpression, factTable, outlierTable, amountColumn)
+		  AND fact.%s>0`, amountColumn, packageSignatureExpression,
+		factTable, outlierTable, kind, amountColumn)
 	err = tx.QueryRow(ctx, query, id).Scan(
 		&subject.year, &subject.propertyGroup, &subject.actual,
 		&subject.quality.IsQualityEligible, &subject.quality.IsRepresentative,
-		&subject.quality.Reasons, &subject.outlierStatus, &subject.regionID,
+		&subject.quality.Reasons, &subject.quality.AnomalyFlags,
+		&subject.outlierStatus, &subject.regionID,
 		&subject.municipalityID, &subject.cityDistrictID,
 		&subject.localCommunityID, &subject.settlementID, &subject.area,
 		&subject.cadastralCode, &subject.buildingNumber, &subject.constructionYear,
-		&subject.packageCount,
+		&subject.packageSignature,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return TransactionContext{}, ErrTransactionNotFound
@@ -207,8 +212,9 @@ func (r *StatisticsRepository) TransactionContext(
 	if subject.cadastralCode != nil && subject.buildingNumber != nil {
 		direct, loadErr := loadDirectComparables(ctx, tx, directComparableQuery{
 			table: factTable, amountColumn: amountColumn,
-			totalColumn:  map[string]string{"sale": "price", "rent": "monthly_rent_ex_vat"}[kind],
-			outlierTable: outlierTable, subjectID: id, actual: subject.actual,
+			transactionKind: kind,
+			totalColumn:     map[string]string{"sale": "price", "rent": "monthly_rent_ex_vat"}[kind],
+			outlierTable:    outlierTable, subjectID: id, actual: subject.actual,
 			area: subject.area, propertyGroup: subject.propertyGroup, year: subject.year,
 			cadastralCode: *subject.cadastralCode, buildingNumber: *subject.buildingNumber,
 		})
@@ -293,12 +299,11 @@ func (r *StatisticsRepository) TransactionContext(
 
 	currentMarket, estimateErr := loadCurrentMarketEstimate(ctx, tx, currentMarketQuery{
 		table: cohortTable, subjectTable: factTable, amountColumn: amountColumn,
-		packageColumn: map[string]string{
-			"sale": "building_part_count+land_parcel_count", "rent": "space_count",
-		}[kind],
-		subjectID: id, propertyGroup: subject.propertyGroup, area: subject.area,
-		constructionYear: subject.constructionYear, packageCount: subject.packageCount,
-		municipalityID: subject.municipalityID,
+		transactionKind: kind,
+		subjectID:       id, propertyGroup: subject.propertyGroup, area: subject.area,
+		constructionYear: subject.constructionYear,
+		packageSignature: subject.packageSignature,
+		municipalityID:   subject.municipalityID,
 	})
 	if estimateErr != nil {
 		return TransactionContext{}, estimateErr
@@ -325,19 +330,19 @@ func (r *StatisticsRepository) TransactionContext(
 }
 
 type currentMarketQuery struct {
-	table, subjectTable, amountColumn, packageColumn, propertyGroup string
-	subjectID                                                       int64
-	area                                                            float64
-	constructionYear                                                *int
-	packageCount                                                    int
-	municipalityID                                                  *int64
+	table, subjectTable, amountColumn, propertyGroup string
+	transactionKind, packageSignature                string
+	subjectID                                        int64
+	area                                             float64
+	constructionYear                                 *int
+	municipalityID                                   *int64
 }
 
 type marketCandidate struct {
 	amountPerSQM, area, distance float64
 	constructionYear             *int
 	contractDate                 time.Time
-	packageCount                 int
+	packageSignature             string
 	municipalityID               *int64
 }
 
@@ -422,7 +427,7 @@ func loadCurrentMarketEstimate(
 		distanceScore := math.Max(0, 1-candidate.distance/20000)
 		recencyScore := math.Max(0, 1-time.Since(candidate.contractDate).Hours()/(24*730))
 		packageScore := 0.0
-		if candidate.packageCount == input.packageCount {
+		if candidate.packageSignature == input.packageSignature {
 			packageScore = 1
 		}
 		weight := 35*areaScore + 25*ageScore + 20*distanceScore + 10*recencyScore + 10*packageScore
@@ -454,7 +459,7 @@ func loadCurrentMarketEstimate(
 		warnings = append(warnings, "lokalna prilagoditev ni uporabljena zaradi premajhnega podpornega vzorca")
 	}
 	if !packageCompositionMatched {
-		warnings = append(warnings, "premalo poslov z enakim številom sestavin paketa; uporabljena je mešana sestava paketov")
+		warnings = append(warnings, "premalo poslov z enako sestavo vrst sestavin paketa; uporabljena je mešana sestava paketov")
 	}
 	confidence := "very_low"
 	if len(selected) >= 20 {
@@ -492,9 +497,10 @@ func queryCurrentCandidates(
 	args := []any{input.subjectID, input.propertyGroup, startYear, input.area, radius, time.Now().Year() + 1}
 	ageClause := "TRUE"
 	packageClause := "TRUE"
+	signatureSQL := packageSignatureExpression(input.transactionKind, "fact.transaction_id")
 	if requirePackageMatch {
-		args = append(args, input.packageCount)
-		packageClause = fmt.Sprintf("(%s)=$%d", input.packageColumn, len(args))
+		args = append(args, input.packageSignature)
+		packageClause = fmt.Sprintf("%s=$%d", signatureSQL, len(args))
 	}
 	if profile.constructionYearTolerance > 0 && input.constructionYear != nil {
 		args = append(args, *input.constructionYear)
@@ -503,7 +509,7 @@ func queryCurrentCandidates(
 	}
 	query := fmt.Sprintf(`SELECT fact.%s::float8,fact.area::float8,
 	  ST_Distance(fact.location,subject.location)::float8,fact.construction_year,
-	  fact.contract_date,(%s)::integer,fact.municipality_id
+	  fact.contract_date,%s,fact.municipality_id
 	FROM %s fact CROSS JOIN (SELECT location FROM %s WHERE transaction_id=$1) subject
 	WHERE fact.transaction_id<>$1 AND fact.property_group=$2
 	  AND fact.contract_date>=make_date($3,1,1) AND fact.contract_date<make_date($6,1,1)
@@ -511,9 +517,16 @@ func queryCurrentCandidates(
 	  AND subject.location IS NOT NULL AND fact.location IS NOT NULL
 	  AND ST_DWithin(fact.location,subject.location,$5)
 	  AND abs(fact.area/$4-1)<=%f AND %s AND %s
+	  AND NOT EXISTS (
+	    SELECT 1 FROM analytics.near_duplicate_candidates duplicate
+	    WHERE duplicate.transaction_kind='%s'
+	      AND duplicate.candidate_transaction_id=fact.transaction_id
+	  )
 	ORDER BY ST_Distance(fact.location,subject.location),fact.transaction_id LIMIT 250`,
-		input.amountColumn, input.packageColumn, input.table, input.subjectTable,
-		input.amountColumn, float64(profile.areaTolerancePercent)/100, ageClause, packageClause)
+		input.amountColumn, signatureSQL,
+		input.table, input.subjectTable, input.amountColumn,
+		float64(profile.areaTolerancePercent)/100, ageClause, packageClause,
+		input.transactionKind)
 	rows, err := tx.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("load current market candidates: %w", err)
@@ -523,13 +536,20 @@ func queryCurrentCandidates(
 	for rows.Next() {
 		var candidate marketCandidate
 		if err := rows.Scan(&candidate.amountPerSQM, &candidate.area, &candidate.distance,
-			&candidate.constructionYear, &candidate.contractDate, &candidate.packageCount,
-			&candidate.municipalityID); err != nil {
+			&candidate.constructionYear, &candidate.contractDate,
+			&candidate.packageSignature, &candidate.municipalityID); err != nil {
 			return nil, fmt.Errorf("scan current market candidate: %w", err)
 		}
 		result = append(result, candidate)
 	}
 	return result, rows.Err()
+}
+
+func packageSignatureExpression(kind, transactionExpression string) string {
+	if kind == "rent" {
+		return fmt.Sprintf("analytics.rental_package_signature(%s)", transactionExpression)
+	}
+	return fmt.Sprintf("analytics.sale_package_signature(%s)", transactionExpression)
 }
 
 func currentMarketLocationFactor(
@@ -556,9 +576,14 @@ func currentMarketLocationFactor(
 	  AND extract(year FROM fact.contract_date)<$4 AND fact.representative_eligible
 	  AND fact.%s>0 AND fact.area>0 AND fact.location IS NOT NULL
 	  AND ST_DWithin(fact.location,subject.location,$6)
-	  AND abs(fact.area/$5-1)<=%f AND %s`, input.amountColumn, input.amountColumn,
+	  AND abs(fact.area/$5-1)<=%f AND %s
+	  AND NOT EXISTS (
+	    SELECT 1 FROM analytics.near_duplicate_candidates duplicate
+	    WHERE duplicate.transaction_kind='%s'
+	      AND duplicate.candidate_transaction_id=fact.transaction_id
+	  )`, input.amountColumn, input.amountColumn,
 		input.table, input.subjectTable, input.amountColumn,
-		float64(profile.areaTolerancePercent)/100, ageClause)
+		float64(profile.areaTolerancePercent)/100, ageClause, input.transactionKind)
 	var localN, allN int
 	var localMedian, allMedian *float64
 	if err := tx.QueryRow(ctx, query, args...).Scan(&localN, &allN, &localMedian, &allMedian); err != nil {
@@ -600,6 +625,7 @@ func weightedQuantile(values []weightedValue, quantile float64) float64 {
 
 type directComparableQuery struct {
 	table, amountColumn, totalColumn, outlierTable, propertyGroup, buildingNumber string
+	transactionKind                                                               string
 	subjectID                                                                     int64
 	actual, area                                                                  float64
 	year                                                                          int
@@ -636,10 +662,16 @@ func loadDirectComparables(
 		  AND fact.%s>0
 		  AND (extract(year FROM fact.contract_date)::integer=$5
 		    OR abs(fact.area/$4-1)<=.15)
+		  AND NOT EXISTS (
+		    SELECT 1 FROM analytics.near_duplicate_candidates duplicate
+		    WHERE duplicate.transaction_kind='%s'
+		      AND duplicate.candidate_transaction_id=fact.transaction_id
+		  )
 		ORDER BY match_tier,abs(fact.area/$4-1),
 		  abs(fact.contract_date-make_date($5,7,1)),fact.transaction_id
 		LIMIT 8`, input.totalColumn, input.amountColumn, input.amountColumn,
-		input.table, input.outlierTable, input.amountColumn, input.totalColumn)
+		input.table, input.outlierTable, input.amountColumn, input.totalColumn,
+		input.transactionKind)
 	rows, err := tx.Query(ctx, query, input.subjectID, input.propertyGroup,
 		input.actual, input.area, input.year, input.cadastralCode, input.buildingNumber)
 	if err != nil {

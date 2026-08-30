@@ -183,6 +183,17 @@ def test_fold_preprocessing_is_shared_without_crossing_fold_boundaries(monkeypat
     # Candidate estimators reuse only the matrices produced inside their fold.
     assert len(calls) == len(folds) + 2
     assert len(calls) < len(folds) * len(configs()) + 2
+    runtime = result["selection_runtime"]
+    assert runtime["shared_preprocessing_seconds"] >= 0
+    assert runtime["candidate_estimator_training_seconds"] == sum(
+        candidate["aggregate"]["training_seconds"]
+        for candidate in result["candidate_results"]
+    )
+    assert all(
+        "shared_preprocessing_seconds" in fold
+        for candidate in result["candidate_results"]
+        for fold in candidate["folds"]
+    )
 
 
 def test_shared_fold_preprocessing_matches_full_candidate_pipelines():

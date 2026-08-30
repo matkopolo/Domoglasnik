@@ -149,9 +149,19 @@ subject, be representative-eligible, have positive area and amount per m²,
 have coordinates, and not be the subject transaction itself. Sale-land
 comparisons use the strict verified-buildable land population. The query is
 capped at the nearest 250 eligible candidates for each attempted cohort.
-Candidates with the same number of contractual package components are searched
-first. A mixed-package cohort is allowed only when fewer than five exact-count
-matches exist, and the fallback is returned as an explicit warning.
+Candidates with the same deterministic contractual package signature are
+searched first. For sales the signature is the ordered multiset of ETN building
+part and parcel type codes; for rentals it is the ordered multiset of rented
+space type codes. This distinguishes an apartment with parking from an
+apartment with a different auxiliary component even when both packages contain
+two rows. A mixed-composition cohort is allowed only when fewer than five
+exact-signature matches exist, and the fallback is returned as an explicit
+warning.
+
+The higher transaction ID in every persisted near-duplicate candidate pair is
+excluded from current-market and same-building comparable populations, matching
+the valuation-model training rule. The source transaction remains stored and
+auditable.
 
 The search uses progressively larger radii of 1 km, 2.5 km, 5 km, 10 km, and
 20 km:
@@ -183,15 +193,15 @@ Candidates receive a transparent similarity weight:
 - 25% construction-year similarity;
 - 20% straight-line PostGIS distance similarity;
 - 10% contract recency over the latest two years;
-- 10% agreement-package component-count similarity.
+- 10% agreement-package component-signature similarity.
 
 In implementation terms, a perfect area match contributes 35 points and falls
-linearly to zero at a 25% difference. A perfect construction-year match
-contributes 25 points and falls to zero at a 15-year difference; missing age
+linearly to zero at a 15% difference. A perfect construction-year match
+contributes 25 points and falls to zero at an 8-year difference; missing age
 information receives a neutral 12.5 points. Distance contributes 20 points at
 the same location and falls linearly to zero at 20 km. Recency contributes up
-to 10 points and falls to zero after approximately two years. An equal number
-of components in the transaction package contributes 10 points. Every
+to 10 points and falls to zero after approximately two years. An exact
+component-type signature in the transaction package contributes 10 points. Every
 candidate receives a minimum total weight of one.
 
 The central estimate is the weighted median amount per m² multiplied by the
@@ -277,10 +287,14 @@ line identity. That is distinct from analytical duplicate detection.
 
 Exact candidate signals compare transaction date, component identity, area,
 amount, and location. Near candidates compare different transaction facts for
-the same cadastral building part within 30 days, 2% relative area, and 2%
+the same cadastral building part within 7 days, 2% relative area, and 2%
 relative amount. They receive a versioned score and `possible_near_duplicate`
 flag. They are never automatically deleted because renewals, corrections,
 partial interests, and legitimate repeat transactions can look similar.
+Within each candidate group the lowest transaction ID remains the canonical
+record. Only higher transaction IDs receive the possible-duplicate flag and
+are excluded from valuation-model and comparable populations; the canonical
+record is not labelled as duplicated merely because a later matching row exists.
 
 ## Hedonic valuation model
 
@@ -400,6 +414,9 @@ transformer between folds. This removes 19 duplicate preprocessing fits per
 fold without exposing future rows or changing a candidate's inputs, fitted
 estimator, predictions, or selection metrics. The transformed matrices are
 released as the worker advances to the next fold to keep memory bounded.
+Persisted candidate `training_seconds` measures estimator fitting only;
+fold-local shared preprocessing and total optimization wall time are recorded
+separately so the same preprocessing duration is not counted twenty times.
 
 Progress logs expose candidate-fit totals and completion rather than implying
 one opaque training operation. They report transaction kind, property group,

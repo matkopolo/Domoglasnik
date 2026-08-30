@@ -102,7 +102,7 @@ func (store fakeBuildings) BuildingStatistics(
 }
 
 func (store fakeBuildings) SearchBuildings(
-	context.Context, string, int,
+	context.Context, string, int, analytics.BuildingFilter,
 ) ([]analytics.BuildingSearchResult, error) {
 	street, houseNumber := "LACKOVA CESTA", "13"
 	return []analytics.BuildingSearchResult{{

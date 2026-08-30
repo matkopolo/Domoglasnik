@@ -20,7 +20,11 @@ func (s *server) searchBuildings(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	items, err := s.buildings.SearchBuildings(r.Context(), query, limit)
+	filter, ok := parseBuildingFilter(w, r)
+	if !ok {
+		return
+	}
+	items, err := s.buildings.SearchBuildings(r.Context(), query, limit, filter)
 	if err != nil {
 		s.logger.Error("search buildings", "error", err)
 		writeError(w, r, http.StatusInternalServerError, "query_failed",

@@ -46,6 +46,9 @@ null; analytical code never invents missing prices, rents, areas, or locations.
   populations.
 - outlier evaluations, anomaly signals, near-duplicate candidates, and
   missingness profiles retain explainable quality evidence.
+- `sale_package_signature` and `rental_package_signature` derive deterministic
+  multisets of ETN component-type codes for exact comparable-package matching;
+  they do not replace or modify the raw component rows.
 - model runs, valuation predictions, index calculation runs, market indices,
   and repeat-sale pairs retain versioned analytical outputs.
 - `refresh_runs` records deterministic refresh status and diagnostics.

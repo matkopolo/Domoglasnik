@@ -14,6 +14,7 @@ type QualityDecision struct {
 	IsQualityEligible bool     `json:"isQualityEligible"`
 	IsRepresentative  bool     `json:"isRepresentative"`
 	Reasons           []string `json:"reasons"`
+	AnomalyFlags      []string `json:"anomalyFlags"`
 }
 
 type OutlierEvidence struct {
@@ -150,17 +151,21 @@ func (r *StatisticsRepository) SaleTransaction(
 		  f.area::float8,f.price::float8,f.price_per_sqm::float8,f.price_derivation,
 		  ST_X(ST_Transform(f.location,4326)),ST_Y(ST_Transform(f.location,4326)),
 		  f.is_quality_eligible,f.representative_eligible,f.quality_reasons,
+		  coalesce(signal.flags,ARRAY[]::text[]),
 		  e.status,e.method,e.cohort_level,e.cohort_size,e.cohort_median::float8,
 		  e.lower_bound::float8,e.upper_bound::float8,e.modified_z_score::float8,
 		  e.rule_version
 		FROM analytics.sale_facts f
 		LEFT JOIN analytics.sale_outlier_evaluations e USING(transaction_id)
+		LEFT JOIN analytics.anomaly_signals signal
+		  ON signal.transaction_kind='sale' AND signal.transaction_id=f.transaction_id
 		WHERE f.transaction_id=$1`, id).Scan(
 		&result.TransactionID, &result.ContractDate, &result.DatasetYear,
 		&result.PropertyGroup, &result.Area, &result.Price, &result.PricePerSQM,
 		&result.PriceDerivation, &result.Longitude, &result.Latitude,
 		&result.Quality.IsQualityEligible, &result.Quality.IsRepresentative,
-		&result.Quality.Reasons, &outlierStatus, &outlier.Method,
+		&result.Quality.Reasons, &result.Quality.AnomalyFlags,
+		&outlierStatus, &outlier.Method,
 		&outlier.CohortLevel, &outlier.CohortSize, &outlier.CohortMedian,
 		&outlier.LowerBound, &outlier.UpperBound, &outlier.ModifiedZScore,
 		&outlierRuleVersion)
@@ -213,11 +218,14 @@ func (r *StatisticsRepository) RentalTransaction(
 		  f.duration_months,f.operating_costs_included,f.is_market_rent,
 		  ST_X(ST_Transform(f.location,4326)),ST_Y(ST_Transform(f.location,4326)),
 		  f.is_quality_eligible,f.representative_eligible,f.quality_reasons,
+		  coalesce(signal.flags,ARRAY[]::text[]),
 		  e.status,e.method,e.cohort_level,e.cohort_size,e.cohort_median::float8,
 		  e.lower_bound::float8,e.upper_bound::float8,e.modified_z_score::float8,
 		  e.rule_version
 		FROM analytics.rental_facts f
 		LEFT JOIN analytics.rental_outlier_evaluations e USING(transaction_id)
+		LEFT JOIN analytics.anomaly_signals signal
+		  ON signal.transaction_kind='rent' AND signal.transaction_id=f.transaction_id
 		WHERE f.transaction_id=$1`, id).Scan(
 		&result.TransactionID, &result.ContractDate, &result.RentalStartDate,
 		&result.RentalEndDate, &result.DatasetYear, &result.PropertyGroup,
@@ -226,7 +234,8 @@ func (r *StatisticsRepository) RentalTransaction(
 		&result.DurationMonths, &result.OperatingCostsIncluded,
 		&result.IsMarketRent, &result.Longitude, &result.Latitude,
 		&result.Quality.IsQualityEligible, &result.Quality.IsRepresentative,
-		&result.Quality.Reasons, &outlierStatus, &outlier.Method,
+		&result.Quality.Reasons, &result.Quality.AnomalyFlags,
+		&outlierStatus, &outlier.Method,
 		&outlier.CohortLevel, &outlier.CohortSize, &outlier.CohortMedian,
 		&outlier.LowerBound, &outlier.UpperBound, &outlier.ModifiedZScore,
 		&outlierRuleVersion)

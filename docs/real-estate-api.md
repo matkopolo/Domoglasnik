@@ -36,7 +36,10 @@ timeouts, graceful shutdown, and readiness checks.
 - Maps: bounded clusters, named geographic summaries, and capped property
   points for sales and rentals.
 - Transactions/buildings: agreement composition, contextual comparables,
-  cadastral building history, and address search.
+  cadastral building history, and address search. Search results include total
+  and per-property-group sale/rental counts constrained by the requested
+  `from`/`to` dates, so clients can suggest a relevant market without guessing
+  or switching filters automatically.
 - Quality: anomaly list/summary and authenticated review decisions.
 - Models: market indices and versioned transaction valuation estimates with
   uncertainty and diagnostics.
@@ -87,6 +90,17 @@ physical tolerances, municipality adjustment, confidence and explicit
 fallback warnings. The complete search order, weights, formulas, year example,
 and limitations are documented under “Current-market estimate” in
 `docs/statistical-methodology.md`.
+
+Comparable packages first require the same deterministic ETN component-type
+signature, rather than merely the same number of components. If fewer than
+five exact-signature candidates exist, an explicitly warned mixed-composition
+fallback is permitted. Persisted near-duplicate pairs retain only their lower
+transaction ID in comparable populations; both raw transactions remain stored.
+The possible-duplicate rule uses the same cadastral building part, dates within
+seven days, and no more than 2% difference in area or amount. It is a
+probabilistic analytical flag, not confirmation that either source row is wrong.
+Only the higher transaction ID is labelled as possibly duplicated; the lower
+canonical record remains unflagged.
 
 See `docs/statistical-methodology.md` for equations, cohorts, model validation,
 uncertainty, and known limitations.
