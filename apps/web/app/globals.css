@@ -488,7 +488,6 @@ main { width: min(1480px, calc(100% - 48px)); margin: 0 auto; padding: 25px 0 30
 .benchmark-card div span, .benchmark-card small { color: var(--muted); font-size: 9px; }
 .benchmark-card small { grid-column: 1 / -1; }
 .direct-comparable-card { width: 100%; display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; padding: 9px 0; border: 0; border-top: 1px solid #eef0ee; background: transparent; color: inherit; text-align: left; cursor: pointer; }
-.direct-comparable-card:first-of-type { border-top: 0; }
 .direct-comparable-card:hover { background: var(--surface-soft); }
 .direct-comparable-card > span { grid-column: 1 / -1; color: var(--muted); font-size: 9px; }
 .direct-comparable-card > strong { font-size: 13px; }
@@ -500,7 +499,7 @@ main { width: min(1480px, calc(100% - 48px)); margin: 0 auto; padding: 25px 0 30
 .context-transaction span { color: var(--muted); font-size: 10px; }
 .context-transaction strong { font-size: 11px; }
 .component-card { display: flex; gap: 8px; margin-top: 8px; padding: 8px; border-radius: 5px; background: var(--surface-soft); font-size: 10px; }
-.component-detail-card { margin: 8px 18px 0; padding: 10px; border: 1px solid var(--line); border-radius: 6px; }
+.component-detail-card { width: 100%; margin: 8px 0 0; padding: 10px; border: 1px solid var(--line); border-radius: 6px; text-align: left; }
 .component-detail-card > strong { display: block; margin-bottom: 8px; font-size: 11px; }
 .component-detail-card .context-fields { grid-template-columns: 1fr 1fr; }
 .suppressed-statistic {
