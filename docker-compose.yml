@@ -34,6 +34,17 @@ services:
       timeout: 5s
       retries: 10
 
+  database-migrations:
+    image: real-estate-postgis:16
+    entrypoint: ["/bin/bash", "/run-migrations.sh"]
+    volumes:
+      - ./database/migrations:/migrations:ro
+      - ./database/run-migrations.sh:/run-migrations.sh:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
   real-estate-api:
     build:
       context: ./apps/real-estate-api
@@ -53,6 +64,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      database-migrations:
+        condition: service_completed_successfully
       pipeline-worker:
         condition: service_healthy
     healthcheck:
@@ -94,6 +107,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      database-migrations:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "python", "-c", "from pathlib import Path; raise SystemExit(not Path('/tmp/pipeline-healthy').is_file())"]
       interval: 30s

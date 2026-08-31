@@ -11,8 +11,6 @@ WEB_DIR := apps/web
 NODE_IMAGE ?= node:22-bookworm-slim
 WEB_NODE_MODULES := real_estate_web_node_modules_debian
 NODE_RUN := docker run --rm -v "$(CURDIR):/repo" -v $(WEB_NODE_MODULES):/repo/$(WEB_DIR)/node_modules -w /repo/$(WEB_DIR) $(NODE_IMAGE)
-MIGRATION_FILES := $(notdir $(wildcard database/migrations/0[0][7-9]_*.sql database/migrations/01*.sql database/migrations/02*.sql))
-
 .PHONY: setup start refresh-system reset-and-repopulate db-up db-migrate db-down db-status analytics-refresh models-refresh api-up api-down api-logs api-fmt api-vet api-test api-build web-setup web-up web-down web-logs web-generate-api-types web-contract-drift web-lint web-typecheck web-test web-build lint pipeline-lint test pipeline-test test-unit import-data import-data-verbose
 
 setup:
@@ -34,10 +32,7 @@ db-up:
 	$(MAKE) db-migrate
 
 db-migrate:
-	@set -e; for migration in $(MIGRATION_FILES); do \
-		echo "Applying $$migration"; \
-		docker compose exec -T db psql -v ON_ERROR_STOP=1 -U real_estate -d real_estate -f "/docker-entrypoint-initdb.d/$$migration"; \
-	done
+	docker compose run --rm database-migrations
 
 analytics-refresh: db-up
 	$(PIPELINE_RUN) refresh-analytics

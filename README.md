@@ -150,7 +150,7 @@ make db-up
 
 The default connection is `postgresql://real_estate:real_estate@localhost:5432/real_estate`. Copy `.env.example` to `.env` or export `DATABASE_URL` if you change it.
 
-The database image is built from the official multi-architecture PostgreSQL 16 image with its matching PostGIS package, so it runs natively on Intel/AMD64 and Apple Silicon/ARM64 machines. `make db-up` builds and starts or upgrades the container, waits until it is healthy, and applies the idempotent spatial migration. The named Docker volume is preserved when the container image changes, so existing imported data does not need to be downloaded again.
+The database image is built from the official multi-architecture PostgreSQL 16 image with its matching PostGIS package, so it runs natively on Intel/AMD64 and Apple Silicon/ARM64 machines. On a full `docker compose up`, the one-shot `database-migrations` service waits for first-volume initialization to finish, applies unapplied incremental migrations, records them in `public.schema_migrations`, and exits before `pipeline-worker` starts. This also upgrades preserved database volumes; PostgreSQL's `/docker-entrypoint-initdb.d` directory runs automatically only when a volume is first created. `make db-up` performs the equivalent migration step explicitly. The named Docker volume is preserved when the container image changes, so existing imported data does not need to be downloaded again.
 
 The `building_parts`, `land_parcels`, and `rental_building_parts` tables expose a generated `location geometry(Point,3794)` column backed by a GiST spatial index. It is automatically derived from the original `centroid_e` and `centroid_n` values; the importer does not need to populate it.
 
