@@ -55,6 +55,10 @@ of what it derives and whether the operation is non-destructive. In particular,
 outlier stages mark statistical deviations and update representative-sample
 eligibility; they never delete the underlying GURS transaction.
 
+Model refreshes likewise announce the sale and rental learning populations
+before fitting starts: the target, per-property-group separation, duplicate and
+strict-land eligibility, and leakage-safe time-ordered selection/calibration.
+
 Configure the loop in the repository `.env`:
 
 ```dotenv

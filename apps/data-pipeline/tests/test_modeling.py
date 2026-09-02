@@ -29,6 +29,11 @@ def test_model_refresh_marks_first_install_bootstrap_only_after_both_kinds(monke
     assert "UPDATE analytics.pipeline_state" in cursor.execute.call_args.args[0]
     assert cursor.execute.call_args.args[1] == ("sale-v,rent-v",)
     output = capsys.readouterr().out
+    assert "learn sale price per m² separately for each property group" in output
+    assert "learn monthly rent per m² separately" in output
+    assert output.index("learn sale price") < output.index(
+        "transaction kind 1/2 starting: sale"
+    )
     assert "transaction kind 1/2 starting: sale" in output
     assert "transaction kind completion 2/2 (100.0%)" in output
 

@@ -233,6 +233,20 @@ def _query(kind: str) -> str:
     """
 
 
+MODEL_KIND_DESCRIPTIONS = {
+    "sale": (
+        "learn sale price per m² separately for each property group from "
+        "quality-eligible, de-duplicated transactions (strict ETN land rules); "
+        "select and calibrate with time-ordered validation before production fitting"
+    ),
+    "rent": (
+        "learn monthly rent per m² separately for each supported property group "
+        "from quality-eligible, de-duplicated agreements; select and calibrate "
+        "with time-ordered validation before production fitting"
+    ),
+}
+
+
 def refresh_models(
     connection: psycopg.Connection,
     workers: int | None = None,
@@ -246,6 +260,7 @@ def refresh_models(
         flush=True,
     )
     for kind_number, kind in enumerate(("sale", "rent"), start=1):
+        print(f"[{kind} model] {MODEL_KIND_DESCRIPTIONS[kind]}", flush=True)
         print(f"[models] transaction kind {kind_number}/2 starting: {kind}", flush=True)
         results.append(_refresh_kind(connection, kind, workers))
         elapsed = time.monotonic() - all_started
