@@ -44,6 +44,14 @@ type fakeBuildings struct{ err error }
 type fakeAnomalies struct{ err error }
 type fakeIdentities struct{ err error }
 type fakeModels struct{ err error }
+type fakeReleases struct {
+	status analytics.DataStatus
+	err    error
+}
+
+func (store fakeReleases) DataStatus(context.Context) (analytics.DataStatus, error) {
+	return store.status, store.err
+}
 
 func (store fakeModels) MarketIndices(context.Context, analytics.MarketIndexFilter) ([]analytics.MarketIndexPoint, error) {
 	return []analytics.MarketIndexPoint{{TransactionKind: "sale", Method: "hedonic"}}, store.err
@@ -308,6 +316,7 @@ func newTestHandler(databaseError error, store fakeGeographies) http.Handler {
 		Anomalies:        fakeAnomalies{},
 		Identities:       fakeIdentities{},
 		Models:           fakeModels{},
+		Releases:         fakeReleases{status: analytics.DataStatus{Status: "current"}},
 		Maps:             fakeMaps{},
 		Economics:        fakeEconomics{},
 		ApplicationName:  "test-api",

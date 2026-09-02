@@ -135,7 +135,7 @@ func (r *StatisticsRepository) ValuationPrediction(
 		    (model.metrics->'property_groups'->fact.property_group
 		      ->>'median_absolute_percentage_error')::float8,
 		    (model.metrics->>'median_absolute_percentage_error')::float8)
-		FROM analytics.valuation_predictions prediction
+		FROM analytics.current_valuation_predictions prediction
 		JOIN %s fact ON fact.transaction_id=prediction.transaction_id
 		JOIN analytics.model_runs model ON model.id=prediction.model_run_id
 		WHERE prediction.transaction_kind=$1 AND prediction.transaction_id=$2`,

@@ -31,6 +31,7 @@ type Dependencies struct {
 	Anomalies        analytics.AnomalyStore
 	Identities       identity.Store
 	Models           analytics.ModelStore
+	Releases         analytics.ReleaseStore
 	Maps             analytics.MapStore
 	Economics        economics.Store
 	AllowedOrigins   []string
@@ -51,6 +52,7 @@ type server struct {
 	anomaliesStore   analytics.AnomalyStore
 	identities       identity.Store
 	models           analytics.ModelStore
+	releases         analytics.ReleaseStore
 	maps             analytics.MapStore
 	economics        economics.Store
 	environment      string
@@ -71,6 +73,7 @@ func New(dependencies Dependencies) http.Handler {
 		anomaliesStore:   dependencies.Anomalies,
 		identities:       dependencies.Identities,
 		models:           dependencies.Models,
+		releases:         dependencies.Releases,
 		maps:             dependencies.Maps,
 		economics:        dependencies.Economics,
 		environment:      dependencies.Environment,
@@ -110,6 +113,16 @@ func (s *server) meta(w http.ResponseWriter, _ *http.Request) {
 		"geographyLevels":  []string{"country", "statistical_region", "municipality", "city_district", "local_community", "settlement"},
 		"propertyGroups":   []string{"apartment", "house", "land", "commercial", "garage", "room", "mixed", "unknown"},
 	})
+}
+
+func (s *server) dataStatus(w http.ResponseWriter, r *http.Request) {
+	status, err := s.releases.DataStatus(r.Context())
+	if err != nil {
+		s.logger.Error("load analytical release status", "error", err)
+		writeError(w, r, http.StatusInternalServerError, "data_status_failed", "data status is unavailable")
+		return
+	}
+	writeJSON(w, http.StatusOK, status)
 }
 
 func (s *server) listGeographies(w http.ResponseWriter, r *http.Request) {

@@ -57,6 +57,8 @@ The development container has a 512 MB ceiling. It does not load transactions or
 - `GET /health/ready`: readiness including PostgreSQL.
 - `GET /api/v1/health`: versioned readiness endpoint.
 - `GET /api/v1/meta`: supported transaction, interval, geography, and property dimensions.
+- `GET /api/v1/data-status`: active analytical cutoff, pending GURS source
+  cutoff, processing stage, and last failed release where applicable.
 - `GET /api/v1/geographies`: geographic units with optional `level` and `parentId` filters.
 - `GET /api/v1/geographies/{id}`: metadata and WGS84 bounds for one unit.
 - `GET /api/v1/geographies/{id}/children`: geographic hierarchy traversal.

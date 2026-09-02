@@ -54,6 +54,19 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Metadata"
+  /api/v1/data-status:
+    get:
+      operationId: getDataStatus
+      tags: [Operations]
+      responses:
+        "200":
+          description: Active analytical release and any newer release being prepared.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataStatus"
+        "500":
+          $ref: "#/components/responses/Error"
   /api/v1/economy/inflation:
     get:
       operationId: getSlovenianInflation
@@ -1088,6 +1101,34 @@ components:
           items:
             type: string
             enum: [apartment, house, land, commercial, garage, room, mixed, unknown]
+    DataStatus:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [current, processing, failed]
+        activeRelease:
+          $ref: "#/components/schemas/AnalyticalRelease"
+        pendingRelease:
+          $ref: "#/components/schemas/AnalyticalRelease"
+        lastFailedRelease:
+          $ref: "#/components/schemas/AnalyticalRelease"
+    AnalyticalRelease:
+      type: object
+      required: [id, status, stage, startedAt]
+      properties:
+        id: {type: string, format: uuid}
+        status: {type: string, enum: [processing, published, failed]}
+        stage: {type: string}
+        sourceSaleThrough: {type: string, format: date-time}
+        sourceRentThrough: {type: string, format: date-time}
+        analyticsSaleThrough: {type: string, format: date-time}
+        analyticsRentThrough: {type: string, format: date-time}
+        modelVersions: {type: string}
+        startedAt: {type: string, format: date-time}
+        publishedAt: {type: string, format: date-time}
+        failureMessage: {type: string}
     GeographyLevel:
       type: string
       enum: [country, statistical_region, municipality, city_district, local_community, settlement]

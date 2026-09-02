@@ -59,6 +59,7 @@ func run() error {
 		Anomalies:        statisticsRepository,
 		Identities:       identityRepository,
 		Models:           statisticsRepository,
+		Releases:         statisticsRepository,
 		Maps:             statisticsRepository,
 		Economics:        inflationClient,
 		AllowedOrigins:   cfg.AllowedOrigins,

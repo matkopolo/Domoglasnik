@@ -41,6 +41,19 @@ func TestMeta(t *testing.T) {
 	}
 }
 
+func TestDataStatus(t *testing.T) {
+	response := httptest.NewRecorder()
+	newTestHandler(nil, fakeGeographies{}).ServeHTTP(
+		response, httptest.NewRequest(http.MethodGet, "/api/v1/data-status", nil),
+	)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d", response.Code)
+	}
+	if !strings.Contains(response.Body.String(), `"status":"current"`) {
+		t.Fatalf("body = %s", response.Body.String())
+	}
+}
+
 func TestGeographiesValidateLevel(t *testing.T) {
 	response := httptest.NewRecorder()
 	handler := newTestHandler(nil, fakeGeographies{})
