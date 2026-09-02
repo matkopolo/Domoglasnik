@@ -27,7 +27,7 @@ real-estate-etl schedule --interval-days 14
 
 It runs once immediately, writes its health marker after the required
 source/geography/analytics chain succeeds, then waits 14 days. A new database
-also performs the one-time model bootstrap before becoming healthy. Failures
+also performs the initial model bootstrap before becoming healthy. Failures
 retry after one hour. A PostgreSQL session advisory lock prevents a scheduled
 run, manual refresh, and reset from executing concurrently.
 
@@ -38,9 +38,17 @@ Each incremental run:
 - retrieves the current-year products again to detect revised archives;
 - keeps valid ZIPs in the `pipeline_data` Docker volume;
 - refreshes GURS RPE boundaries;
-- refreshes all deterministic analytics in dependency order;
-- trains models only when the database bootstrap marker is empty; later
-  scheduled runs leave model versions unchanged.
+- refreshes all deterministic analytics in dependency order inside one
+  publication transaction;
+- retrains sale and rental models when an archive checksum changed, while
+  unchanged current-year downloads retain the published model;
+- keeps the previous facts, outliers, indices, and model predictions visible
+  until the complete pending release commits.
+
+`analytics.analytical_publication` identifies the active and pending releases.
+During processing, `/api/v1/data-status` exposes both the published analytical
+cutoff and the newer GURS source cutoff. A failed refresh rolls back derived
+changes and leaves the active release untouched.
 
 Configure the loop in the repository `.env`:
 

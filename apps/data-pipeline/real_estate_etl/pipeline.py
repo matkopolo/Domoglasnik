@@ -102,6 +102,7 @@ def _run_refresh(
     work = iter(combinations)
     total = len(combinations) if hasattr(combinations, "__len__") else 0
     imported = unavailable = 0
+    already_imported = skipped
     download_seconds = parsing_seconds = database_seconds = 0.0
     print(
         f"Queued {total} archives; skipped {skipped} already imported; "
@@ -139,6 +140,10 @@ def _run_refresh(
                     elif verbose:
                         print(f"{item_label}: importing {archive.path}")
                     stats = import_zip(connection, archive.path, verbose=verbose)
+                    if stats.unchanged:
+                        already_imported += 1
+                        print(f"{item_label}: source checksum unchanged")
+                        continue
                     parsing_seconds += stats.parsing_seconds
                     database_seconds += stats.database_seconds
                     imported += 1
@@ -156,12 +161,12 @@ def _run_refresh(
         executor.shutdown(wait=True, cancel_futures=True)
 
     print(
-        f"{summary_prefix}: imported={imported}, already_imported={skipped}, unavailable={unavailable}, "
+        f"{summary_prefix}: imported={imported}, already_imported={already_imported}, unavailable={unavailable}, "
         f"elapsed={format_duration(time.monotonic() - started_at)}, "
         f"download_worker_time={format_duration(download_seconds)}, "
         f"csv_parsing={format_duration(parsing_seconds)}, database={format_duration(database_seconds)}"
     )
-    return RefreshSummary(imported, skipped, unavailable)
+    return RefreshSummary(imported, already_imported, unavailable)
 
 
 def refresh_all_sales(

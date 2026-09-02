@@ -424,7 +424,11 @@ reviewer, and time are preserved when signals are refreshed.
   training window/sample, latest-complete-year temporal metrics,
   municipality-blocked diagnostics, and honest split-conformal coverage.
 - `analytics.valuation_predictions`: observed and predicted amount per m²,
-  calibrated lower/upper range, and residual for every model-eligible fact.
+  calibrated lower/upper range, and residual for every model-eligible fact;
+  generations are immutable per model run.
+- `analytics.model_publications`: active sale and rental model-run pointers.
+- `analytics.current_valuation_predictions`: API-facing predictions from only
+  the active model generations.
 - `analytics.repeat_sale_pairs`: consecutive representative sales of the same
   cadastral building part, at least 180 days apart.
 - `analytics.index_calculation_runs`: append-only index calculation vintage,
@@ -433,6 +437,17 @@ reviewer, and time are preserved when signals are refreshed.
   constant-quality hedonic series with observed/reference samples, uncertainty,
   publication state, base period, model run, and calculation vintage.
 - `analytics.current_market_indices`: latest vintage for each series/period.
+
+### Analytical releases
+
+- `analytics.analytical_releases`: one publication attempt with processing
+  stage, raw source cutoffs, published analytical cutoffs, model versions,
+  timestamps, outcome, and bounded failure information.
+- `analytics.analytical_publication`: singleton active/pending release pointer.
+
+The pending release record is independently visible while its derived tables
+are built. Facts, quality evaluations, indices, predictions, model pointers,
+and the active analytical pointer publish in one transaction.
 
 The `matched_pair_median` method compounds median annualized log returns from
 matched building-part pairs. It is not labelled as a weighted repeat-sales

@@ -298,6 +298,21 @@ record is not labelled as duplicated merely because a later matching row exists.
 
 ## Hedonic valuation model
 
+### Publication and data freshness
+
+New or changed GURS archives do not immediately replace published analytical
+results. The pipeline rebuilds sale and rental facts, robust outlier
+classifications, shared quality analytics, indices, and the valuation models
+as one pending analytical release. The prior release remains queryable during
+calculation and validation. One transaction publishes the replacement only
+after every required stage succeeds. This operational consistency mechanism
+does not alter any eligibility, outlier, validation, or selection definition.
+
+The imported source cutoff and published analytical cutoff are deliberately
+separate. The UI can therefore report that newer GURS evidence is being
+processed while stating exactly through which date the active verified
+analytics apply.
+
 ### Model architecture
 
 The valuation component is supervised hedonic regression: it estimates the

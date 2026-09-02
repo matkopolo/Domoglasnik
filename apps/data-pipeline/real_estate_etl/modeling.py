@@ -266,6 +266,22 @@ def refresh_models(
             """,
             (",".join(result.model_version for result in results),),
         )
+        cursor.executemany(
+            """
+            INSERT INTO analytics.model_publications(
+                transaction_kind,model_run_id,activated_at
+            )
+            SELECT %s,id,clock_timestamp() FROM analytics.model_runs
+            WHERE transaction_kind=%s AND model_version=%s
+            ON CONFLICT(transaction_kind) DO UPDATE SET
+                model_run_id=excluded.model_run_id,
+                activated_at=excluded.activated_at
+            """,
+            [
+                (result.transaction_kind, result.transaction_kind, result.model_version)
+                for result in results
+            ],
+        )
     return results
 
 
@@ -490,17 +506,6 @@ def _refresh_kind(
                     )
             cursor.execute(
                 """
-                DELETE FROM analytics.valuation_predictions prediction
-                WHERE prediction.transaction_kind=%s
-                  AND NOT EXISTS (
-                    SELECT 1 FROM model_scores score
-                    WHERE score.transaction_id=prediction.transaction_id
-                  )
-                """,
-                (kind,),
-            )
-            cursor.execute(
-                """
                 INSERT INTO analytics.valuation_predictions(
                     transaction_kind,transaction_id,model_run_id,
                     predicted_amount_per_sqm,lower_amount_per_sqm,
@@ -509,8 +514,7 @@ def _refresh_kind(
                 SELECT %s,transaction_id,%s,predicted,lower_bound,upper_bound,
                        actual,log_residual
                 FROM model_scores
-                ON CONFLICT(transaction_kind,transaction_id) DO UPDATE SET
-                    model_run_id=excluded.model_run_id,
+                ON CONFLICT(transaction_kind,transaction_id,model_run_id) DO UPDATE SET
                     predicted_amount_per_sqm=excluded.predicted_amount_per_sqm,
                     lower_amount_per_sqm=excluded.lower_amount_per_sqm,
                     upper_amount_per_sqm=excluded.upper_amount_per_sqm,

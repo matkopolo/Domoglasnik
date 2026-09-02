@@ -6,8 +6,8 @@ import os
 import signal
 import sys
 import time
+import uuid
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -35,10 +35,6 @@ ANALYTICS_REFRESH_FUNCTIONS = (
     "analytics.refresh_missingness_profiles",
     "analytics.refresh_repeat_sales_indices",
 )
-
-SALE_ANALYTICS_REFRESH_FUNCTIONS = ANALYTICS_REFRESH_FUNCTIONS[:3]
-RENTAL_ANALYTICS_REFRESH_FUNCTIONS = ANALYTICS_REFRESH_FUNCTIONS[3:5]
-SHARED_ANALYTICS_REFRESH_FUNCTIONS = ANALYTICS_REFRESH_FUNCTIONS[5:]
 
 RESET_TABLES = (
     "analytics.valuation_predictions",
@@ -133,25 +129,113 @@ def _refresh_functions(
     return counts
 
 
-def _refresh_branch(database_url: str, functions: tuple[str, ...]) -> dict[str, int]:
-    with psycopg.connect(database_url) as connection:
-        return _refresh_functions(connection, functions)
-
-
 def refresh_analytics(connection, *, database_url: str) -> dict[str, int]:
-    """Refresh independent sale/rent branches, then their shared dependants."""
-    with ThreadPoolExecutor(max_workers=2, thread_name_prefix="analytics") as executor:
-        sale_future = executor.submit(
-            _refresh_branch, database_url, SALE_ANALYTICS_REFRESH_FUNCTIONS
-        )
-        rental_future = executor.submit(
-            _refresh_branch, database_url, RENTAL_ANALYTICS_REFRESH_FUNCTIONS
-        )
-        sale_counts = sale_future.result()
-        rental_counts = rental_future.result()
+    """Build one coherent analytical generation in the caller's transaction."""
+    del database_url  # retained for CLI/API compatibility
+    return _refresh_functions(connection, ANALYTICS_REFRESH_FUNCTIONS)
 
-    shared_counts = _refresh_functions(connection, SHARED_ANALYTICS_REFRESH_FUNCTIONS)
-    return sale_counts | rental_counts | shared_counts
+
+def _release_status(database_url: str, release_id: uuid.UUID, stage: str) -> None:
+    with psycopg.connect(database_url) as status_connection:
+        status_connection.execute(
+            """UPDATE analytics.analytical_releases SET stage=%s WHERE id=%s""",
+            (stage, release_id),
+        )
+
+
+def _start_release(connection, database_url: str) -> uuid.UUID:
+    release_id = uuid.uuid4()
+    sale_through, rent_through = connection.execute(
+        """SELECT (SELECT max(contract_date) FROM transactions),
+                  (SELECT max(contract_date) FROM rental_transactions)"""
+    ).fetchone()
+    connection.commit()
+    with psycopg.connect(database_url) as status_connection:
+        status_connection.execute(
+            """
+            UPDATE analytics.analytical_releases
+            SET status='failed',stage='superseded',failed_at=clock_timestamp(),
+                failure_message='superseded by a newer refresh'
+            WHERE status='processing'
+            """
+        )
+        status_connection.execute(
+            """
+            INSERT INTO analytics.analytical_releases(
+                id,status,stage,source_sale_through,source_rent_through
+            ) VALUES(%s,'processing','source',%s,%s)
+            """,
+            (release_id, sale_through, rent_through),
+        )
+        status_connection.execute(
+            """
+            UPDATE analytics.analytical_publication
+            SET pending_release_id=%s,updated_at=clock_timestamp()
+            WHERE singleton
+            """,
+            (release_id,),
+        )
+    return release_id
+
+
+def _update_release_source(connection, database_url: str, release_id: uuid.UUID) -> None:
+    sale_through, rent_through = connection.execute(
+        """SELECT (SELECT max(contract_date) FROM transactions),
+                  (SELECT max(contract_date) FROM rental_transactions)"""
+    ).fetchone()
+    connection.commit()
+    with psycopg.connect(database_url) as status_connection:
+        status_connection.execute(
+            """UPDATE analytics.analytical_releases
+               SET source_sale_through=%s,source_rent_through=%s,stage='geography'
+               WHERE id=%s""",
+            (sale_through, rent_through, release_id),
+        )
+
+
+def _fail_release(database_url: str, release_id: uuid.UUID, error: Exception) -> None:
+    with psycopg.connect(database_url) as status_connection:
+        status_connection.execute(
+            """
+            UPDATE analytics.analytical_releases
+            SET status='failed',stage='failed',failed_at=clock_timestamp(),
+                failure_message=left(%s,2000)
+            WHERE id=%s
+            """,
+            (str(error), release_id),
+        )
+        status_connection.execute(
+            """
+            UPDATE analytics.analytical_publication
+            SET pending_release_id=NULL,updated_at=clock_timestamp()
+            WHERE singleton AND pending_release_id=%s
+            """,
+            (release_id,),
+        )
+
+
+def _publish_release(
+    connection, release_id: uuid.UUID, model_versions: str | None
+) -> None:
+    connection.execute(
+        """
+        UPDATE analytics.analytical_releases
+        SET status='published',stage='published',published_at=clock_timestamp(),
+            analytics_sale_through=(SELECT max(contract_date) FROM analytics.sale_facts),
+            analytics_rent_through=(SELECT max(contract_date) FROM analytics.rental_facts),
+            model_versions=%s
+        WHERE id=%s
+        """,
+        (model_versions, release_id),
+    )
+    connection.execute(
+        """
+        UPDATE analytics.analytical_publication
+        SET active_release_id=%s,pending_release_id=NULL,updated_at=clock_timestamp()
+        WHERE singleton
+        """,
+        (release_id,),
+    )
 
 
 def reset_market_data(connection) -> None:
@@ -238,51 +322,70 @@ def _refresh_system_unlocked(
     verbose: bool,
     database_url: str,
 ) -> SystemRefreshResult:
-    archives = refresh_all_national(
-        connection,
-        output_dir,
-        end_year,
-        force,
-        workers,
-        verbose,
-        refresh_current_year=True,
-    )
-    geography_counts = sync_geographies(connection)
-    analytics_counts = refresh_analytics(connection, database_url=database_url)
-    print(
-        "Refreshed analytics: "
-        + ", ".join(
-            f"{name.rsplit('.', 1)[-1]}={count}"
-            for name, count in analytics_counts.items()
+    release_id = _start_release(connection, database_url)
+    try:
+        archives = refresh_all_national(
+            connection,
+            output_dir,
+            end_year,
+            force,
+            workers,
+            verbose,
+            refresh_current_year=True,
         )
-    )
+        _update_release_source(connection, database_url, release_id)
+        geography_counts = sync_geographies(connection)
+        _release_status(database_url, release_id, "analytics")
+        bootstrap_required = connection.execute(
+            """
+            SELECT model_bootstrap_completed_at IS NULL
+            FROM analytics.pipeline_state WHERE singleton
+            """
+        ).fetchone()[0]
+        connection.commit()
+        model_rows: dict[str, int] = {}
+        with connection.transaction():
+            analytics_counts = refresh_analytics(connection, database_url=database_url)
+            print(
+                "Refreshed analytics: "
+                + ", ".join(
+                    f"{name.rsplit('.', 1)[-1]}={count}"
+                    for name, count in analytics_counts.items()
+                )
+            )
+            should_train = bootstrap_required or archives.imported > 0
+            model_versions = connection.execute(
+                """SELECT model_bootstrap_version FROM analytics.pipeline_state
+                   WHERE singleton"""
+            ).fetchone()[0]
+            if should_train:
+                _release_status(database_url, release_id, "models")
+                print(
+                    "Starting valuation-model training for the pending analytical release.",
+                    flush=True,
+                )
+                from .model_reporting import format_model_report
+                from .modeling import refresh_models
 
-    bootstrap_required = connection.execute(
-        """
-        SELECT model_bootstrap_completed_at IS NULL
-        FROM analytics.pipeline_state WHERE singleton
-        """
-    ).fetchone()[0]
-    connection.commit()
-    if not bootstrap_required:
-        print(
-            "Skipped valuation-model training; first-install bootstrap is already "
-            "complete. Run `make models-refresh` explicitly for a new model version."
-        )
-        return SystemRefreshResult(archives, geography_counts, {})
-
-    print("Starting one-time first-install valuation-model training.", flush=True)
-    from .model_reporting import format_model_report
-    from .modeling import refresh_models
-
-    model_results = refresh_models(connection, workers)
-    for result in model_results:
-        print(format_model_report(result))
-    return SystemRefreshResult(
-        archives,
-        geography_counts,
-        {result.transaction_kind: result.rows for result in model_results},
-    )
+                model_results = refresh_models(connection, workers)
+                for result in model_results:
+                    print(format_model_report(result))
+                model_rows = {
+                    result.transaction_kind: result.rows for result in model_results
+                }
+                model_versions = ",".join(
+                    result.model_version for result in model_results
+                )
+            else:
+                print(
+                    "No new GURS archives; retaining the currently published model."
+                )
+            _publish_release(connection, release_id, model_versions)
+        return SystemRefreshResult(archives, geography_counts, model_rows)
+    except Exception as error:
+        connection.rollback()
+        _fail_release(database_url, release_id, error)
+        raise
 
 
 def scheduled_refresh_loop(

@@ -217,6 +217,18 @@ def import_zip(connection, path: Path, verbose: bool = False) -> ImportStats:
     else:
         raise ValueError(f"Cannot determine dataset scope/type/year from archive name: {path.name}")
     selected_tables = RENT_TABLES if dataset_type == "rent" else TABLES
+    existing = connection.execute(
+        """
+        SELECT 1 FROM source_files
+        WHERE dataset_scope=%s AND dataset_type=%s AND dataset_year=%s
+          AND municipality_code IS NOT DISTINCT FROM %s AND sha256=%s
+        """,
+        (dataset_scope, dataset_type, year, municipality, digest),
+    ).fetchone()
+    connection.commit()
+    if existing:
+        stats.unchanged = True
+        return stats
     database_started = time.monotonic()
     with connection.transaction(), connection.cursor() as cur:
         cur.execute("""INSERT INTO source_files(

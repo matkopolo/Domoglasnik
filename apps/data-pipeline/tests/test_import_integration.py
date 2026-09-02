@@ -155,7 +155,7 @@ def test_import_preserves_historical_incomplete_and_duplicate_rows(database_conn
 
     assert first.rows == 6
     assert first.codebook_rows == 1
-    assert second.codebook_skipped is True
+    assert second.unchanged is True
     assert connection.execute("SELECT count(*) FROM transactions").fetchone()[0] == 1
     assert connection.execute("SELECT count(*) FROM building_parts").fetchone()[0] == 3
     assert connection.execute("SELECT count(*) FROM land_parcels").fetchone()[0] == 2

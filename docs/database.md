@@ -53,6 +53,21 @@ null; analytical code never invents missing prices, rents, areas, or locations.
   and repeat-sale pairs retain versioned analytical outputs.
 - `refresh_runs` records deterministic refresh status and diagnostics.
 
+### Atomic analytical publication
+
+`analytical_releases` records source cutoffs, published analytical cutoffs,
+model versions, processing stages, and outcomes. `analytical_publication` is a
+singleton pointer to the active release and any pending replacement. Raw GURS
+imports commit first; facts, outlier classifications, shared analytics,
+indices, model predictions, and the release pointer then change inside one
+PostgreSQL transaction. API readers therefore retain the previous committed
+generation until all required work succeeds.
+
+Predictions are immutable per model run. `model_publications` selects the
+active sale and rental generations and `current_valuation_predictions` is the
+API-facing view. Pending or failed training never overwrites active model
+predictions.
+
 Repeat-sale pairs are fully derived. Both links to `sale_facts` cascade on
 deletion so replacing a yearly GURS archive safely invalidates obsolete pairs;
 the analytics refresh recreates them after the fact tables are current.

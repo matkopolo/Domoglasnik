@@ -11,6 +11,7 @@ class ImportStats:
     rows: int = 0
     codebook_rows: int = 0
     codebook_skipped: bool = False
+    unchanged: bool = False
 
 
 @dataclass
