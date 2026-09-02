@@ -38,6 +38,10 @@ def test_long_analytics_refresh_emits_periodic_heartbeat(capsys):
     assert "refresh_rental_facts: started" in output
     assert "one quality-audited analytical fact per rental agreement" in output
     assert "database tables populated/updated: analytics.rental_facts" in output
+    assert "execution plan: 1 sequential stages" in output
+    assert output.index("[analytics] 1/1 refresh_rental_facts") < output.index(
+        "refresh_rental_facts: started"
+    )
     assert output.count("PostgreSQL is still processing") >= 2
     assert "refresh_rental_facts: 456,585 rows in" in output
 
@@ -78,6 +82,14 @@ def test_refresh_analytics_uses_documented_dependency_order(capsys):
     ]
     assert counts == {function: 3 for function in ANALYTICS_REFRESH_FUNCTIONS}
     output = capsys.readouterr().out
+    assert "execution plan: 9 sequential stages" in output
+    assert "database refresh stages do not run in parallel" in output
+    planned = [
+        output.index(f"[analytics] {position}/9 {function.rsplit('.', 1)[-1]}")
+        for position, function in enumerate(ANALYTICS_REFRESH_FUNCTIONS, start=1)
+    ]
+    assert planned == sorted(planned)
+    assert planned[-1] < output.index("refresh_sale_facts: started")
     for function in ANALYTICS_REFRESH_FUNCTIONS:
         assert f"{function.rsplit('.', 1)[-1]}: 3 rows in " in output
 

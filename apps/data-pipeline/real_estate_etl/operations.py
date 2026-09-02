@@ -161,6 +161,26 @@ def _log_running_stage(label: str, started: float, done: Event, interval: float)
         )
 
 
+def _print_analytics_plan(functions: tuple[str, ...]) -> None:
+    print(
+        f"[analytics] execution plan: {len(functions)} sequential stages; "
+        "database refresh stages do not run in parallel",
+        flush=True,
+    )
+    for position, function in enumerate(functions, start=1):
+        label = function.rsplit(".", 1)[-1]
+        print(f"[analytics] {position}/{len(functions)} {label}", flush=True)
+        description = ANALYTICS_STAGE_DESCRIPTIONS.get(function)
+        if description:
+            print(f"  action: {description}", flush=True)
+        tables = ANALYTICS_STAGE_TABLES.get(function)
+        if tables:
+            print(
+                "  database tables populated/updated: " + ", ".join(tables),
+                flush=True,
+            )
+
+
 def _refresh_functions(
     connection,
     functions: tuple[str, ...],
@@ -169,20 +189,11 @@ def _refresh_functions(
 ) -> dict[str, int]:
     counts: dict[str, int] = {}
     interval = progress_interval_seconds or _analytics_progress_interval()
+    _print_analytics_plan(functions)
     with connection.transaction(), connection.cursor() as cursor:
         for function in functions:
             label = function.rsplit(".", 1)[-1]
             started = time.monotonic()
-            description = ANALYTICS_STAGE_DESCRIPTIONS.get(function)
-            if description:
-                print(f"  {label}: {description}", flush=True)
-            tables = ANALYTICS_STAGE_TABLES.get(function)
-            if tables:
-                print(
-                    f"  {label}: database tables populated/updated: "
-                    + ", ".join(tables),
-                    flush=True,
-                )
             print(f"  {label}: started", flush=True)
             done = Event()
             heartbeat = Thread(

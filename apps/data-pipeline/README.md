@@ -62,6 +62,12 @@ Every stage also prints the exact schema-qualified database tables it primarily
 populates or updates. Shared audit bookkeeping such as `analytics.refresh_runs`
 is intentionally omitted from these short destination lists.
 
+The complete numbered analytics plan is printed before its first SQL function
+starts and is the actual sequential execution order. The model plan is also
+printed up front: sale completes before rent starts. It separately discloses
+bounded property-group parallelism inside the currently active sale or rental
+population so the log never implies that all model fits are sequential.
+
 Configure the loop in the repository `.env`:
 
 ```dotenv

@@ -265,17 +265,23 @@ def refresh_models(
     results = []
     all_started = time.monotonic()
     print(
-        f"[models] training plan: sale then rent; up to {workers} parallel "
-        "property-group workers per transaction kind",
+        "[models] ordered execution plan: 2 transaction populations; sale "
+        "completes before rent starts",
         flush=True,
     )
     for kind_number, kind in enumerate(("sale", "rent"), start=1):
-        print(f"[{kind} model] {MODEL_KIND_DESCRIPTIONS[kind]}", flush=True)
+        print(f"[models] {kind_number}/2 {kind} model", flush=True)
+        print(f"  action: {MODEL_KIND_DESCRIPTIONS[kind]}", flush=True)
         print(
-            f"[{kind} model] database tables populated/updated: "
-            + ", ".join(MODEL_OUTPUT_TABLES),
+            "  database tables populated/updated: " + ", ".join(MODEL_OUTPUT_TABLES),
             flush=True,
         )
+    print(
+        f"[models] concurrency: sale and rent are sequential; within the active "
+        f"population, up to {workers} property groups may train in parallel",
+        flush=True,
+    )
+    for kind_number, kind in enumerate(("sale", "rent"), start=1):
         print(f"[models] transaction kind {kind_number}/2 starting: {kind}", flush=True)
         results.append(_refresh_kind(connection, kind, workers))
         elapsed = time.monotonic() - all_started

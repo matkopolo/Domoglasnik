@@ -33,7 +33,9 @@ def test_model_refresh_marks_first_install_bootstrap_only_after_both_kinds(monke
     assert "learn monthly rent per m² separately" in output
     assert "database tables populated/updated: analytics.model_runs" in output
     assert "analytics.model_publications" in output
-    assert output.index("learn sale price") < output.index(
+    assert "sale completes before rent starts" in output
+    assert "sale and rent are sequential" in output
+    assert output.index("[models] 2/2 rent model") < output.index(
         "transaction kind 1/2 starting: sale"
     )
     assert "transaction kind 1/2 starting: sale" in output
