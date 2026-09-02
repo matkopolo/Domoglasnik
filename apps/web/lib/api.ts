@@ -24,6 +24,7 @@ import type {
   TransactionContextResponse,
   YearRange,
   AreaRange,
+  DataStatus,
 } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? "http://localhost:8080";
@@ -62,6 +63,10 @@ export async function getJSON<T>(path: string, signal: AbortSignal): Promise<T> 
   });
   if (!response.ok) throw new APIError(response.status, path);
   return response.json() as Promise<T>;
+}
+
+export async function loadDataStatus(signal: AbortSignal): Promise<DataStatus> {
+  return getJSON<DataStatus>("/api/v1/data-status", signal);
 }
 
 export async function loadDashboard(

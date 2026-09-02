@@ -465,6 +465,12 @@ main { width: min(1480px, calc(100% - 48px)); margin: 0 auto; padding: 25px 0 30
 .context-progress { margin: 0 !important; padding: 8px 18px; background: #eef5f0; color: var(--green); font-size: 11px; }
 .context-error, .dashboard-error { padding: 10px 12px; border: 1px solid #e6b9aa; border-radius: 6px; background: #fff2ed; color: #8a3e28; font-size: 12px; }
 .dashboard-error { margin-bottom: 12px; }
+.publication-status { display: flex; align-items: flex-start; gap: 10px; margin: 0 0 14px; padding: 10px 12px; border: 1px solid var(--line); border-left: 3px solid var(--green); background: var(--surface-soft); color: var(--muted); font-size: 12px; line-height: 1.45; }
+.publication-status svg { width: 16px; height: 16px; flex: 0 0 auto; margin-top: 1px; }
+.publication-status div { display: grid; gap: 2px; }
+.publication-status strong { color: var(--ink); font-size: 13px; }
+.publication-status.failed { border-left-color: #b87819; }
+.publication-status.compact { display: inline-flex; align-items: center; padding-block: 7px; }
 .context-primary { padding: 11px 0; display: grid; gap: 2px; }
 .context-primary span, .context-primary b { color: var(--muted); font-size: 11px; }
 .context-primary strong { color: var(--green); font-size: 20px; }

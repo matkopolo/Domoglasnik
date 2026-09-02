@@ -6,6 +6,14 @@ const { loadDashboardMock } = vi.hoisted(() => ({ loadDashboardMock: vi.fn() }))
 vi.mock("@/lib/api", async () => {
   return {
     loadDashboard: loadDashboardMock,
+    loadDataStatus: vi.fn(async () => ({
+      status: "current",
+      activeRelease: {
+        id: "active", status: "published", stage: "published",
+        startedAt: "2026-04-01T08:00:00Z", publishedAt: "2026-04-01T09:00:00Z",
+        analyticsSaleThrough: "2026-03-31", analyticsRentThrough: "2026-03-31",
+      },
+    })),
     loadMarketIndices: vi.fn(async () => ({ items: [] })),
     loadDetailedTimeSeries: vi.fn(async () => ({ items: [] })),
     loadInflation: vi.fn(async () => ({ items: [], source: "SURS SiStat H281S" })),

@@ -2,9 +2,10 @@
 
 import { ArrowRight, Menu, RefreshCw, SearchCheck, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { loadBuildingStatistics, loadDashboard, loadTransaction } from "@/lib/api";
+import { loadBuildingStatistics, loadDashboard, loadDataStatus, loadTransaction } from "@/lib/api";
 import type {
   AreaRange,
+  DataStatus,
   DashboardData,
   GeographyLevel,
   MarketContext,
@@ -21,6 +22,7 @@ import { FilterBar } from "./filter-bar";
 import { SloveniaMap } from "./slovenia-map";
 import { MarketSnapshot } from "./market-snapshot";
 import { TrendChart } from "./trend-chart";
+import { DataPublicationStatus } from "./data-publication-status";
 
 const EMPTY_DATA: DashboardData = {
   overview: {
@@ -131,12 +133,28 @@ export function MarketDashboard() {
   const [data, setData] = useState<DashboardData>(EMPTY_DATA);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
+  const [dataStatus, setDataStatus] = useState<DataStatus>();
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
   const [mapResetVersion, setMapResetVersion] = useState(0);
   const mobileNavigationButton = useRef<HTMLButtonElement>(null);
   const generation = useRef(0);
   const contextGeographyGeneration = useRef(0);
   const geographyId = geographyContext?.id;
+
+  useEffect(() => {
+    let activeController: AbortController | undefined;
+    const refreshStatus = () => {
+      activeController?.abort();
+      activeController = new AbortController();
+      loadDataStatus(activeController.signal).then(setDataStatus).catch(() => undefined);
+    };
+    refreshStatus();
+    const timer = window.setInterval(refreshStatus, 30_000);
+    return () => {
+      window.clearInterval(timer);
+      activeController?.abort();
+    };
+  }, []);
 
   useEffect(() => {
     if (!mobileNavigationOpen) return;
@@ -304,6 +322,7 @@ export function MarketDashboard() {
             window.setTimeout(() => document.querySelector<HTMLInputElement>("#building-address-search")?.focus(), 300);
           }}><SearchCheck size={17} /> Preverite konkreten naslov <ArrowRight size={15} /></button>
         </div>
+        <DataPublicationStatus status={dataStatus} mode={mode} />
         {error && (
           <div className="dashboard-error" role="alert">
             Podatkov ni bilo mogoče osvežiti ({error}). Prikazan je zadnji uspešen rezultat;

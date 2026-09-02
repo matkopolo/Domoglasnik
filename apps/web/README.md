@@ -5,6 +5,11 @@ the Go API from `NEXT_PUBLIC_API_URL`. If that API is unavailable, the
 dashboard shows an explicit error state; it does not substitute generated or
 demo market values.
 
+The dashboard polls `/api/v1/data-status` every 30 seconds. When newer GURS
+data is being processed, it continues displaying the last complete analytical
+release and clearly shows both cutoffs and the active pipeline stage. Failed
+updates do not replace otherwise usable published market data.
+
 ## Local development
 
 ```bash

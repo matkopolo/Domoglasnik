@@ -68,6 +68,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/data-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getDataStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/economy/inflation": {
         parameters: {
             query?: never;
@@ -666,6 +682,34 @@ export interface components {
             intervals: ("month" | "quarter" | "year")[];
             geographyLevels: components["schemas"]["GeographyLevel"][];
             propertyGroups: ("apartment" | "house" | "land" | "commercial" | "garage" | "room" | "mixed" | "unknown")[];
+        };
+        DataStatus: {
+            /** @enum {string} */
+            status: "current" | "processing" | "failed";
+            activeRelease?: components["schemas"]["AnalyticalRelease"];
+            pendingRelease?: components["schemas"]["AnalyticalRelease"];
+            lastFailedRelease?: components["schemas"]["AnalyticalRelease"];
+        };
+        AnalyticalRelease: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            status: "processing" | "published" | "failed";
+            stage: string;
+            /** Format: date-time */
+            sourceSaleThrough?: string;
+            /** Format: date-time */
+            sourceRentThrough?: string;
+            /** Format: date-time */
+            analyticsSaleThrough?: string;
+            /** Format: date-time */
+            analyticsRentThrough?: string;
+            modelVersions?: string;
+            /** Format: date-time */
+            startedAt: string;
+            /** Format: date-time */
+            publishedAt?: string;
+            failureMessage?: string;
         };
         /** @enum {string} */
         GeographyLevel: "country" | "statistical_region" | "municipality" | "city_district" | "local_community" | "settlement";
@@ -1403,6 +1447,27 @@ export interface operations {
                     "application/json": components["schemas"]["Metadata"];
                 };
             };
+        };
+    };
+    getDataStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active analytical release and any newer release being prepared. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataStatus"];
+                };
+            };
+            500: components["responses"]["Error"];
         };
     };
     getSlovenianInflation: {

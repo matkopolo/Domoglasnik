@@ -9,6 +9,27 @@ export type GeographyLevel = ApiSchemas["GeographyLevel"];
 export interface YearRange { from: number; to: number }
 export interface AreaRange { min?: number; max?: number }
 
+export interface AnalyticalRelease {
+  id: string;
+  status: "processing" | "published" | "failed";
+  stage: string;
+  sourceSaleThrough?: string;
+  sourceRentThrough?: string;
+  analyticsSaleThrough?: string;
+  analyticsRentThrough?: string;
+  modelVersions?: string;
+  startedAt: string;
+  publishedAt?: string;
+  failureMessage?: string;
+}
+
+export interface DataStatus {
+  status: "current" | "processing" | "failed";
+  activeRelease?: AnalyticalRelease;
+  pendingRelease?: AnalyticalRelease;
+  lastFailedRelease?: AnalyticalRelease;
+}
+
 export interface Geography {
   id: number;
   level: GeographyLevel;
