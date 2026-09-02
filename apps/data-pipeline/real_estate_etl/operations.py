@@ -75,6 +75,35 @@ ANALYTICS_STAGE_DESCRIPTIONS = {
     ),
 }
 
+ANALYTICS_STAGE_TABLES = {
+    "analytics.refresh_sale_facts": ("analytics.sale_facts",),
+    "analytics.refresh_land_transaction_facts": (
+        "analytics.land_transaction_facts",
+    ),
+    "analytics.refresh_sale_outliers": (
+        "analytics.sale_outlier_evaluations",
+        "analytics.sale_facts",
+    ),
+    "analytics.refresh_rental_facts": ("analytics.rental_facts",),
+    "analytics.refresh_rental_outliers": (
+        "analytics.rental_outlier_evaluations",
+        "analytics.rental_facts",
+    ),
+    "analytics.refresh_anomaly_signals": ("analytics.anomaly_signals",),
+    "analytics.refresh_near_duplicate_candidates": (
+        "analytics.near_duplicate_candidates",
+        "analytics.anomaly_signals",
+    ),
+    "analytics.refresh_missingness_profiles": (
+        "analytics.missingness_profiles",
+    ),
+    "analytics.refresh_repeat_sales_indices": (
+        "analytics.repeat_sale_pairs",
+        "analytics.index_calculation_runs",
+        "analytics.market_indices",
+    ),
+}
+
 RESET_TABLES = (
     "analytics.valuation_predictions",
     "analytics.market_indices",
@@ -147,6 +176,13 @@ def _refresh_functions(
             description = ANALYTICS_STAGE_DESCRIPTIONS.get(function)
             if description:
                 print(f"  {label}: {description}", flush=True)
+            tables = ANALYTICS_STAGE_TABLES.get(function)
+            if tables:
+                print(
+                    f"  {label}: database tables populated/updated: "
+                    + ", ".join(tables),
+                    flush=True,
+                )
             print(f"  {label}: started", flush=True)
             done = Event()
             heartbeat = Thread(

@@ -58,6 +58,9 @@ eligibility; they never delete the underlying GURS transaction.
 Model refreshes likewise announce the sale and rental learning populations
 before fitting starts: the target, per-property-group separation, duplicate and
 strict-land eligibility, and leakage-safe time-ordered selection/calibration.
+Every stage also prints the exact schema-qualified database tables it primarily
+populates or updates. Shared audit bookkeeping such as `analytics.refresh_runs`
+is intentionally omitted from these short destination lists.
 
 Configure the loop in the repository `.env`:
 

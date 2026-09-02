@@ -246,6 +246,16 @@ MODEL_KIND_DESCRIPTIONS = {
     ),
 }
 
+MODEL_OUTPUT_TABLES = (
+    "analytics.model_runs",
+    "analytics.valuation_predictions",
+    "analytics.anomaly_signals",
+    "analytics.index_calculation_runs",
+    "analytics.market_indices",
+    "analytics.model_publications",
+    "analytics.pipeline_state",
+)
+
 
 def refresh_models(
     connection: psycopg.Connection,
@@ -261,6 +271,11 @@ def refresh_models(
     )
     for kind_number, kind in enumerate(("sale", "rent"), start=1):
         print(f"[{kind} model] {MODEL_KIND_DESCRIPTIONS[kind]}", flush=True)
+        print(
+            f"[{kind} model] database tables populated/updated: "
+            + ", ".join(MODEL_OUTPUT_TABLES),
+            flush=True,
+        )
         print(f"[models] transaction kind {kind_number}/2 starting: {kind}", flush=True)
         results.append(_refresh_kind(connection, kind, workers))
         elapsed = time.monotonic() - all_started
