@@ -9,6 +9,7 @@ from real_estate_etl.cli import build_parser, validate_arguments
 from real_estate_etl.models import RefreshSummary
 from real_estate_etl.operations import (
     ANALYTICS_REFRESH_FUNCTIONS,
+    ANALYTICS_STAGE_DESCRIPTIONS,
     SystemRefreshResult,
     _refresh_functions,
     _refresh_system_unlocked,
@@ -34,8 +35,16 @@ def test_long_analytics_refresh_emits_periodic_heartbeat(capsys):
     assert counts == {"analytics.refresh_rental_facts": 456_585}
     output = capsys.readouterr().out
     assert "refresh_rental_facts: started" in output
+    assert "one quality-audited analytical fact per rental agreement" in output
     assert output.count("PostgreSQL is still processing") >= 2
     assert "refresh_rental_facts: 456,585 rows in" in output
+
+
+def test_every_analytics_stage_has_a_non_destructive_description():
+    assert set(ANALYTICS_STAGE_DESCRIPTIONS) == set(ANALYTICS_REFRESH_FUNCTIONS)
+    assert "marked, not deleted" in ANALYTICS_STAGE_DESCRIPTIONS[
+        "analytics.refresh_sale_outliers"
+    ]
 
 
 def test_scheduler_defaults_to_every_fourteen_days():

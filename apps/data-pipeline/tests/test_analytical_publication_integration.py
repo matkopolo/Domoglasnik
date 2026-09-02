@@ -17,12 +17,9 @@ def test_active_release_switch_is_invisible_until_commit():
         ).fetchone()[0]
         setup.execute(
             """INSERT INTO analytics.analytical_releases(
-                   id,status,stage,source_sale_through,source_rent_through
-               ) VALUES(%s,'processing','analytics',DATE '2026-06-30',DATE '2026-06-30')""",
-            (pending_id,),
-        )
-        setup.execute(
-            "UPDATE analytics.analytical_publication SET pending_release_id=%s WHERE singleton",
+                   id,status,stage,source_sale_through,source_rent_through,published_at
+               ) VALUES(%s,'published','published',DATE '2026-06-30',DATE '2026-06-30',
+                        clock_timestamp())""",
             (pending_id,),
         )
         setup.commit()
@@ -30,14 +27,8 @@ def test_active_release_switch_is_invisible_until_commit():
     try:
         with psycopg.connect(database_url) as writer, psycopg.connect(database_url) as reader:
             writer.execute(
-                """UPDATE analytics.analytical_releases
-                   SET status='published',stage='published',published_at=clock_timestamp()
-                   WHERE id=%s""",
-                (pending_id,),
-            )
-            writer.execute(
                 """UPDATE analytics.analytical_publication
-                   SET active_release_id=%s,pending_release_id=NULL WHERE singleton""",
+                   SET active_release_id=%s WHERE singleton""",
                 (pending_id,),
             )
             assert reader.execute(
@@ -51,7 +42,7 @@ def test_active_release_switch_is_invisible_until_commit():
     finally:
         with psycopg.connect(database_url) as cleanup:
             cleanup.execute(
-                "UPDATE analytics.analytical_publication SET active_release_id=%s,pending_release_id=NULL WHERE singleton",
+                "UPDATE analytics.analytical_publication SET active_release_id=%s WHERE singleton",
                 (previous,),
             )
             cleanup.execute(

@@ -36,6 +36,45 @@ ANALYTICS_REFRESH_FUNCTIONS = (
     "analytics.refresh_repeat_sales_indices",
 )
 
+ANALYTICS_STAGE_DESCRIPTIONS = {
+    "analytics.refresh_sale_facts": (
+        "build one quality-audited analytical fact per sale agreement from its "
+        "building parts and parcels; source transactions remain unchanged"
+    ),
+    "analytics.refresh_land_transaction_facts": (
+        "classify land-only sales into strict, broad, and audit populations "
+        "using the preserved ETN land codes"
+    ),
+    "analytics.refresh_sale_outliers": (
+        "recalculate robust sale cohorts and representative-sample flags; "
+        "statistical outliers are marked, not deleted"
+    ),
+    "analytics.refresh_rental_facts": (
+        "build one quality-audited analytical fact per rental agreement from "
+        "the preserved rental transactions and components"
+    ),
+    "analytics.refresh_rental_outliers": (
+        "recalculate robust rental cohorts and representative-sample flags; "
+        "statistical outliers are marked, not deleted"
+    ),
+    "analytics.refresh_anomaly_signals": (
+        "combine quality, robust-cohort, duplicate, spatial, and available "
+        "model evidence into non-destructive review signals"
+    ),
+    "analytics.refresh_near_duplicate_candidates": (
+        "identify explainable possible duplicate transaction pairs within the "
+        "configured seven-day and similarity rules"
+    ),
+    "analytics.refresh_missingness_profiles": (
+        "measure field availability by transaction kind, property group, year, "
+        "and geography without imputing missing targets"
+    ),
+    "analytics.refresh_repeat_sales_indices": (
+        "rebuild eligible repeat-sale pairs and their published market-index "
+        "vintages from representative transactions"
+    ),
+}
+
 RESET_TABLES = (
     "analytics.valuation_predictions",
     "analytics.market_indices",
@@ -105,6 +144,9 @@ def _refresh_functions(
         for function in functions:
             label = function.rsplit(".", 1)[-1]
             started = time.monotonic()
+            description = ANALYTICS_STAGE_DESCRIPTIONS.get(function)
+            if description:
+                print(f"  {label}: {description}", flush=True)
             print(f"  {label}: started", flush=True)
             done = Event()
             heartbeat = Thread(

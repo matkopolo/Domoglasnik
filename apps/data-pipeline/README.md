@@ -50,6 +50,11 @@ During processing, `/api/v1/data-status` exposes both the published analytical
 cutoff and the newer GURS source cutoff. A failed refresh rolls back derived
 changes and leaves the active release untouched.
 
+Before every SQL analytics function starts, the worker prints a short statement
+of what it derives and whether the operation is non-destructive. In particular,
+outlier stages mark statistical deviations and update representative-sample
+eligibility; they never delete the underlying GURS transaction.
+
 Configure the loop in the repository `.env`:
 
 ```dotenv
