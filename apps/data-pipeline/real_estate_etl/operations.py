@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import signal
-import sys
+import textwrap
 import time
 import uuid
 from collections.abc import Callable
@@ -18,6 +19,8 @@ import psycopg
 from .geography import sync_geographies
 from .models import RefreshSummary
 from .pipeline import refresh_all_national
+
+logger = logging.getLogger(__name__)
 
 REFRESH_LOCK_ID = 724_202_607
 DEFAULT_INTERVAL_DAYS = 14
@@ -75,32 +78,80 @@ ANALYTICS_STAGE_DESCRIPTIONS = {
     ),
 }
 
-ANALYTICS_STAGE_TABLES = {
-    "analytics.refresh_sale_facts": ("analytics.sale_facts",),
+ANALYTICS_STAGE_DATABASE_EFFECTS = {
+    "analytics.refresh_sale_facts": (
+        (
+            "analytics.sale_facts",
+            "rebuilds derived sale facts, prices, areas, quality reasons, and geography; raw transactions are unchanged",
+        ),
+    ),
     "analytics.refresh_land_transaction_facts": (
-        "analytics.land_transaction_facts",
+        (
+            "analytics.land_transaction_facts",
+            "rebuilds land-only analytical rows and their strict, broad, and audit eligibility flags",
+        ),
     ),
     "analytics.refresh_sale_outliers": (
-        "analytics.sale_outlier_evaluations",
-        "analytics.sale_facts",
+        (
+            "analytics.sale_outlier_evaluations",
+            "rebuilds cohort status, bounds, modified z-score, and the outlier decision for every sale fact",
+        ),
+        (
+            "analytics.sale_facts",
+            "updates quality eligibility/reasons for implausible values and sets representative_eligible from the outlier decision; no sale is deleted",
+        ),
     ),
-    "analytics.refresh_rental_facts": ("analytics.rental_facts",),
+    "analytics.refresh_rental_facts": (
+        (
+            "analytics.rental_facts",
+            "rebuilds derived rental facts, rents, areas, quality reasons, and geography; raw rental agreements are unchanged",
+        ),
+    ),
     "analytics.refresh_rental_outliers": (
-        "analytics.rental_outlier_evaluations",
-        "analytics.rental_facts",
+        (
+            "analytics.rental_outlier_evaluations",
+            "rebuilds cohort status, bounds, modified z-score, and the outlier decision for every rental fact",
+        ),
+        (
+            "analytics.rental_facts",
+            "sets representative_eligible from quality eligibility and the outlier decision; no rental agreement is deleted",
+        ),
     ),
-    "analytics.refresh_anomaly_signals": ("analytics.anomaly_signals",),
+    "analytics.refresh_anomaly_signals": (
+        (
+            "analytics.anomaly_signals",
+            "upserts non-destructive anomaly flags, component scores, reasons, and combined review scores; stale signals are removed",
+        ),
+    ),
     "analytics.refresh_near_duplicate_candidates": (
-        "analytics.near_duplicate_candidates",
-        "analytics.anomaly_signals",
+        (
+            "analytics.near_duplicate_candidates",
+            "rebuilds auditable candidate pairs and identifies only the later record as the possible duplicate",
+        ),
+        (
+            "analytics.anomaly_signals",
+            "updates possible_duplicate, duplicate_score, reasons, and the combined review score",
+        ),
     ),
     "analytics.refresh_missingness_profiles": (
-        "analytics.missingness_profiles",
+        (
+            "analytics.missingness_profiles",
+            "rebuilds present/missing counts and coverage rates by population, field, year, and geography",
+        ),
     ),
     "analytics.refresh_repeat_sales_indices": (
-        "analytics.repeat_sale_pairs",
-        "analytics.index_calculation_runs",
-        "analytics.market_indices",
+        (
+            "analytics.repeat_sale_pairs",
+            "rebuilds eligible consecutive repeat-sale pairs",
+        ),
+        (
+            "analytics.index_calculation_runs",
+            "records the repeat-sale index calculation run and data vintage",
+        ),
+        (
+            "analytics.market_indices",
+            "stores the resulting repeat-sale index series, sample sizes, and intervals",
+        ),
     ),
 }
 
@@ -154,31 +205,51 @@ def _analytics_progress_interval() -> float:
 
 def _log_running_stage(label: str, started: float, done: Event, interval: float) -> None:
     while not done.wait(interval):
-        print(
+        logger.info(
             f"  {label}: PostgreSQL is still processing "
-            f"(elapsed={time.monotonic() - started:.1f}s)",
-            flush=True,
+            f"(elapsed={time.monotonic() - started:.1f}s)"
         )
 
 
 def _print_analytics_plan(functions: tuple[str, ...]) -> None:
-    print(
-        f"[analytics] execution plan: {len(functions)} sequential stages; "
-        "database refresh stages do not run in parallel",
-        flush=True,
-    )
+    width = 88
+    lines = [
+        " ANALYTICS REFRESH PLAN ".center(width, "="),
+        (
+            f"[analytics] execution plan: {len(functions)} sequential stages; "
+            "database refresh stages do not run in parallel"
+        ),
+        "-" * width,
+    ]
     for position, function in enumerate(functions, start=1):
         label = function.rsplit(".", 1)[-1]
-        print(f"[analytics] {position}/{len(functions)} {label}", flush=True)
+        if position > 1:
+            lines.append("")
+        lines.append(f"[analytics] {position}/{len(functions)} {label}")
         description = ANALYTICS_STAGE_DESCRIPTIONS.get(function)
         if description:
-            print(f"  action: {description}", flush=True)
-        tables = ANALYTICS_STAGE_TABLES.get(function)
-        if tables:
-            print(
-                "  database tables populated/updated: " + ", ".join(tables),
-                flush=True,
+            lines.extend(
+                textwrap.wrap(
+                    f"Action: {description}",
+                    width=width,
+                    initial_indent="  ",
+                    subsequent_indent="          ",
+                )
             )
+        effects = ANALYTICS_STAGE_DATABASE_EFFECTS.get(function)
+        if effects:
+            lines.append("  Database effects:")
+            for table, effect in effects:
+                lines.extend(
+                    textwrap.wrap(
+                        f"- {table}: {effect}",
+                        width=width,
+                        initial_indent="    ",
+                        subsequent_indent="      ",
+                    )
+                )
+    lines.extend(["-" * width, " END ANALYTICS REFRESH PLAN ".center(width, "=")])
+    logger.info("%s", "\n".join(lines), extra={"plain_block": True})
 
 
 def _refresh_functions(
@@ -194,7 +265,7 @@ def _refresh_functions(
         for function in functions:
             label = function.rsplit(".", 1)[-1]
             started = time.monotonic()
-            print(f"  {label}: started", flush=True)
+            logger.info("  %s: started", label)
             done = Event()
             heartbeat = Thread(
                 target=_log_running_stage,
@@ -210,10 +281,9 @@ def _refresh_functions(
                 heartbeat.join()
             value = cursor.fetchone()[0]
             counts[function] = int(value or 0)
-            print(
+            logger.info(
                 f"  {label}: "
-                f"{int(value or 0):,} rows in {time.monotonic() - started:.1f}s",
-                flush=True,
+                f"{int(value or 0):,} rows in {time.monotonic() - started:.1f}s"
             )
     return counts
 
@@ -385,7 +455,9 @@ def reset_and_repopulate(
         raise RefreshAlreadyRunning("another data-pipeline refresh is already running")
     try:
         reset_market_data(connection)
-        print("Removed imported and derived market data; users and preferences were preserved.")
+        logger.info(
+            "Removed imported and derived market data; users and preferences were preserved."
+        )
         return _refresh_system_unlocked(
             connection,
             output_dir=output_dir,
@@ -435,7 +507,7 @@ def _refresh_system_unlocked(
         model_rows: dict[str, int] = {}
         with connection.transaction():
             analytics_counts = refresh_analytics(connection, database_url=database_url)
-            print(
+            logger.info(
                 "Refreshed analytics: "
                 + ", ".join(
                     f"{name.rsplit('.', 1)[-1]}={count}"
@@ -449,16 +521,15 @@ def _refresh_system_unlocked(
             ).fetchone()[0]
             if should_train:
                 _release_status(database_url, release_id, "models")
-                print(
-                    "Starting valuation-model training for the pending analytical release.",
-                    flush=True,
+                logger.info(
+                    "Starting valuation-model training for the pending analytical release."
                 )
                 from .model_reporting import format_model_report
                 from .modeling import refresh_models
 
                 model_results = refresh_models(connection, workers)
                 for result in model_results:
-                    print(format_model_report(result))
+                    logger.info("%s", format_model_report(result))
                 model_rows = {
                     result.transaction_kind: result.rows for result in model_results
                 }
@@ -466,7 +537,7 @@ def _refresh_system_unlocked(
                     result.model_version for result in model_results
                 )
             else:
-                print(
+                logger.info(
                     "No new GURS archives; retaining the currently published model."
                 )
             _publish_release(connection, release_id, model_versions)
@@ -519,9 +590,13 @@ def scheduled_refresh_loop(
                 health_file.parent.mkdir(parents=True, exist_ok=True)
                 health_file.touch()
             wait_seconds = interval_days * 24 * 60 * 60
-            print(f"Scheduled refresh succeeded; next run in {interval_days} days.")
+            logger.info(
+                "Scheduled refresh succeeded; next run in %s days.", interval_days
+            )
         except Exception as exc:
-            print(f"Scheduled refresh failed: {exc}", file=sys.stderr)
+            logger.exception("Scheduled refresh failed: %s", exc)
             wait_seconds = retry_hours * 60 * 60
-            print(f"Retrying scheduled refresh in {retry_hours} hour(s).", file=sys.stderr)
+            logger.warning(
+                "Retrying scheduled refresh in %s hour(s).", retry_hours
+            )
         stop_event.wait(wait_seconds)

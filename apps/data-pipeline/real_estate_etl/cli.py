@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import os
-import sys
 from datetime import date
 from pathlib import Path
 
@@ -12,6 +12,7 @@ import psycopg
 
 from .geography import sync_geographies
 from .importer import import_zip
+from .logging_config import configure_logging
 from .operations import (
     DEFAULT_INTERVAL_DAYS,
     DEFAULT_RETRY_HOURS,
@@ -258,6 +259,7 @@ def run(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
+    configure_logging()
     parser = build_parser()
     args = parser.parse_args()
     validate_arguments(parser, args)
@@ -268,5 +270,5 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as exc:
-        print(f"error: {exc}", file=sys.stderr)
+        logging.getLogger(__name__).exception("command failed: %s", exc)
         raise SystemExit(1) from None

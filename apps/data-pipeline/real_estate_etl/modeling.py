@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
+import textwrap
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -18,6 +20,8 @@ from sklearn.pipeline import Pipeline
 from .model_features import MODEL_FEATURES, preprocessor
 from .model_selection import SelectionSettings, build_pipeline, optimize_model
 from .model_validation import NOMINAL_INTERVAL_COVERAGE, percentile_scores
+
+logger = logging.getLogger(__name__)
 
 RANDOM_SEED = 20260723
 ISOLATION_TRAINING_LIMIT = 50_000
@@ -75,7 +79,7 @@ def _train_property_group(
     group_target = target[group_indices]
     group_dates = [contract_dates[index] for index in group_indices]
     prefix = f"[{kind} model · {group} · group {group_number}/{group_count}]"
-    print(f"{prefix} population={len(group_indices):,} rows", flush=True)
+    logger.info("%s population=%s rows", prefix, f"{len(group_indices):,}")
     robustness_groups = building_identities[group_indices].copy()
     missing_identity = np.asarray([not value for value in robustness_groups])
     robustness_groups[missing_identity] = np.asarray(
@@ -88,14 +92,14 @@ def _train_property_group(
         group_dates,
         robustness_groups,
         settings,
-        progress=lambda message: print(f"{prefix} {message}", flush=True),
+        progress=lambda message: logger.info("%s %s", prefix, message),
     )
     predictions = np.empty(len(group_indices), dtype=float)
     widths = np.empty(len(group_indices), dtype=float)
     residuals = np.zeros(len(group_indices), dtype=float)
     if selection["status"] != "selected":
         fallback = build_pipeline({"family": "ridge", "alpha": 2.0}, RANDOM_SEED)
-        print(f"{prefix} fitting sparse-group production fallback", flush=True)
+        logger.info("%s fitting sparse-group production fallback", prefix)
         production_started = time.monotonic()
         fallback.fit(group_features, group_target)
         production_training_seconds = time.monotonic() - production_started
@@ -122,7 +126,7 @@ def _train_property_group(
 
     widths[:] = float(selection["interval_half_width_log"])
     final_model = build_pipeline(selection["selected_configuration"], RANDOM_SEED)
-    print(f"{prefix} fitting selected production model", flush=True)
+    logger.info("%s fitting selected production model", prefix)
     production_started = time.monotonic()
     final_model.fit(group_features, group_target)
     production_training_seconds = time.monotonic() - production_started
@@ -163,10 +167,9 @@ def _train_property_groups(
     settings: SelectionSettings,
 ) -> list[PropertyGroupResult]:
     group_workers = min(workers, len(groups))
-    print(
+    logger.info(
         f"[{kind} model] property groups={len(groups)}; parallel workers={group_workers}; "
-        "database persistence remains single-threaded",
-        flush=True,
+        "database persistence remains single-threaded"
     )
     started = time.monotonic()
     results: list[PropertyGroupResult] = []
@@ -193,11 +196,10 @@ def _train_property_groups(
             results.append(future.result())
             elapsed = time.monotonic() - started
             remaining = elapsed / completed * (len(groups) - completed)
-            print(
+            logger.info(
                 f"[{kind} model] group completion {completed}/{len(groups)} "
                 f"({100 * completed / len(groups):.1f}%); "
-                f"elapsed={_format_duration(elapsed)}; ETA={_format_duration(remaining)}",
-                flush=True,
+                f"elapsed={_format_duration(elapsed)}; ETA={_format_duration(remaining)}"
             )
     return results
 
@@ -246,14 +248,14 @@ MODEL_KIND_DESCRIPTIONS = {
     ),
 }
 
-MODEL_OUTPUT_TABLES = (
-    "analytics.model_runs",
-    "analytics.valuation_predictions",
-    "analytics.anomaly_signals",
-    "analytics.index_calculation_runs",
-    "analytics.market_indices",
-    "analytics.model_publications",
-    "analytics.pipeline_state",
+MODEL_DATABASE_EFFECTS = (
+    ("analytics.model_runs", "inserts immutable model configuration, validation metrics, periods, and training metadata"),
+    ("analytics.valuation_predictions", "inserts versioned production predictions and conformal ranges without overwriting earlier model runs"),
+    ("analytics.anomaly_signals", "updates model-residual and Isolation Forest evidence while preserving reviewed anomaly metadata"),
+    ("analytics.index_calculation_runs", "records the hedonic-index calculation run and data vintage"),
+    ("analytics.market_indices", "stores versioned hedonic index values, intervals, and sample sizes"),
+    ("analytics.model_publications", "activates the completed sale and rent model runs together only after both populations succeed"),
+    ("analytics.pipeline_state", "records completion of the initial model bootstrap and the published model version"),
 )
 
 
@@ -264,33 +266,57 @@ def refresh_models(
     workers = workers or max(1, min(6, os.cpu_count() or 1))
     results = []
     all_started = time.monotonic()
-    print(
-        "[models] ordered execution plan: 2 transaction populations; sale "
-        "completes before rent starts",
-        flush=True,
-    )
+    width = 88
+    plan_lines = [
+        " VALUATION MODEL TRAINING PLAN ".center(width, "="),
+        (
+            "[models] ordered execution plan: 2 transaction populations; sale "
+            "completes before rent starts"
+        ),
+        "-" * width,
+    ]
     for kind_number, kind in enumerate(("sale", "rent"), start=1):
-        print(f"[models] {kind_number}/2 {kind} model", flush=True)
-        print(f"  action: {MODEL_KIND_DESCRIPTIONS[kind]}", flush=True)
-        print(
-            "  database tables populated/updated: " + ", ".join(MODEL_OUTPUT_TABLES),
-            flush=True,
+        if kind_number > 1:
+            plan_lines.append("")
+        plan_lines.append(f"[models] {kind_number}/2 {kind} model")
+        plan_lines.extend(
+            textwrap.wrap(
+                f"Action: {MODEL_KIND_DESCRIPTIONS[kind]}",
+                width=width,
+                initial_indent="  ",
+                subsequent_indent="          ",
+            )
         )
-    print(
-        f"[models] concurrency: sale and rent are sequential; within the active "
-        f"population, up to {workers} property groups may train in parallel",
-        flush=True,
+        plan_lines.append("  Database effects:")
+        for table, effect in MODEL_DATABASE_EFFECTS:
+            plan_lines.extend(
+                textwrap.wrap(
+                    f"- {table}: {effect}",
+                    width=width,
+                    initial_indent="    ",
+                    subsequent_indent="      ",
+                )
+            )
+    plan_lines.extend(
+        [
+            "-" * width,
+            (
+                f"[models] concurrency: sale and rent are sequential; within the active "
+                f"population, up to {workers} property groups may train in parallel"
+            ),
+            " END VALUATION MODEL TRAINING PLAN ".center(width, "="),
+        ]
     )
+    logger.info("%s", "\n".join(plan_lines), extra={"plain_block": True})
     for kind_number, kind in enumerate(("sale", "rent"), start=1):
-        print(f"[models] transaction kind {kind_number}/2 starting: {kind}", flush=True)
+        logger.info("[models] transaction kind %s/2 starting: %s", kind_number, kind)
         results.append(_refresh_kind(connection, kind, workers))
         elapsed = time.monotonic() - all_started
         remaining = elapsed / kind_number * (2 - kind_number)
-        print(
+        logger.info(
             f"[models] transaction kind completion {kind_number}/2 "
             f"({50 * kind_number:.1f}%); elapsed={_format_duration(elapsed)}; "
-            f"ETA={_format_duration(remaining)}",
-            flush=True,
+            f"ETA={_format_duration(remaining)}"
         )
     with connection.transaction(), connection.cursor() as cursor:
         cursor.execute(
@@ -384,7 +410,7 @@ def _refresh_kind(
         group_metrics[result.group] = result.metrics
 
     isolation_features = np.column_stack([target, features])
-    print(f"[{kind} model] fitting separate Isolation Forest", flush=True)
+    logger.info("[%s model] fitting separate Isolation Forest", kind)
     isolation_transformer = preprocessor(list(range(7)), [7, 8])
     transformed = isolation_transformer.fit_transform(isolation_features)
     generator = np.random.default_rng(RANDOM_SEED)
@@ -445,7 +471,7 @@ def _refresh_kind(
     now = datetime.now(timezone.utc)
     version = f"{kind}-selected-hedonic-iforest-v3-{now:%Y%m%dT%H%M%SZ}"
     model_run_id = uuid.uuid4()
-    print(f"[{kind} model] persisting model run and production predictions", flush=True)
+    logger.info("[%s model] persisting model run and production predictions", kind)
 
     with connection.transaction():  # noqa: SIM117 - transaction and cursor have distinct cleanup semantics
         with connection.cursor() as cursor:

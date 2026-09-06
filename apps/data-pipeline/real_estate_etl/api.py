@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import sys
+import logging
 import threading
 import time
 import urllib.parse
@@ -13,6 +13,8 @@ import httpx
 from tenacity import Retrying, retry_if_exception, stop_after_attempt, wait_exponential
 
 from .settings import API_BASE, MAX_DOWNLOAD_ATTEMPTS, NATIONAL_DATASETS
+
+logger = logging.getLogger(__name__)
 
 _CLIENTS_LOCAL = threading.local()
 
@@ -76,10 +78,9 @@ class JGPClient:
 
     def _with_retries(self, operation, label: str):
         def before_sleep(state):
-            print(
+            logger.warning(
                 f"Transient {label} error; retry {state.attempt_number}/{self.max_attempts - 1} "
-                f"in {state.next_action.sleep:g}s: {state.outcome.exception()}",
-                file=sys.stderr,
+                f"in {state.next_action.sleep:g}s: {state.outcome.exception()}"
             )
 
         retryer = Retrying(
@@ -107,7 +108,7 @@ class JGPClient:
         download = self.get_json(f"{base}/file?{query}")
         target = self.output_dir / result["file"]["name"]
         path = self._download(download["url"], target)
-        print(f"Downloaded {path}")
+        logger.info("Downloaded %s", path)
         return path
 
     def fetch_national(self, dataset_type: str, year: int) -> Path:
@@ -126,7 +127,7 @@ class JGPClient:
         download = self.get_json(f"{base}/file?{query}")
         target = self.output_dir / result["file"]["name"]
         path = self._download(download["url"], target)
-        print(f"Downloaded national {dataset_type}: {path}")
+        logger.info("Downloaded national %s: %s", dataset_type, path)
         return path
 
 

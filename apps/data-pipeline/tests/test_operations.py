@@ -9,8 +9,8 @@ from real_estate_etl.cli import build_parser, validate_arguments
 from real_estate_etl.models import RefreshSummary
 from real_estate_etl.operations import (
     ANALYTICS_REFRESH_FUNCTIONS,
+    ANALYTICS_STAGE_DATABASE_EFFECTS,
     ANALYTICS_STAGE_DESCRIPTIONS,
-    ANALYTICS_STAGE_TABLES,
     SystemRefreshResult,
     _refresh_functions,
     _refresh_system_unlocked,
@@ -21,7 +21,8 @@ from real_estate_etl.operations import (
 )
 
 
-def test_long_analytics_refresh_emits_periodic_heartbeat(capsys):
+def test_long_analytics_refresh_emits_periodic_heartbeat(caplog):
+    caplog.set_level("INFO")
     connection = MagicMock()
     cursor = connection.cursor.return_value.__enter__.return_value
     cursor.fetchone.return_value = (456_585,)
@@ -34,10 +35,11 @@ def test_long_analytics_refresh_emits_periodic_heartbeat(capsys):
     )
 
     assert counts == {"analytics.refresh_rental_facts": 456_585}
-    output = capsys.readouterr().out
+    output = caplog.text
     assert "refresh_rental_facts: started" in output
     assert "one quality-audited analytical fact per rental agreement" in output
-    assert "database tables populated/updated: analytics.rental_facts" in output
+    assert "Database effects:" in output
+    assert "analytics.rental_facts: rebuilds derived rental facts" in output
     assert "execution plan: 1 sequential stages" in output
     assert output.index("[analytics] 1/1 refresh_rental_facts") < output.index(
         "refresh_rental_facts: started"
@@ -48,7 +50,7 @@ def test_long_analytics_refresh_emits_periodic_heartbeat(capsys):
 
 def test_every_analytics_stage_has_a_non_destructive_description():
     assert set(ANALYTICS_STAGE_DESCRIPTIONS) == set(ANALYTICS_REFRESH_FUNCTIONS)
-    assert set(ANALYTICS_STAGE_TABLES) == set(ANALYTICS_REFRESH_FUNCTIONS)
+    assert set(ANALYTICS_STAGE_DATABASE_EFFECTS) == set(ANALYTICS_REFRESH_FUNCTIONS)
     assert "marked, not deleted" in ANALYTICS_STAGE_DESCRIPTIONS[
         "analytics.refresh_sale_outliers"
     ]
@@ -71,7 +73,8 @@ def test_reset_requires_explicit_confirmation():
         validate_arguments(parser, args)
 
 
-def test_refresh_analytics_uses_documented_dependency_order(capsys):
+def test_refresh_analytics_uses_documented_dependency_order(caplog):
+    caplog.set_level("INFO")
     connection = MagicMock()
     cursor = connection.cursor.return_value.__enter__.return_value
     cursor.fetchone.return_value = (3,)
@@ -81,7 +84,7 @@ def test_refresh_analytics_uses_documented_dependency_order(capsys):
         f"SELECT {function}()" for function in ANALYTICS_REFRESH_FUNCTIONS
     ]
     assert counts == {function: 3 for function in ANALYTICS_REFRESH_FUNCTIONS}
-    output = capsys.readouterr().out
+    output = caplog.text
     assert "execution plan: 9 sequential stages" in output
     assert "database refresh stages do not run in parallel" in output
     planned = [
@@ -148,7 +151,8 @@ def test_refresh_system_holds_and_releases_advisory_lock(tmp_path: Path):
     assert "pg_advisory_unlock" in connection.execute.call_args_list[-1].args[0]
 
 
-def test_system_refresh_skips_models_after_first_install(tmp_path: Path, capsys):
+def test_system_refresh_skips_models_after_first_install(tmp_path: Path, caplog):
+    caplog.set_level("INFO")
     connection = MagicMock()
     connection.execute.return_value.fetchone.return_value = (False,)
     archives = RefreshSummary(0, 3, 0)
@@ -174,13 +178,14 @@ def test_system_refresh_skips_models_after_first_install(tmp_path: Path, capsys)
 
     train.assert_not_called()
     assert result.model_rows == {}
-    assert "No new GURS archives" in capsys.readouterr().out
+    assert "No new GURS archives" in caplog.text
 
 
 @pytest.mark.parametrize("bootstrap_required", [True, False])
 def test_system_refresh_trains_models_for_bootstrap_or_new_archive(
-    tmp_path: Path, capsys, bootstrap_required: bool
+    tmp_path: Path, caplog, bootstrap_required: bool
 ):
+    caplog.set_level("INFO")
     connection = MagicMock()
     connection.execute.return_value.fetchone.return_value = (bootstrap_required,)
     archives = RefreshSummary(1, 2, 0)
@@ -210,7 +215,7 @@ def test_system_refresh_trains_models_for_bootstrap_or_new_archive(
 
     train.assert_called_once_with(connection, 4)
     assert result.model_rows == {"sale": 12}
-    assert "pending analytical release" in capsys.readouterr().out
+    assert "pending analytical release" in caplog.text
 
 
 def test_scheduled_refresh_runs_immediately_and_marks_health(tmp_path: Path):

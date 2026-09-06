@@ -12,11 +12,12 @@ from real_estate_etl.model_validation import (
 )
 
 
-def test_model_refresh_marks_first_install_bootstrap_only_after_both_kinds(monkeypatch, capsys):
+def test_model_refresh_marks_first_install_bootstrap_only_after_both_kinds(monkeypatch, caplog):
     from unittest.mock import MagicMock
 
     from real_estate_etl import modeling
 
+    caplog.set_level("INFO")
     connection = MagicMock()
     results = [
         modeling.ModelResult("sale", 10, "sale-v", 1.0, {}),
@@ -28,10 +29,10 @@ def test_model_refresh_marks_first_install_bootstrap_only_after_both_kinds(monke
     cursor = connection.cursor.return_value.__enter__.return_value
     assert "UPDATE analytics.pipeline_state" in cursor.execute.call_args.args[0]
     assert cursor.execute.call_args.args[1] == ("sale-v,rent-v",)
-    output = capsys.readouterr().out
+    output = caplog.text
     assert "learn sale price per m² separately for each property group" in output
     assert "learn monthly rent per m² separately" in output
-    assert "database tables populated/updated: analytics.model_runs" in output
+    assert "analytics.model_runs: inserts immutable model configuration" in output
     assert "analytics.model_publications" in output
     assert "sale completes before rent starts" in output
     assert "sale and rent are sequential" in output
@@ -42,11 +43,12 @@ def test_model_refresh_marks_first_install_bootstrap_only_after_both_kinds(monke
     assert "transaction kind completion 2/2 (100.0%)" in output
 
 
-def test_property_groups_use_bounded_parallel_workers(monkeypatch, capsys):
+def test_property_groups_use_bounded_parallel_workers(monkeypatch, caplog):
     from unittest.mock import MagicMock
 
     from real_estate_etl import modeling
 
+    caplog.set_level("INFO")
     lock = Lock()
     active = 0
     maximum_active = 0
@@ -76,7 +78,7 @@ def test_property_groups_use_bounded_parallel_workers(monkeypatch, capsys):
 
     assert {result.group for result in results} == {"apartment", "house", "land"}
     assert maximum_active == 2
-    output = capsys.readouterr().out
+    output = caplog.text
     assert "parallel workers=2" in output
     assert "group completion 3/3 (100.0%)" in output
 

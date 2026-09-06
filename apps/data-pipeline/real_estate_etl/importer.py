@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import io
+import logging
 import re
 import time
 import zipfile
@@ -15,6 +16,8 @@ from psycopg import sql
 
 from .conversion import converted
 from .models import ImportStats
+
+logger = logging.getLogger(__name__)
 
 IGNORED_SOURCE_COLUMNS = {
     "OPOMBE_O_PRAVNEM_POSLU",
@@ -262,13 +265,13 @@ def import_zip(connection, path: Path, verbose: bool = False) -> ImportStats:
                     if cur.fetchone() is None:
                         stats.codebook_skipped = True
                         if verbose:
-                            print("Skipped unchanged codebook")
+                            logger.info("Skipped unchanged codebook")
                         continue
                     imported = _import_codebook(cur, archive, member, source_file_id)
                     stats.codebook_rows += imported
                     stats.parsing_seconds += time.monotonic() - parsing_started
                     if verbose:
-                        print(f"Imported {imported} rows into codebook_values")
+                        logger.info("Imported %s rows into codebook_values", imported)
                     continue
                 kind = next((key for key in selected_tables if f"_{key}_" in member), None)
                 if not kind:
@@ -297,6 +300,6 @@ def import_zip(connection, path: Path, verbose: bool = False) -> ImportStats:
                 stats.parsing_seconds += time.monotonic() - parsing_started
                 stats.rows += copied
                 if verbose:
-                    print(f"Copied {copied} rows into {table}")
+                    logger.info("Copied %s rows into %s", copied, table)
     stats.database_seconds = max(0.0, time.monotonic() - database_started - stats.parsing_seconds)
     return stats

@@ -58,11 +58,13 @@ eligibility; they never delete the underlying GURS transaction.
 Model refreshes likewise announce the sale and rental learning populations
 before fitting starts: the target, per-property-group separation, duplicate and
 strict-land eligibility, and leakage-safe time-ordered selection/calibration.
-Every stage also prints the exact schema-qualified database tables it primarily
-populates or updates. Shared audit bookkeeping such as `analytics.refresh_runs`
-is intentionally omitted from these short destination lists.
+Every stage also logs the exact schema-qualified database tables it affects and
+explains whether it rebuilds rows, inserts a version, or updates specific
+eligibility, outlier, duplicate, or publication fields. Shared audit
+bookkeeping such as `analytics.refresh_runs` is intentionally omitted from
+these short destination lists.
 
-The complete numbered analytics plan is printed before its first SQL function
+The complete numbered analytics plan is logged before its first SQL function
 starts and is the actual sequential execution order. The model plan is also
 printed up front: sale completes before rent starts. It separately discloses
 bounded property-group parallelism inside the currently active sale or rental
@@ -73,7 +75,16 @@ Configure the loop in the repository `.env`:
 ```dotenv
 REFRESH_INTERVAL_DAYS=14
 REFRESH_RETRY_HOURS=1
+LOG_LEVEL=INFO
 ```
+
+Operational messages use Python logging on stdout, so they remain visible in
+`docker compose logs`. `INFO` includes plans, progress, database effects, and
+completion summaries. Use `LOG_LEVEL=WARNING` for quieter scheduled operation
+or `LOG_LEVEL=DEBUG` when additional debug messages are available. Routine
+`httpx` request summaries—including signed download URLs—are debug-only and do
+not appear at the default `INFO` level. CLI reports that are explicit command
+results remain plain terminal output.
 
 ## Commands
 

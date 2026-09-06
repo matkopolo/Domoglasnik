@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -12,6 +13,8 @@ from psycopg import sql
 
 from .api import client_for
 from .settings import RPE_OGC_BASE
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -160,7 +163,10 @@ def sync_geographies(
         connection.commit()
         raise
 
-    print("Synchronized geographic boundaries: " + ", ".join(f"{level}={count}" for level, count in counts.items()))
+    logger.info(
+        "Synchronized geographic boundaries: %s",
+        ", ".join(f"{level}={count}" for level, count in counts.items()),
+    )
     return counts
 
 

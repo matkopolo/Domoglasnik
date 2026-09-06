@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import sys
+import logging
 import time
 import zipfile
 from collections.abc import Callable, Iterable
@@ -14,6 +14,8 @@ from .api import DatasetUnavailable, client_for
 from .importer import import_zip
 from .models import ArchiveResult, RefreshSummary
 from .settings import API_BASE, AVAILABLE_THREADS, NATIONAL_DATASETS
+
+logger = logging.getLogger(__name__)
 
 WorkItem = TypeVar("WorkItem")
 
@@ -35,7 +37,11 @@ def sync_reference_data(connection) -> None:
             [(int(item["sifko"]), item["name"]) for item in cadastral],
         )
     connection.commit()
-    print(f"Synced {len(municipalities)} municipalities and {len(cadastral)} cadastral municipalities")
+    logger.info(
+        "Synced %s municipalities and %s cadastral municipalities",
+        len(municipalities),
+        len(cadastral),
+    )
 
 
 def fetch_zip(municipality: int, year: int, output_dir: Path) -> Path:
@@ -104,7 +110,7 @@ def _run_refresh(
     imported = unavailable = 0
     already_imported = skipped
     download_seconds = parsing_seconds = database_seconds = 0.0
-    print(
+    logger.info(
         f"Queued {total} archives; skipped {skipped} already imported; "
         f"download workers={workers}; available logical CPU threads={AVAILABLE_THREADS}"
     )
@@ -136,31 +142,31 @@ def _run_refresh(
                     archive = future.result()
                     download_seconds += archive.download_seconds
                     if archive.reused:
-                        print(f"{item_label}: using existing {archive.path}")
+                        logger.info("%s: using existing %s", item_label, archive.path)
                     elif verbose:
-                        print(f"{item_label}: importing {archive.path}")
+                        logger.info("%s: importing %s", item_label, archive.path)
                     stats = import_zip(connection, archive.path, verbose=verbose)
                     if stats.unchanged:
                         already_imported += 1
-                        print(f"{item_label}: source checksum unchanged")
+                        logger.info("%s: source checksum unchanged", item_label)
                         continue
                     parsing_seconds += stats.parsing_seconds
                     database_seconds += stats.database_seconds
                     imported += 1
                     if not verbose:
-                        print(f"{item_label}: imported {stats.rows:,} data rows")
+                        logger.info("%s: imported %s data rows", item_label, f"{stats.rows:,}")
                 except DatasetUnavailable as exc:
                     unavailable += 1
-                    print(f"{item_label}: unavailable ({exc})", file=sys.stderr)
+                    logger.warning("%s: unavailable (%s)", item_label, exc)
                 except Exception:
-                    print(f"{item_label}: stopped by unexpected error", file=sys.stderr)
+                    logger.exception("%s: stopped by unexpected error", item_label)
                     raise
     finally:
         for future in pending:
             future.cancel()
         executor.shutdown(wait=True, cancel_futures=True)
 
-    print(
+    logger.info(
         f"{summary_prefix}: imported={imported}, already_imported={already_imported}, unavailable={unavailable}, "
         f"elapsed={format_duration(time.monotonic() - started_at)}, "
         f"download_worker_time={format_duration(download_seconds)}, "
