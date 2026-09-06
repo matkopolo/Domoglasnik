@@ -207,3 +207,13 @@ cd apps/data-pipeline
 ../../.venv/bin/ruff check .
 ../../.venv/bin/pytest -q
 ```
+
+Database integration tests require `TEST_DATABASE_URL` to point to a disposable
+PostGIS database with **all** `database/migrations/*.sql` files applied in order
+before running pytest. In particular, publication tests require migration 036.
+Without `TEST_DATABASE_URL`, database integration tests are skipped; a passing
+unit-only run does not verify them. CI migrates its fresh database before the
+Python tests and then runs the Go tests against that schema. For changes to
+database setup or publication, verify this fresh-database sequence before
+pushing; tests against an already populated development database can miss
+missing migrations or incorrect setup order.

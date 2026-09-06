@@ -38,17 +38,19 @@ jobs:
         working-directory: apps/data-pipeline
       - run: ruff check .
         working-directory: apps/data-pipeline
-      - run: pytest -q
-        working-directory: apps/data-pipeline
-      - name: Build pipeline worker
-        run: docker build -t real-estate-data-pipeline:test apps/data-pipeline
-      - name: Validate Compose services
-        run: docker compose config --quiet
+      # Python publication integration tests require the same migrated schema as Go.
       - name: Apply database migrations
         run: |
           for migration in database/migrations/*.sql; do
             psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f "$migration"
           done
+      - name: Run pipeline unit and integration tests
+        run: pytest -q
+        working-directory: apps/data-pipeline
+      - name: Build pipeline worker
+        run: docker build -t real-estate-data-pipeline:test apps/data-pipeline
+      - name: Validate Compose services
+        run: docker compose config --quiet
       - uses: actions/setup-go@v6
         with:
           go-version: "1.26.5"
