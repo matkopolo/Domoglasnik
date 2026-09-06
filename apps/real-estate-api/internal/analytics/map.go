@@ -59,6 +59,41 @@ var geographyFactColumns = map[string]string{
 	"settlement":         "settlement_id",
 }
 
+// Local administrative polygons can include large unbuilt extensions. Use
+// distinct recorded building locations across both markets and all years to
+// anchor their labels. UNION removes repeated sales/rentals at the same metre
+// grid location. Current analytical filters and viewport never affect this anchor.
+const geographyBuildingAnchorJoin = `LEFT JOIN LATERAL (
+	SELECT ST_Centroid(ST_Collect(location)) AS point
+	FROM (
+		SELECT ST_SnapToGrid(part.location,1) AS location
+		FROM building_parts part
+		WHERE unit.level IN ('city_district','local_community','settlement')
+		  AND part.location && unit.geometry_d96tm
+		  AND ST_Covers(unit.geometry_d96tm,part.location)
+		UNION
+		SELECT ST_SnapToGrid(part.location,1) AS location
+		FROM rental_building_parts part
+		WHERE unit.level IN ('city_district','local_community','settlement')
+		  AND part.location && unit.geometry_d96tm
+		  AND ST_Covers(unit.geometry_d96tm,part.location)
+	) locations
+) building_anchor ON true`
+
+// Project the preferred anchor into a 20-metre interior buffer. Tiny/narrow
+// polygons with an empty buffer retain a guaranteed point on their surface.
+const geographyLabelPointExpression = `ST_Transform(
+	CASE
+		WHEN ST_IsEmpty(ST_Buffer(unit.geometry_d96tm,-20))
+			THEN ST_PointOnSurface(unit.geometry_d96tm)
+		ELSE ST_ClosestPoint(
+			ST_Buffer(unit.geometry_d96tm,-20),
+			coalesce(unit.label_anchor,ST_Centroid(unit.geometry_d96tm))
+		)
+	END,
+	4326
+)`
+
 func (r *StatisticsRepository) GeographySummaries(
 	ctx context.Context,
 	filter StatisticsFilter,
@@ -83,16 +118,15 @@ func (r *StatisticsRepository) GeographySummaries(
 		return nil, err
 	}
 	query := fmt.Sprintf(`
-		SELECT unit.id,unit.level,unit.name,
-		  ST_X(ST_PointOnSurface(unit.geometry_wgs84)),
-		  ST_Y(ST_PointOnSurface(unit.geometry_wgs84)),
-		  ARRAY[ST_XMin(extent),ST_YMin(extent),ST_XMax(extent),ST_YMax(extent)]::float8[],
-		  count(*)::bigint,
-		  count(*) FILTER (WHERE fact.representative_eligible)::bigint,
+		WITH summaries AS MATERIALIZED (
+		SELECT unit.id,unit.level,unit.name,unit.geometry_d96tm,
+		  ARRAY[ST_XMin(extent),ST_YMin(extent),ST_XMax(extent),ST_YMax(extent)]::float8[] AS bounds,
+		  count(*)::bigint AS transaction_count,
+		  count(*) FILTER (WHERE fact.representative_eligible)::bigint AS representative_count,
 		  percentile_cont(.5) WITHIN GROUP (ORDER BY fact.%s)
-		    FILTER (WHERE fact.representative_eligible)::float8,
+		    FILTER (WHERE fact.representative_eligible)::float8 AS median_per_sqm,
 		  percentile_cont(.5) WITHIN GROUP (ORDER BY fact.%s)
-		    FILTER (WHERE fact.representative_eligible)::float8
+		    FILTER (WHERE fact.representative_eligible)::float8 AS median_amount
 		FROM analytics.geographic_units unit
 		JOIN %s fact ON %s
 		CROSS JOIN LATERAL ST_Envelope(unit.geometry_wgs84) extent
@@ -103,7 +137,17 @@ func (r *StatisticsRepository) GeographySummaries(
 		  AND ($3 = '' OR fact.property_group=$3)
 		  AND %s
 		GROUP BY unit.id,unit.level,unit.name,unit.geometry_wgs84,extent
-		ORDER BY count(*) DESC`, metric, amountMetric, table, join, geographyClause)
+		), anchors AS MATERIALIZED (
+		  SELECT unit.*, building_anchor.point AS label_anchor
+		  FROM summaries unit %s
+		), labels AS MATERIALIZED (
+		  SELECT unit.*, %s AS label FROM anchors unit
+		)
+		SELECT id,level,name,ST_X(label),ST_Y(label),bounds,
+		  transaction_count,representative_count,median_per_sqm,median_amount
+		FROM labels ORDER BY transaction_count DESC,id`,
+		metric, amountMetric, table, join, geographyClause,
+		geographyBuildingAnchorJoin, geographyLabelPointExpression)
 	rows, err := r.pool.Query(ctx, query,
 		filter.FromDate, filter.ToDate, filter.PropertyGroup, geographyID, filter.MinArea, filter.MaxArea,
 		bounds.West, bounds.South, bounds.East, bounds.North, level,

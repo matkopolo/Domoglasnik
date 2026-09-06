@@ -65,6 +65,22 @@ Common filters include contract dates, property group, geography, land scope,
 and inclusive minimum/maximum area. Map requests additionally require a valid
 WGS84 bounding box and enforce result limits.
 
+Named map labels for city districts, local communities, and settlements use
+the centroid of distinct recorded building locations inside the official GURS
+boundary. Locations from sale and rental components across all imported years
+are combined and deduplicated on a one-metre D96/TM grid. This places labels
+closer to the observed built-up area without weighting repeatedly traded units
+more heavily. These locations are ETN observations, not a complete building
+inventory or an official town-center designation. Their position is independent
+of the current market/date/area filters and viewport, but can change after an
+import adds new building locations. With no building evidence, and for broader
+geographies, the polygon centroid is used. The anchor is projected into a
+20-metre inset of the polygon; shapes with an empty inset fall back to
+`ST_PointOnSurface`. This affects label placement only; boundaries, transaction
+assignments, sample counts, and prices still use the existing statistical rules.
+Spatial indexes restrict building lookup, which runs once per returned local
+geography after statistical aggregation, rather than once per transaction.
+
 Transaction context is returned by
 `GET /api/v1/sales/transactions/{id}/context` and
 `GET /api/v1/rentals/transactions/{id}/context`. It uses one hierarchy for

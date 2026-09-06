@@ -2,6 +2,7 @@ package analytics
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -305,6 +306,44 @@ func TestGeographySummariesIntegration(t *testing.T) {
 		if item.Name == "" || item.TransactionCount == 0 || len(item.Bounds) != 4 {
 			t.Fatalf("invalid geography summary: %+v", item)
 		}
+	}
+}
+
+func TestGeographyLabelPointStaysInsideConcaveBoundaryAndApproachesCentroid(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is not set")
+	}
+	pool, err := pgxpool.New(context.Background(), databaseURL)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer pool.Close()
+
+	query := fmt.Sprintf(`
+		WITH unit AS (
+			SELECT ST_Multi(ST_GeomFromText(
+				'POLYGON((0 0,1000 0,1000 200,200 200,200 1000,0 1000,0 0))',
+				3794
+			)) AS geometry_d96tm, NULL::geometry AS label_anchor
+		), calculated AS (
+			SELECT geometry_d96tm, %s AS label,
+			       ST_PointOnSurface(geometry_d96tm) AS old_label,
+			       ST_Centroid(geometry_d96tm) AS centroid
+			FROM unit
+		)
+		SELECT ST_Covers(geometry_d96tm,ST_Transform(label,3794)),
+		       ST_Distance(ST_Transform(label,3794),centroid)
+		         < ST_Distance(old_label,centroid)
+		FROM calculated`, geographyLabelPointExpression)
+	var inside, closerToCentroid bool
+	if err := pool.QueryRow(context.Background(), query).Scan(
+		&inside, &closerToCentroid,
+	); err != nil {
+		t.Fatalf("calculate geography label point: %v", err)
+	}
+	if !inside || !closerToCentroid {
+		t.Fatalf("label point inside=%v closerToCentroid=%v", inside, closerToCentroid)
 	}
 }
 
