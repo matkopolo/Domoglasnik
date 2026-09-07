@@ -1,0 +1,21 @@
+apiVersion: "cert-manager.io/v1"
+kind: "Issuer"
+metadata:
+  name: "letsencrypt-staging"
+  labels:
+    app.kubernetes.io/name: "letsencrypt-staging"
+    app.kubernetes.io/component: "ingress"
+    app.kubernetes.io/part-of: "real-estate"
+    app.kubernetes.io/version: "sha-RELEASE_SHA"
+    app.kubernetes.io/managed-by: "kustomize"
+spec:
+  acme:
+    email: "operator@example.invalid"
+    server: "https://acme-staging-v02.api.letsencrypt.org/directory"
+    privateKeySecretRef:
+      name: "letsencrypt-staging-account"
+    solvers:
+      -
+        http01:
+          ingress:
+            ingressClassName: "traefik"

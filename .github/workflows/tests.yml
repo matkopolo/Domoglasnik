@@ -81,3 +81,64 @@ jobs:
         working-directory: apps/web
       - run: npm run build
         working-directory: apps/web
+      - name: Test production migrations on disposable databases
+        run: MIGRATION_TEST_DATABASE_URL="$TEST_DATABASE_URL" pytest -q database/tests
+      - name: Build production images (same-origin web)
+        run: |
+          docker build -t real-estate-api:test apps/real-estate-api
+          docker build --build-arg NEXT_PUBLIC_API_URL= -t real-estate-web:test apps/web
+          docker build -t real-estate-migrations:test -f infrastructure/docker/migrations/Dockerfile .
+      - uses: azure/setup-kubectl@v4
+        with:
+          version: v1.35.8
+      - name: Validate pinned Kubernetes schemas
+        run: |
+          pip install -r infrastructure/kubernetes/scripts/requirements.txt
+          . infrastructure/kubernetes/addons/versions.env
+          curl -fsSL "$CNPG_MANIFEST" -o /tmp/cnpg.yaml
+          curl -fsSL "$BARMAN_MANIFEST" -o /tmp/barman.yaml
+          python infrastructure/kubernetes/scripts/validate.py /tmp/cnpg.yaml /tmp/barman.yaml
+      - name: Disposable K3s dry-run smoke (no historical import or training)
+        run: python infrastructure/kubernetes/scripts/smoke.py
+
+  images:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - image: api
+            context: apps/real-estate-api
+            file: apps/real-estate-api/Dockerfile
+          - image: web
+            context: apps/web
+            file: apps/web/Dockerfile
+          - image: pipeline
+            context: apps/data-pipeline
+            file: apps/data-pipeline/Dockerfile
+          - image: migrations
+            context: .
+            file: infrastructure/docker/migrations/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ghcr.io/matkopolo/nepremicninskiagent-${{ matrix.image }}:sha-${{ github.sha }}
+          build-args: NEXT_PUBLIC_API_URL=
+          provenance: mode=max
+          sbom: true

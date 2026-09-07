@@ -1,0 +1,34 @@
+apiVersion: "barmancloud.cnpg.io/v1"
+kind: "ObjectStore"
+metadata:
+  name: "real-estate-backups"
+  labels:
+    app.kubernetes.io/name: "real-estate-backups"
+    app.kubernetes.io/component: "backup"
+    app.kubernetes.io/part-of: "real-estate"
+    app.kubernetes.io/version: "sha-RELEASE_SHA"
+    app.kubernetes.io/managed-by: "kustomize"
+spec:
+  configuration:
+    destinationPath: "s3://REPLACE_BACKUP_BUCKET/postgresql"
+    endpointURL: "https://s3.example.invalid"
+    s3Credentials:
+      accessKeyId:
+        name: "backup-credentials"
+        key: "ACCESS_KEY_ID"
+      secretAccessKey:
+        name: "backup-credentials"
+        key: "ACCESS_SECRET_KEY"
+    wal:
+      compression: "gzip"
+    data:
+      compression: "gzip"
+  retentionPolicy: "30d"
+  instanceSidecarConfiguration:
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "1"
+        memory: "512Mi"

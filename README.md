@@ -17,10 +17,19 @@ This project downloads national yearly ZIP archives from GURS JGP, preserves the
 - `docs/data-licensing-privacy.md`: source attribution, privacy minimization, and use limitations
 - `docs/development-guidelines.md`: Go/Python conventions and test-layout policy
 - `infrastructure/docker/`: service-specific Docker assets
+- `infrastructure/kubernetes/`: phased K3s/CNPG production deployment (single-node and HA)
 - `data/raw/`: local downloaded archives, excluded from Git
 - `Makefile`: root commands shared by all developers
 
 ## Run the complete system
+
+This section is the **local Docker Compose** workflow. For physical-server
+production, use [K3s deployment](docs/k3s-deployment.md),
+[operations](docs/kubernetes-operations.md) and
+[backup/recovery](docs/backup-and-recovery.md). The production architecture uses
+CloudNativePG from day one and supports a later three-node HA overlay.
+Production model training is deliberately manual; Compose retains automatic
+first-install/new-archive training.
 
 Docker Desktop (or Docker Engine with Compose) is the only requirement for the
 normal workflow on Windows, macOS, and Linux:

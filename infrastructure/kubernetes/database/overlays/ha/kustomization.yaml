@@ -1,0 +1,11 @@
+apiVersion: "kustomize.config.k8s.io/v1beta1"
+kind: "Kustomization"
+namespace: "real-estate"
+resources:
+  - "../../base"
+patches:
+  -
+    target:
+      kind: "Cluster"
+      name: "real-estate-db"
+    patch: "apiVersion: \"postgresql.cnpg.io/v1\"\nkind: \"Cluster\"\nmetadata: \n  name: \"real-estate-db\"\nspec: \n  instances: 3\n  affinity: \n    enablePodAntiAffinity: true\n    podAntiAffinityType: \"required\"\n    topologyKey: \"kubernetes.io/hostname\""

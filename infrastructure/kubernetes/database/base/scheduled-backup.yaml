@@ -1,0 +1,18 @@
+apiVersion: "postgresql.cnpg.io/v1"
+kind: "ScheduledBackup"
+metadata:
+  name: "real-estate-daily"
+  labels:
+    app.kubernetes.io/name: "real-estate-daily"
+    app.kubernetes.io/component: "backup"
+    app.kubernetes.io/part-of: "real-estate"
+    app.kubernetes.io/version: "sha-RELEASE_SHA"
+    app.kubernetes.io/managed-by: "kustomize"
+spec:
+  schedule: "0 0 2 * * *"
+  backupOwnerReference: "self"
+  cluster:
+    name: "real-estate-db"
+  method: "plugin"
+  pluginConfiguration:
+    name: "barman-cloud.cloudnative-pg.io"

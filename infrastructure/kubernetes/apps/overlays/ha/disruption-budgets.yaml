@@ -1,0 +1,31 @@
+apiVersion: "policy/v1"
+kind: "PodDisruptionBudget"
+metadata:
+  name: "web"
+  labels:
+    app.kubernetes.io/name: "web"
+    app.kubernetes.io/component: "web"
+    app.kubernetes.io/part-of: "real-estate"
+    app.kubernetes.io/version: "sha-RELEASE_SHA"
+    app.kubernetes.io/managed-by: "kustomize"
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: "web"
+---
+apiVersion: "policy/v1"
+kind: "PodDisruptionBudget"
+metadata:
+  name: "real-estate-api"
+  labels:
+    app.kubernetes.io/name: "real-estate-api"
+    app.kubernetes.io/component: "api"
+    app.kubernetes.io/part-of: "real-estate"
+    app.kubernetes.io/version: "sha-RELEASE_SHA"
+    app.kubernetes.io/managed-by: "kustomize"
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: "real-estate-api"

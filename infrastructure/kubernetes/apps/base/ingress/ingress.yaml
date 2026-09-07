@@ -1,0 +1,41 @@
+apiVersion: "networking.k8s.io/v1"
+kind: "Ingress"
+metadata:
+  name: "real-estate"
+  labels:
+    app.kubernetes.io/name: "real-estate"
+    app.kubernetes.io/component: "ingress"
+    app.kubernetes.io/part-of: "real-estate"
+    app.kubernetes.io/version: "sha-RELEASE_SHA"
+    app.kubernetes.io/managed-by: "kustomize"
+  annotations:
+    cert-manager.io/issuer: "letsencrypt-staging"
+    traefik.ingress.kubernetes.io/router.entrypoints: "websecure"
+spec:
+  ingressClassName: "traefik"
+  tls:
+    -
+      hosts:
+        - "app.example.invalid"
+      secretName: "real-estate-tls"
+  rules:
+    -
+      host: "app.example.invalid"
+      http:
+        paths:
+          -
+            path: "/api"
+            pathType: "Prefix"
+            backend:
+              service:
+                name: "real-estate-api"
+                port:
+                  name: "http"
+          -
+            path: "/"
+            pathType: "Prefix"
+            backend:
+              service:
+                name: "web"
+                port:
+                  name: "http"

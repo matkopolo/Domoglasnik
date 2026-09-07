@@ -1,0 +1,109 @@
+apiVersion: "networking.k8s.io/v1"
+kind: "NetworkPolicy"
+metadata:
+  name: "deny-unspecified-ingress"
+  labels:
+    app.kubernetes.io/name: "deny-unspecified-ingress"
+    app.kubernetes.io/component: "security"
+    app.kubernetes.io/part-of: "real-estate"
+    app.kubernetes.io/version: "sha-RELEASE_SHA"
+    app.kubernetes.io/managed-by: "kustomize"
+spec:
+  podSelector:
+
+  policyTypes:
+    - "Ingress"
+---
+apiVersion: "networking.k8s.io/v1"
+kind: "NetworkPolicy"
+metadata:
+  name: "public-http"
+  labels:
+    app.kubernetes.io/name: "public-http"
+    app.kubernetes.io/component: "security"
+    app.kubernetes.io/part-of: "real-estate"
+    app.kubernetes.io/version: "sha-RELEASE_SHA"
+    app.kubernetes.io/managed-by: "kustomize"
+spec:
+  podSelector:
+    matchExpressions:
+      -
+        key: "app.kubernetes.io/component"
+        operator: "In"
+        values:
+          - "api"
+          - "web"
+  policyTypes:
+    - "Ingress"
+  ingress:
+    -
+      from:
+        -
+          namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: "kube-system"
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: "traefik"
+      ports:
+        -
+          protocol: "TCP"
+          port: 3000
+        -
+          protocol: "TCP"
+          port: 8080
+---
+apiVersion: "networking.k8s.io/v1"
+kind: "NetworkPolicy"
+metadata:
+  name: "postgres-internal"
+  labels:
+    app.kubernetes.io/name: "postgres-internal"
+    app.kubernetes.io/component: "security"
+    app.kubernetes.io/part-of: "real-estate"
+    app.kubernetes.io/version: "sha-RELEASE_SHA"
+    app.kubernetes.io/managed-by: "kustomize"
+spec:
+  podSelector:
+    matchLabels:
+      cnpg.io/cluster: "real-estate-db"
+  policyTypes:
+    - "Ingress"
+  ingress:
+    -
+      from:
+        -
+          podSelector:
+            matchLabels:
+              cnpg.io/cluster: "real-estate-db"
+        -
+          podSelector:
+            matchExpressions:
+              -
+                key: "app.kubernetes.io/component"
+                operator: "In"
+                values:
+                  - "api"
+                  - "pipeline"
+                  - "maintenance"
+                  - "migration"
+      ports:
+        -
+          protocol: "TCP"
+          port: 5432
+    -
+      from:
+        -
+          namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: "cnpg-system"
+      ports:
+        -
+          protocol: "TCP"
+          port: 8000
+        -
+          protocol: "TCP"
+          port: 5432
+        -
+          protocol: "TCP"
+          port: 9187

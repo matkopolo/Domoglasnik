@@ -1,0 +1,67 @@
+apiVersion: "postgresql.cnpg.io/v1"
+kind: "Cluster"
+metadata:
+  name: "real-estate-db"
+  labels:
+    app.kubernetes.io/name: "real-estate-db"
+    app.kubernetes.io/component: "database"
+    app.kubernetes.io/part-of: "real-estate"
+    app.kubernetes.io/version: "sha-RELEASE_SHA"
+    app.kubernetes.io/managed-by: "kustomize"
+spec:
+  instances: 1
+  imageName: "ghcr.io/cloudnative-pg/postgis:16.15-3.6.4-202608311017-system-trixie@sha256:9d597fcf4350e4bae9ff40cbe0e4383746a9c7f9c60da72483b0e966e4c20765"
+  enableSuperuserAccess: true
+  superuserSecret:
+    name: "real-estate-migration-db"
+  bootstrap:
+    initdb:
+      database: "real_estate"
+      owner: "real_estate"
+      postInitApplicationSQL:
+        - "CREATE EXTENSION IF NOT EXISTS postgis;"
+        - "CREATE EXTENSION IF NOT EXISTS pgcrypto;"
+  managed:
+    roles:
+      -
+        name: "real_estate_api"
+        ensure: "present"
+        login: true
+        superuser: false
+        createdb: false
+        createrole: false
+        passwordSecret:
+          name: "real-estate-api-db"
+      -
+        name: "real_estate_pipeline"
+        ensure: "present"
+        login: true
+        superuser: false
+        createdb: false
+        createrole: false
+        passwordSecret:
+          name: "real-estate-pipeline-db"
+  storage:
+    size: "100Gi"
+    storageClass: "local-path"
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "2Gi"
+    limits:
+      cpu: "2"
+      memory: "4Gi"
+  postgresql:
+    parameters:
+      shared_buffers: "1GB"
+      work_mem: "16MB"
+      maintenance_work_mem: "256MB"
+      effective_cache_size: "3GB"
+      max_connections: "100"
+      archive_timeout: "300s"
+  plugins:
+    -
+      name: "barman-cloud.cloudnative-pg.io"
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: "real-estate-backups"

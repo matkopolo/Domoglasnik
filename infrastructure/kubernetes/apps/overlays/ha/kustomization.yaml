@@ -1,0 +1,17 @@
+apiVersion: "kustomize.config.k8s.io/v1beta1"
+kind: "Kustomization"
+namespace: "real-estate"
+resources:
+  - "../../base"
+  - "disruption-budgets.yaml"
+patches:
+  -
+    target:
+      kind: "Deployment"
+      name: "web"
+    patch: "apiVersion: \"apps/v1\"\nkind: \"Deployment\"\nmetadata: \n  name: \"web\"\nspec: \n  replicas: 2\n  template: \n    spec: \n      topologySpreadConstraints: \n        - \n          maxSkew: 1\n          topologyKey: \"kubernetes.io/hostname\"\n          whenUnsatisfiable: \"DoNotSchedule\"\n          labelSelector: \n            matchLabels: \n              app.kubernetes.io/name: \"web\""
+  -
+    target:
+      kind: "Deployment"
+      name: "real-estate-api"
+    patch: "apiVersion: \"apps/v1\"\nkind: \"Deployment\"\nmetadata: \n  name: \"real-estate-api\"\nspec: \n  replicas: 2\n  template: \n    spec: \n      topologySpreadConstraints: \n        - \n          maxSkew: 1\n          topologyKey: \"kubernetes.io/hostname\"\n          whenUnsatisfiable: \"DoNotSchedule\"\n          labelSelector: \n            matchLabels: \n              app.kubernetes.io/name: \"real-estate-api\""

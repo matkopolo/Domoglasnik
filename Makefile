@@ -115,3 +115,34 @@ import-data: db-up
 
 import-data-verbose: db-up
 	$(PIPELINE_RUN) refresh-all-data --workers $(WORKERS) --output-dir /data/raw --verbose
+
+# Production helpers never delete a namespace, Cluster, PVC or backup.
+K8S := sh infrastructure/kubernetes/scripts/operator.sh
+.PHONY: k8s-render-single k8s-render-ha k8s-db-apply-single k8s-db-apply-ha k8s-db-wait k8s-migrate k8s-apps-apply-single k8s-apps-apply-ha k8s-status k8s-db-status k8s-logs-api k8s-logs-pipeline
+k8s-render-single:
+	$(K8S) render single-node database
+	$(K8S) render single-node apps
+k8s-render-ha:
+	$(K8S) render ha database
+	$(K8S) render ha apps
+k8s-db-apply-single:
+	$(K8S) apply single-node database
+k8s-db-apply-ha:
+	$(K8S) apply ha database
+k8s-db-wait:
+	kubectl --context "$(KUBE_CONTEXT)" -n real-estate wait --for=condition=Ready cluster/real-estate-db --timeout=900s
+k8s-migrate:
+	$(K8S) job single-node migrations
+k8s-apps-apply-single:
+	$(K8S) apply single-node apps
+k8s-apps-apply-ha:
+	$(K8S) apply ha apps
+k8s-status:
+	kubectl --context "$(KUBE_CONTEXT)" -n real-estate get all
+k8s-db-status:
+	kubectl --context "$(KUBE_CONTEXT)" -n real-estate get cluster/real-estate-db -o wide
+	kubectl --context "$(KUBE_CONTEXT)" -n real-estate get pods -l cnpg.io/cluster=real-estate-db -o wide
+k8s-logs-api:
+	kubectl --context "$(KUBE_CONTEXT)" -n real-estate logs deployment/real-estate-api -f
+k8s-logs-pipeline:
+	kubectl --context "$(KUBE_CONTEXT)" -n real-estate logs deployment/pipeline-worker -f
