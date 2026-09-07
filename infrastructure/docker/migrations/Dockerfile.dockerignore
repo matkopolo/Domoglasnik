@@ -1,0 +1,7 @@
+**
+!database
+!database/migrations
+!database/migrations/*.sql
+!database/production-migrations
+!database/production-migrations/*.sql
+!database/production_migrate.py

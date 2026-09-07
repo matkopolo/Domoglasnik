@@ -1,5 +1,11 @@
 # Database architecture
 
+Production uses CloudNativePG on K3s, not the local Compose database lifecycle.
+See [deployment and privileged migration Jobs](k3s-deployment.md) and
+[backup/PITR](backup-and-recovery.md). Authoritative schema SQL remains here;
+production additionally records per-file checksums and applies the versioned
+production privilege policy. The API never performs production migrations.
+
 ## Purpose and ownership
 
 PostgreSQL 16 with PostGIS is the system of record. It stores structured GURS
