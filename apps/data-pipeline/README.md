@@ -1,5 +1,11 @@
 # Data pipeline worker
 
+Production deployment uses [K3s/CloudNativePG](../../docs/k3s-deployment.md).
+`MODEL_REFRESH_POLICY=manual` disables automatic model training during scheduled
+refresh and initial import; use an explicit `refresh-models` Job. The default
+`auto` preserves Compose's initial/new-archive training behavior. Manual analytics
+and model commands share the scheduler's PostgreSQL advisory lock.
+
 Detailed definitions for quality populations, robust cohort outliers,
 duplicate signals, valuation-model selection, rolling temporal validation,
 building/municipality robustness, split-conformal ranges, Isolation Forest,

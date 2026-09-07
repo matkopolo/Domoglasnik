@@ -151,11 +151,17 @@ def test_refresh_system_holds_and_releases_advisory_lock(tmp_path: Path):
     assert "pg_advisory_unlock" in connection.execute.call_args_list[-1].args[0]
 
 
-def test_system_refresh_skips_models_after_first_install(tmp_path: Path, caplog):
+@pytest.mark.parametrize("policy,bootstrap,new_archives", [
+    ("auto", False, 0), ("manual", False, 1), ("manual", True, 1),
+])
+def test_system_refresh_skips_models_after_first_install(
+    tmp_path: Path, caplog, monkeypatch, policy, bootstrap, new_archives
+):
     caplog.set_level("INFO")
+    monkeypatch.setenv("MODEL_REFRESH_POLICY", policy)
     connection = MagicMock()
-    connection.execute.return_value.fetchone.return_value = (False,)
-    archives = RefreshSummary(0, 3, 0)
+    connection.execute.return_value.fetchone.return_value = (bootstrap,)
+    archives = RefreshSummary(new_archives, 3, 0)
     with (
         patch("real_estate_etl.operations.refresh_all_national", return_value=archives),
         patch("real_estate_etl.operations.sync_geographies", return_value={"country": 1}),
@@ -178,7 +184,7 @@ def test_system_refresh_skips_models_after_first_install(tmp_path: Path, caplog)
 
     train.assert_not_called()
     assert result.model_rows == {}
-    assert "No new GURS archives" in caplog.text
+    assert "Retaining published models" in caplog.text
 
 
 @pytest.mark.parametrize("bootstrap_required", [True, False])

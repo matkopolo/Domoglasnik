@@ -9,6 +9,7 @@ import textwrap
 import time
 import uuid
 from collections.abc import Callable
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -26,6 +27,32 @@ REFRESH_LOCK_ID = 724_202_607
 DEFAULT_INTERVAL_DAYS = 14
 DEFAULT_RETRY_HOURS = 1
 DEFAULT_ANALYTICS_PROGRESS_INTERVAL_SECONDS = 15.0
+
+
+def model_training_enabled() -> bool:
+    """Compose keeps automatic training; production can require a deliberate Job."""
+    policy = os.getenv("MODEL_REFRESH_POLICY", "auto")
+    if policy not in {"auto", "manual"}:
+        raise ValueError("MODEL_REFRESH_POLICY must be auto or manual")
+    return policy == "auto"
+
+
+@contextmanager
+def maintenance_lock(connection):
+    """Serialize manual maintenance with the scheduler using its existing lock."""
+    acquired = connection.execute(
+        "SELECT pg_try_advisory_lock(%s)", (REFRESH_LOCK_ID,)
+    ).fetchone()[0]
+    connection.commit()
+    if not acquired:
+        raise RefreshAlreadyRunning("another data-pipeline refresh is already running")
+    try:
+        yield
+        connection.commit()
+    finally:
+        connection.rollback()
+        connection.execute("SELECT pg_advisory_unlock(%s)", (REFRESH_LOCK_ID,))
+        connection.commit()
 
 ANALYTICS_REFRESH_FUNCTIONS = (
     "analytics.refresh_sale_facts",
@@ -414,7 +441,7 @@ def refresh_system(
     verbose: bool,
     database_url: str,
 ) -> SystemRefreshResult:
-    """Run source → geography → analytics; model training is explicitly opt-in."""
+    """Run source → geography → analytics; models follow MODEL_REFRESH_POLICY."""
     acquired = connection.execute(
         "SELECT pg_try_advisory_lock(%s)", (REFRESH_LOCK_ID,)
     ).fetchone()[0]
@@ -483,6 +510,7 @@ def _refresh_system_unlocked(
     verbose: bool,
     database_url: str,
 ) -> SystemRefreshResult:
+    automatic_training = model_training_enabled()
     release_id = _start_release(connection, database_url)
     try:
         archives = refresh_all_national(
@@ -514,7 +542,7 @@ def _refresh_system_unlocked(
                     for name, count in analytics_counts.items()
                 )
             )
-            should_train = bootstrap_required or archives.imported > 0
+            should_train = automatic_training and (bootstrap_required or archives.imported > 0)
             model_versions = connection.execute(
                 """SELECT model_bootstrap_version FROM analytics.pipeline_state
                    WHERE singleton"""
@@ -537,8 +565,12 @@ def _refresh_system_unlocked(
                     result.model_version for result in model_results
                 )
             else:
+                if automatic_training:
+                    logger.info("No new GURS archives; retaining the currently published model.")
                 logger.info(
-                    "No new GURS archives; retaining the currently published model."
+                    "Retaining published models (policy=%s, new archives=%s); "
+                    "refresh-models remains available for deliberate training.",
+                    "auto" if automatic_training else "manual", archives.imported,
                 )
             _publish_release(connection, release_id, model_versions)
         return SystemRefreshResult(archives, geography_counts, model_rows)

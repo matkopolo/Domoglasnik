@@ -16,6 +16,7 @@ from .logging_config import configure_logging
 from .operations import (
     DEFAULT_INTERVAL_DAYS,
     DEFAULT_RETRY_HOURS,
+    maintenance_lock,
     refresh_analytics,
     refresh_system,
     reset_and_repopulate,
@@ -81,7 +82,7 @@ def build_parser() -> argparse.ArgumentParser:
         "refresh-system",
         help=(
             "Incrementally import GURS data, synchronize geography, refresh analytics, "
-            "and bootstrap models only on a new database"
+            "with training controlled by MODEL_REFRESH_POLICY (auto or manual)"
         ),
     )
     system.add_argument("--end-year", type=int, default=date.today().year)
@@ -201,8 +202,9 @@ def run(args: argparse.Namespace) -> None:
             from .model_reporting import format_model_report
             from .modeling import refresh_models
 
-            for result in refresh_models(connection, args.workers):
-                print(format_model_report(result))
+            with maintenance_lock(connection):
+                for result in refresh_models(connection, args.workers):
+                    print(format_model_report(result))
         elif args.command == "import":
             import_zip(connection, args.zip_file, verbose=args.verbose)
         elif args.command == "refresh":
@@ -239,7 +241,8 @@ def run(args: argparse.Namespace) -> None:
                 database_url=args.database_url,
             )
         elif args.command == "refresh-analytics":
-            counts = refresh_analytics(connection, database_url=args.database_url)
+            with maintenance_lock(connection):
+                counts = refresh_analytics(connection, database_url=args.database_url)
             print(
                 "Refreshed analytics: "
                 + ", ".join(
