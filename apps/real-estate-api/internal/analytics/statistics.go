@@ -30,6 +30,16 @@ func saleFactsTable(filter StatisticsFilter) string {
 		return "analytics.sale_facts_broad_land"
 	case "all":
 		return "analytics.sale_facts_all_land"
+	case "agricultural":
+		return "analytics.sale_facts_agricultural_land"
+	case "forest":
+		return "analytics.sale_facts_forest_land"
+	case "unverified":
+		return "analytics.sale_facts_unverified_land"
+	case "mixed":
+		return "analytics.sale_facts_mixed_land"
+	case "other":
+		return "analytics.sale_facts_other_land"
 	default:
 		return "analytics.sale_facts_strict_land"
 	}

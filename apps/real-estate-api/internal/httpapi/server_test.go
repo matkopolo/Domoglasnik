@@ -169,6 +169,16 @@ func TestStatisticsFilterDefaultsFrontendLandRequestsToStrict(t *testing.T) {
 	}
 }
 
+func TestStatisticsFilterAcceptsSeparateLandCategories(t *testing.T) {
+	for _, scope := range []string{"strict", "broad", "all", "agricultural", "forest", "unverified", "mixed", "other"} {
+		response := httptest.NewRecorder()
+		filter, ok := statisticsFilter(response, httptest.NewRequest(http.MethodGet, "/api/v1/statistics/overview?propertyGroup=land&landScope="+scope, nil))
+		if !ok || filter.LandScope != scope {
+			t.Fatalf("scope=%s parsed=%s ok=%v", scope, filter.LandScope, ok)
+		}
+	}
+}
+
 func TestStatisticsTimeSeries(t *testing.T) {
 	response := httptest.NewRecorder()
 	newTestHandler(nil, fakeGeographies{}).ServeHTTP(

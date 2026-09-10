@@ -1353,9 +1353,9 @@ export interface components {
         MinArea: number;
         /** @description Inclusive maximum analytical property area in square metres. */
         MaxArea: number;
-        /** @description Land readiness population. Defaults to verified-buildable ETN codes 1 and 2; broad allows only codes 1-3 and all is explicit audit access. It has no effect unless propertyGroup is land.
+        /** @description Land browsing population. Defaults to verified-buildable ETN codes 1/2. agricultural requires only codes 7/8; forest only 9; unverified only 3. mixed contains contracts spanning these categories, including known plus unknown use. other contains only other/unknown uses (4/5/6/10, missing or unrecognized codes), or missing land facts. No package price is apportioned between land types. all includes every land sale; broad preserves the legacy 1-3 population. Model training remains strict regardless of browsing. It has no effect unless propertyGroup is land.
          *      */
-        LandScope: "strict" | "broad" | "all";
+        LandScope: "strict" | "broad" | "all" | "agricultural" | "forest" | "unverified" | "mixed" | "other";
         /** @description Official geographic unit at any supported hierarchy level. */
         StatisticsGeographyId: number;
         /** @description WGS84 west,south,east,north coordinates. */
@@ -1609,7 +1609,7 @@ export interface operations {
                 minArea?: components["parameters"]["MinArea"];
                 /** @description Inclusive maximum analytical property area in square metres. */
                 maxArea?: components["parameters"]["MaxArea"];
-                /** @description Land readiness population. Defaults to verified-buildable ETN codes 1 and 2; broad allows only codes 1-3 and all is explicit audit access. It has no effect unless propertyGroup is land.
+                /** @description Land browsing population. Defaults to verified-buildable ETN codes 1/2. agricultural requires only codes 7/8; forest only 9; unverified only 3. mixed contains contracts spanning these categories, including known plus unknown use. other contains only other/unknown uses (4/5/6/10, missing or unrecognized codes), or missing land facts. No package price is apportioned between land types. all includes every land sale; broad preserves the legacy 1-3 population. Model training remains strict regardless of browsing. It has no effect unless propertyGroup is land.
                  *      */
                 landScope?: components["parameters"]["LandScope"];
                 /** @description Official geographic unit at any supported hierarchy level. */
@@ -1646,7 +1646,7 @@ export interface operations {
                 minArea?: components["parameters"]["MinArea"];
                 /** @description Inclusive maximum analytical property area in square metres. */
                 maxArea?: components["parameters"]["MaxArea"];
-                /** @description Land readiness population. Defaults to verified-buildable ETN codes 1 and 2; broad allows only codes 1-3 and all is explicit audit access. It has no effect unless propertyGroup is land.
+                /** @description Land browsing population. Defaults to verified-buildable ETN codes 1/2. agricultural requires only codes 7/8; forest only 9; unverified only 3. mixed contains contracts spanning these categories, including known plus unknown use. other contains only other/unknown uses (4/5/6/10, missing or unrecognized codes), or missing land facts. No package price is apportioned between land types. all includes every land sale; broad preserves the legacy 1-3 population. Model training remains strict regardless of browsing. It has no effect unless propertyGroup is land.
                  *      */
                 landScope?: components["parameters"]["LandScope"];
                 /** @description Official geographic unit at any supported hierarchy level. */
@@ -1684,7 +1684,7 @@ export interface operations {
                 minArea?: components["parameters"]["MinArea"];
                 /** @description Inclusive maximum analytical property area in square metres. */
                 maxArea?: components["parameters"]["MaxArea"];
-                /** @description Land readiness population. Defaults to verified-buildable ETN codes 1 and 2; broad allows only codes 1-3 and all is explicit audit access. It has no effect unless propertyGroup is land.
+                /** @description Land browsing population. Defaults to verified-buildable ETN codes 1/2. agricultural requires only codes 7/8; forest only 9; unverified only 3. mixed contains contracts spanning these categories, including known plus unknown use. other contains only other/unknown uses (4/5/6/10, missing or unrecognized codes), or missing land facts. No package price is apportioned between land types. all includes every land sale; broad preserves the legacy 1-3 population. Model training remains strict regardless of browsing. It has no effect unless propertyGroup is land.
                  *      */
                 landScope?: components["parameters"]["LandScope"];
                 /** @description Official geographic unit at any supported hierarchy level. */
@@ -1724,7 +1724,7 @@ export interface operations {
                 minArea?: components["parameters"]["MinArea"];
                 /** @description Inclusive maximum analytical property area in square metres. */
                 maxArea?: components["parameters"]["MaxArea"];
-                /** @description Land readiness population. Defaults to verified-buildable ETN codes 1 and 2; broad allows only codes 1-3 and all is explicit audit access. It has no effect unless propertyGroup is land.
+                /** @description Land browsing population. Defaults to verified-buildable ETN codes 1/2. agricultural requires only codes 7/8; forest only 9; unverified only 3. mixed contains contracts spanning these categories, including known plus unknown use. other contains only other/unknown uses (4/5/6/10, missing or unrecognized codes), or missing land facts. No package price is apportioned between land types. all includes every land sale; broad preserves the legacy 1-3 population. Model training remains strict regardless of browsing. It has no effect unless propertyGroup is land.
                  *      */
                 landScope?: components["parameters"]["LandScope"];
                 /** @description Official geographic unit at any supported hierarchy level. */
@@ -2074,7 +2074,7 @@ export interface operations {
                 minArea?: components["parameters"]["MinArea"];
                 /** @description Inclusive maximum analytical property area in square metres. */
                 maxArea?: components["parameters"]["MaxArea"];
-                /** @description Land readiness population. Defaults to verified-buildable ETN codes 1 and 2; broad allows only codes 1-3 and all is explicit audit access. It has no effect unless propertyGroup is land.
+                /** @description Land browsing population. Defaults to verified-buildable ETN codes 1/2. agricultural requires only codes 7/8; forest only 9; unverified only 3. mixed contains contracts spanning these categories, including known plus unknown use. other contains only other/unknown uses (4/5/6/10, missing or unrecognized codes), or missing land facts. No package price is apportioned between land types. all includes every land sale; broad preserves the legacy 1-3 population. Model training remains strict regardless of browsing. It has no effect unless propertyGroup is land.
                  *      */
                 landScope?: components["parameters"]["LandScope"];
                 /** @description Official geographic unit at any supported hierarchy level. */
@@ -2219,7 +2219,7 @@ export interface operations {
                 minArea?: components["parameters"]["MinArea"];
                 /** @description Inclusive maximum analytical property area in square metres. */
                 maxArea?: components["parameters"]["MaxArea"];
-                /** @description Land readiness population. Defaults to verified-buildable ETN codes 1 and 2; broad allows only codes 1-3 and all is explicit audit access. It has no effect unless propertyGroup is land.
+                /** @description Land browsing population. Defaults to verified-buildable ETN codes 1/2. agricultural requires only codes 7/8; forest only 9; unverified only 3. mixed contains contracts spanning these categories, including known plus unknown use. other contains only other/unknown uses (4/5/6/10, missing or unrecognized codes), or missing land facts. No package price is apportioned between land types. all includes every land sale; broad preserves the legacy 1-3 population. Model training remains strict regardless of browsing. It has no effect unless propertyGroup is land.
                  *      */
                 landScope?: components["parameters"]["LandScope"];
                 /** @description Official geographic unit at any supported hierarchy level. */
@@ -2259,7 +2259,7 @@ export interface operations {
                 minArea?: components["parameters"]["MinArea"];
                 /** @description Inclusive maximum analytical property area in square metres. */
                 maxArea?: components["parameters"]["MaxArea"];
-                /** @description Land readiness population. Defaults to verified-buildable ETN codes 1 and 2; broad allows only codes 1-3 and all is explicit audit access. It has no effect unless propertyGroup is land.
+                /** @description Land browsing population. Defaults to verified-buildable ETN codes 1/2. agricultural requires only codes 7/8; forest only 9; unverified only 3. mixed contains contracts spanning these categories, including known plus unknown use. other contains only other/unknown uses (4/5/6/10, missing or unrecognized codes), or missing land facts. No package price is apportioned between land types. all includes every land sale; broad preserves the legacy 1-3 population. Model training remains strict regardless of browsing. It has no effect unless propertyGroup is land.
                  *      */
                 landScope?: components["parameters"]["LandScope"];
                 /** @description Official geographic unit at any supported hierarchy level. */
@@ -2299,7 +2299,7 @@ export interface operations {
                 minArea?: components["parameters"]["MinArea"];
                 /** @description Inclusive maximum analytical property area in square metres. */
                 maxArea?: components["parameters"]["MaxArea"];
-                /** @description Land readiness population. Defaults to verified-buildable ETN codes 1 and 2; broad allows only codes 1-3 and all is explicit audit access. It has no effect unless propertyGroup is land.
+                /** @description Land browsing population. Defaults to verified-buildable ETN codes 1/2. agricultural requires only codes 7/8; forest only 9; unverified only 3. mixed contains contracts spanning these categories, including known plus unknown use. other contains only other/unknown uses (4/5/6/10, missing or unrecognized codes), or missing land facts. No package price is apportioned between land types. all includes every land sale; broad preserves the legacy 1-3 population. Model training remains strict regardless of browsing. It has no effect unless propertyGroup is land.
                  *      */
                 landScope?: components["parameters"]["LandScope"];
                 /** @description Official geographic unit at any supported hierarchy level. */

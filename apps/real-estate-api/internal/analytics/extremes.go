@@ -55,7 +55,7 @@ func (r *StatisticsRepository) TransactionExtremes(
 		  FROM ranked WHERE high_rank<=$7
 		) extremes
 		ORDER BY CASE direction WHEN 'highest' THEN 0 ELSE 1 END,
-		  CASE WHEN direction='highest' THEN -amount ELSE amount END`,
+		  CASE WHEN direction='highest' THEN -amount ELSE amount END,transaction_id`,
 		amount, perSQM, table, perSQM, amount, clause)
 	rows, err := r.pool.Query(ctx, query, filter.FromDate, filter.ToDate,
 		filter.PropertyGroup, geographyID, filter.MinArea, filter.MaxArea, limit)

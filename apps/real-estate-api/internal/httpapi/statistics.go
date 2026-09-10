@@ -152,10 +152,11 @@ func statisticsFilter(w http.ResponseWriter, r *http.Request) (analytics.Statist
 	if filter.LandScope == "" {
 		filter.LandScope = "strict"
 	}
-	if filter.LandScope != "strict" && filter.LandScope != "broad" &&
-		filter.LandScope != "all" {
+	switch filter.LandScope {
+	case "strict", "broad", "all", "agricultural", "forest", "unverified", "mixed", "other":
+	default:
 		writeError(w, r, http.StatusBadRequest, "invalid_land_scope",
-			"landScope must be strict, broad, or all")
+			"landScope must be strict, broad, all, agricultural, forest, unverified, mixed, or other")
 		return filter, false
 	}
 	if value := r.URL.Query().Get("geographyId"); value != "" {
