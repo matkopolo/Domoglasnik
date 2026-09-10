@@ -1,0 +1,42 @@
+.brand-wordmark { display: inline-flex; align-items: baseline; letter-spacing: -.04em; }
+.brand-wordmark strong { color: var(--brand, #143f32); font-weight: 850; }
+.brand-wordmark > span { color: #56666c; font-weight: 500; }
+.recent-transactions { margin-block: 18px; border-block: 1px solid var(--border, #dce2dc); padding-block: 14px; }
+.recent-transactions h3 { margin: 0 0 5px; font-size: 15px; }
+.recent-transactions p { font-size: 12px; line-height: 1.5; color: var(--muted); }
+.recent-transactions details { padding-block: 9px; }
+.recent-transactions summary { cursor: pointer; min-height: 40px; align-content: center; font-weight: 650; }
+.recent-transaction { width: 100%; padding: 10px 0; display: grid; grid-template-columns: 1fr auto; gap: 5px 12px; text-align: left; background: none; border: 0; border-top: 1px solid var(--border, #dce2dc); cursor: pointer; font: inherit; font-size: 12px; font-variant-numeric: tabular-nums; }
+.recent-transaction:hover { background: var(--surface-subtle, #f8f7f3); }
+.recent-transaction small { color: var(--muted); }
+.land-scope-note { margin: 0; padding: 8px 12px; font-size: 12px; line-height: 1.5; border-left: 2px solid var(--brand, #143f32); }
+
+/* Land scope is a separate filter row, not another shrinking date/area field. */
+.land-filter-row {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.land-scope-field { display: grid; gap: 5px; min-width: 0; }
+.land-scope-field > span { font-size: 12px; font-weight: 650; color: var(--text-muted); }
+.land-scope-field select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.land-scope-field select:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+@media (max-width: 760px) {
+  .land-filter-row { grid-template-columns: minmax(0, 1fr); margin-block: 12px; }
+  .land-filter-row .land-scope-note { padding-block: 4px; }
+}

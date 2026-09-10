@@ -4,12 +4,13 @@ import { Layers3, LocateFixed, Mountain, Search, X } from "lucide-react";
 import maplibregl, { type GeoJSONSource, type LngLatBoundsLike } from "maplibre-gl";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { loadMapFeatures, loadRegionBoundaries, loadTransaction, mapGeographyLevel, searchBuildings } from "@/lib/api";
+import { focusAreaContext } from "@/lib/map-context-navigation";
 import { buildMapPopup, mapAmountLabel } from "@/lib/map-popup";
 import { mapStyle, type MapStyleId } from "@/lib/map-styles";
 import { propertyGroupLabels, suggestedBuildingMarket } from "@/lib/building-search";
 import type {
   BoundaryFeatureCollection,
-  AreaRange,
+  MarketConstraints,
   BuildingSearchResult,
   Cluster,
   Geography,
@@ -77,7 +78,7 @@ interface SloveniaMapProps {
   regions: Geography[];
   selectedId?: number;
   years: YearRange;
-  area: AreaRange;
+  area: MarketConstraints;
   refreshing?: boolean;
   onContextChange: (context: MarketContext) => void;
   onMarketSuggestion: (mode: MarketMode, propertyGroup: PropertyGroup) => void;
@@ -316,6 +317,7 @@ export function SloveniaMap({
   useEffect(() => {
     selectionMarkerRef.current?.remove();
     selectionMarkerRef.current = null;
+    popupRef.current?.remove();
     queueMicrotask(() => setLocationNotice(undefined));
     if (context.kind !== "transaction") return;
     const map = mapRef.current;
@@ -371,6 +373,17 @@ export function SloveniaMap({
     });
     return () => controller.abort();
   }, [context]);
+
+  // Context-panel navigation must move the same camera as direct map clicks.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || context.kind === "transaction") return;
+    const controller = new AbortController();
+    focusAreaContext(map, context, propertyGroup, years, controller.signal)
+      .then((notice) => { if (!controller.signal.aborted && notice) setLocationNotice(notice); })
+      .catch(() => { if (!controller.signal.aborted) setLocationNotice("Izbrane lokacije ni bilo mogoče prikazati na zemljevidu."); });
+    return () => controller.abort();
+  }, [context, propertyGroup, years]);
 
   useEffect(() => {
     const map = mapRef.current;

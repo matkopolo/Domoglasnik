@@ -3,7 +3,7 @@
 import { RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { loadDetailedTimeSeries, loadInflation } from "@/lib/api";
-import type { AreaRange, InflationPoint, MarketMode, PropertyGroup, TimePoint, YearRange } from "@/lib/types";
+import type { MarketConstraints, InflationPoint, MarketMode, PropertyGroup, TimePoint, YearRange } from "@/lib/types";
 import { Tabs } from "@/components/ui/tabs";
 
 type Tab = "price" | "volume" | "inflation";
@@ -19,7 +19,7 @@ function periodLabel(period: string, interval: Interval) {
 
 export function TrendChart({ mode, points, years, propertyGroup, geographyId, area = {} }: {
   mode: MarketMode; points: TimePoint[]; years: YearRange; propertyGroup: PropertyGroup;
-  geographyId?: number; area?: AreaRange;
+  geographyId?: number; area?: MarketConstraints;
 }) {
   const [tab, setTab] = useState<Tab>("price");
   const [interval, setInterval] = useState<Interval>("year");

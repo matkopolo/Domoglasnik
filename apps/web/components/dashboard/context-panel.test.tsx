@@ -1,6 +1,9 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ContextPanel } from "./context-panel";
+import { loadRecentTransactions } from "@/lib/recent-transactions";
+
+vi.mock("@/lib/recent-transactions", () => ({ loadRecentTransactions: vi.fn(async () => ({ items: [], from: "2024-01-01", to: "2024-12-31", expanded: true })) }));
 
 vi.mock("@/lib/api", () => ({
   loadTransaction: vi.fn(async () => ({
@@ -15,7 +18,7 @@ vi.mock("@/lib/api", () => ({
     rentalTerm: "fixed",
     isMarketRent: true,
     quality: { isQualityEligible: true, isRepresentative: true, reasons: [], anomalyFlags: ["possible_near_duplicate"] },
-    geographies: [{ id: 2, level: "statistical_region", name: "Podravska" }],
+    geographies: [{ id: 2, level: "statistical_region", name: "Podravska" }, { id: 77, level: "municipality", name: "Ruše" }],
     spaces: [{
       id: 1,
       rentedSpaceTypeDescription: "Stanovanje",
@@ -128,6 +131,9 @@ describe("ContextPanel", () => {
       onChange={onChange}
     />);
     expect(await screen.findByText("700 €")).toBeInTheDocument();
+    await waitFor(() => expect(loadRecentTransactions).toHaveBeenCalledWith("rent", "apartment", 77,
+      { from: 2024, to: 2024 }, expect.any(AbortSignal), {}));
+    expect(screen.getByRole("heading", { name: "Nedavni posli · Ruše" })).toBeInTheDocument();
     expect(screen.getByText("Možen podvojen zapis")).toBeInTheDocument();
     expect(screen.getByText("14 €/m²")).toBeInTheDocument();
     expect(screen.getByText("157.000 €")).toBeInTheDocument();

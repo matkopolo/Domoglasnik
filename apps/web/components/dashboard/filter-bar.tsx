@@ -3,7 +3,8 @@
 import { Building2, CalendarDays, MapPin, RotateCcw, SlidersHorizontal, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { propertyGroupLabel } from "@/lib/display-values";
-import type { AreaRange, Geography, MarketMode, PropertyGroup, YearRange } from "@/lib/types";
+import { isLandScope, landScopeOptions, landScopes } from "@/lib/land-scopes";
+import type { MarketConstraints, Geography, MarketMode, PropertyGroup, YearRange } from "@/lib/types";
 
 const saleProperties: Array<{ value: PropertyGroup; label: string }> = [
   { value: "apartment", label: "Stanovanja" }, { value: "house", label: "Hiše" },
@@ -21,7 +22,7 @@ interface FilterBarProps {
   propertyGroup: PropertyGroup; onPropertyChange: (group: PropertyGroup) => void;
   geographyId?: number; onGeographyChange: (id?: number) => void; geographies: Geography[];
   years: YearRange; onYearsChange: (years: YearRange) => void;
-  area: AreaRange; onAreaChange: (area: AreaRange) => void;
+  area: MarketConstraints; onAreaChange: (area: MarketConstraints) => void;
   onReset?: () => void;
 }
 
@@ -32,6 +33,8 @@ export function FilterBar(props: FilterBarProps) {
   const selectedGeography = props.geographies.find((item) => item.id === props.geographyId)?.name ?? "Slovenija";
   const areaText = props.area.min != null || props.area.max != null
     ? `${props.area.min ?? 0}–${props.area.max ?? "∞"} m²` : "vse površine";
+  const scopeText = props.mode === "sale" && props.propertyGroup === "land"
+    ? ` · ${landScopes[props.area.landScope ?? "strict"].label}` : "";
   const close = () => { setOpen(false); window.setTimeout(() => trigger.current?.focus(), 0); };
 
   useEffect(() => {
@@ -50,7 +53,7 @@ export function FilterBar(props: FilterBarProps) {
   return <section className="market-context-bar" aria-label="Tržni kontekst in filtri">
     <div className="mobile-market-summary">
       <div><strong>{props.mode === "sale" ? "Prodaja" : "Najem"} · {propertyGroupLabel(props.propertyGroup)}</strong>
-        <span>{selectedGeography}</span><small>{props.years.from}–{props.years.to} · {areaText}</small></div>
+        <span>{selectedGeography}</span><small>{props.years.from}–{props.years.to} · {areaText}{scopeText}</small></div>
       <button ref={trigger} type="button" aria-expanded={open} aria-controls="market-filter-panel" onClick={() => setOpen(true)}>
         <SlidersHorizontal aria-hidden="true" /> Spremeni filtre
       </button>
@@ -92,8 +95,22 @@ export function FilterBar(props: FilterBarProps) {
             onChange={(event) => props.onAreaChange({ ...props.area, max: event.target.value ? Number(event.target.value) : undefined })}/></label>
         {props.onReset && <button type="button" className="reset-filters" onClick={props.onReset}><RotateCcw aria-hidden="true" /> Ponastavi</button>}
       </div>
+      {props.mode === "sale" && props.propertyGroup === "land" && <div className="land-filter-row">
+        <label className="land-scope-field" htmlFor="land-scope-select">
+          <span>Vrste zemljišč</span>
+          <select id="land-scope-select" aria-describedby="land-scope-description" value={props.area.landScope ?? "strict"}
+            onChange={(event) => { if (isLandScope(event.target.value)) props.onAreaChange({ ...props.area, landScope: event.target.value }); }}>
+            {landScopeOptions.map((scope) => <option key={scope} value={scope}>{landScopes[scope].label}</option>)}
+            {props.area.landScope === "broad" && <option value="broad">{landScopes.broad.label}</option>}
+          </select>
+        </label>
+        <p id="land-scope-description" className="land-scope-note">
+        {landScopes[props.area.landScope ?? "strict"].description}
+        {" "}Modelske ocene zemljišč še naprej uporabljajo samo strogi zazidljivi vzorec.
+        </p>
+      </div>}
       <div className="active-filter-summary" aria-live="polite"><strong>{props.mode === "sale" ? "Prodaja" : "Najem"} · {propertyGroupLabel(props.propertyGroup)}</strong>
-        <span>{selectedGeography} · {props.years.from}–{props.years.to} · {areaText}</span></div>
+        <span>{selectedGeography} · {props.years.from}–{props.years.to} · {areaText}{scopeText}</span></div>
       <button type="button" className="apply-filters" onClick={close}>Prikaži izbrani trg</button>
     </div>
   </section>;

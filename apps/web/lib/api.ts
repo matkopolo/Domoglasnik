@@ -23,7 +23,7 @@ import type {
   TransactionExtreme,
   TransactionContextResponse,
   YearRange,
-  AreaRange,
+  MarketConstraints,
   DataStatus,
 } from "./types";
 
@@ -43,7 +43,7 @@ export function marketQuery(
   propertyGroup: PropertyGroup,
   years: YearRange,
   geographyId?: number,
-  area: AreaRange = {},
+  area: MarketConstraints = {},
 ) {
   const query = new URLSearchParams({
     from: `${years.from}-01-01`,
@@ -53,6 +53,7 @@ export function marketQuery(
   if (geographyId) query.set("geographyId", String(geographyId));
   if (area.min != null) query.set("minArea", String(area.min));
   if (area.max != null) query.set("maxArea", String(area.max));
+  if (propertyGroup === "land" && area.landScope) query.set("landScope", area.landScope);
   return query;
 }
 
@@ -75,7 +76,7 @@ export async function loadDashboard(
   geographyId: number | undefined,
   years: YearRange,
   signal: AbortSignal,
-  area: AreaRange = {},
+  area: MarketConstraints = {},
 ): Promise<DashboardData> {
   const query = marketQuery(propertyGroup, years, geographyId, area);
   const prefix = mode === "sale" ? "" : "/rentals";
@@ -119,7 +120,7 @@ export async function loadMapFeatures(
   bounds: [number, number, number, number],
   zoom: number,
   signal: AbortSignal,
-  area: AreaRange = {},
+  area: MarketConstraints = {},
 ): Promise<MapFeatureCollection> {
   const query = marketQuery(propertyGroup, years, geographyId, area);
   query.set("bbox", bounds.join(","));
@@ -216,7 +217,7 @@ export function loadDetailedTimeSeries(
   years: YearRange,
   interval: "month" | "quarter" | "year",
   signal: AbortSignal,
-  area: AreaRange = {},
+  area: MarketConstraints = {},
 ) {
   const query = marketQuery(propertyGroup, years, geographyId, area);
   query.set("interval", interval);
@@ -248,8 +249,9 @@ export function loadStatisticalOutliers(
   geographyId: number | undefined,
   years: YearRange,
   signal: AbortSignal,
+  area: MarketConstraints = {},
 ) {
-  const query = marketQuery(propertyGroup, years, geographyId);
+  const query = marketQuery(propertyGroup, years, geographyId, area);
   query.set("limit", "12");
   const prefix = mode === "sale" ? "" : "/rentals";
   return getJSON<{ items: StatisticalOutlier[]; total: number }>(
@@ -271,10 +273,13 @@ export function loadTransactionExtremes(
   geographyId: number | undefined,
   years: YearRange,
   signal: AbortSignal,
+  area: MarketConstraints = {},
+  period?: { from: string; to: string },
 ) {
-  const query = marketQuery(propertyGroup, years, geographyId);
+  const query = marketQuery(propertyGroup, years, geographyId, area);
   query.set("transactionKind", mode);
-  query.set("limit", "3");
+  query.set("limit", period ? "10" : "3");
+  if (period) { query.set("from", period.from); query.set("to", period.to); }
   return getJSON<{ items: TransactionExtreme[]; population: "representative" }>(
     `/api/v1/transactions/extremes?${query}`,
     signal,
@@ -296,8 +301,9 @@ export async function loadGeographyRankings(
   years: YearRange,
   signal: AbortSignal,
   geographyId?: number,
+  area: MarketConstraints = {},
 ) {
-  const query = marketQuery(propertyGroup, years, geographyId);
+  const query = marketQuery(propertyGroup, years, geographyId, area);
   query.set("bbox", bounds.join(","));
   query.set("level", level);
   const prefix = mode === "sale" ? "/api/v1/map" : "/api/v1/rentals/map";
@@ -360,9 +366,10 @@ export async function loadGeographyComparisons(
   propertyGroup: PropertyGroup,
   years: YearRange,
   signal: AbortSignal,
+  area: MarketConstraints = {},
 ): Promise<GeographyComparison[]> {
   if (children.length === 0 || !parent.bounds) return [];
-  const query = marketQuery(propertyGroup, years, parent.id);
+  const query = marketQuery(propertyGroup, years, parent.id, area);
   query.set("bbox", parent.bounds.join(","));
   query.set("level", children[0].level);
   const prefix = mode === "sale" ? "/api/v1/map" : "/api/v1/rentals/map";

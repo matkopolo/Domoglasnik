@@ -4,7 +4,7 @@ import { ArrowRight, Menu, RefreshCw, SearchCheck, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { loadBuildingStatistics, loadDashboard, loadDataStatus, loadTransaction } from "@/lib/api";
 import type {
-  AreaRange,
+  MarketConstraints,
   DataStatus,
   DashboardData,
   GeographyLevel,
@@ -15,6 +15,7 @@ import type {
   YearRange,
 } from "@/lib/types";
 import { Brand } from "@/components/ui/brand";
+import { isLandScope } from "@/lib/land-scopes";
 import { ContextPanel } from "./context-panel";
 import { AnalyticsWorkspace } from "./analytics-workspace";
 import { DistributionChart } from "./distribution-chart";
@@ -71,7 +72,7 @@ function initialState(): {
   years: YearRange;
   context: MarketContext;
   geographyContext?: GeographyContext;
-  area: AreaRange;
+  area: MarketConstraints;
 } {
   if (typeof window === "undefined") {
     return {
@@ -117,7 +118,9 @@ function initialState(): {
       id: Number(query.get("transactionId")),
     };
   }
-  return { mode, propertyGroup, years: { from, to }, context, geographyContext, area: { min, max } };
+  const scope = query.get("landScope");
+  return { mode, propertyGroup, years: { from, to }, context, geographyContext,
+    area: { min, max, ...(isLandScope(scope) ? { landScope: scope } : {}) } };
 }
 
 export function MarketDashboard() {
@@ -125,7 +128,7 @@ export function MarketDashboard() {
   const [mode, setMode] = useState(initial.mode);
   const [propertyGroup, setPropertyGroup] = useState(initial.propertyGroup);
   const [years, setYears] = useState<YearRange>(initial.years);
-  const [area, setArea] = useState<AreaRange>(initial.area);
+  const [area, setArea] = useState<MarketConstraints>(initial.area);
   const [context, setContext] = useState<MarketContext>(initial.context);
   const [geographyContext, setGeographyContext] = useState<GeographyContext | undefined>(
     initial.geographyContext,
@@ -202,6 +205,7 @@ export function MarketDashboard() {
     query.set("to", String(years.to));
     if (area.min != null) query.set("minArea", String(area.min));
     if (area.max != null) query.set("maxArea", String(area.max));
+    if (propertyGroup === "land" && area.landScope) query.set("landScope", area.landScope);
     query.set("context", context.kind);
     if (geographyContext) {
       query.set("geographyId", String(geographyContext.id));
@@ -269,7 +273,7 @@ export function MarketDashboard() {
   };
   const handlePanelContext = (next: MarketContext) => {
     if (next.kind === "country" && geographyContext) {
-      setContext(geographyContext);
+      handleContext(geographyContext);
       return;
     }
     handleContext(next);
@@ -384,6 +388,7 @@ export function MarketDashboard() {
               propertyGroup={propertyGroup}
               years={years}
               overview={data.overview}
+              area={area}
               onChange={handlePanelContext}
             />
           </div>
@@ -399,6 +404,7 @@ export function MarketDashboard() {
           years={years}
           context={analysisContext}
           overview={data.overview}
+          area={area}
           onContextChange={handleContext}
         />
         <footer className="legal-footer">

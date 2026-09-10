@@ -109,7 +109,7 @@ describe("MarketDashboard", () => {
   it("returns to the default Slovenian market from the brand", async () => {
     window.history.replaceState(null, "", "/?mode=rent&propertyGroup=house&from=2022&to=2024&context=country");
     render(<MarketDashboard />);
-    fireEvent.click(screen.getByRole("button", { name: /Analitika nepremičnin — začetni pogled/ }));
+    fireEvent.click(screen.getByRole("button", { name: /DOMOGLASNIK — začetni pogled/ }));
     await waitFor(() => {
       expect(window.location.search).toContain("mode=sale");
       expect(window.location.search).toContain("propertyGroup=apartment");
@@ -136,6 +136,25 @@ describe("MarketDashboard", () => {
     expect(to).toHaveValue("2024");
     expect(window.location.search).toContain("from=2020");
     expect(window.location.search).toContain("to=2024");
+  });
+
+  it("exposes all land including agricultural land and persists the scope in the URL", async () => {
+    render(<MarketDashboard />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Vrsta nepremičnine" }), { target: { value: "land" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Vrste zemljišč" }), { target: { value: "all" } });
+    await waitFor(() => expect(window.location.search).toContain("landScope=all"));
+    expect(loadDashboardMock.mock.calls.at(-1)?.[5]).toMatchObject({ landScope: "all" });
+    fireEvent.click(screen.getByRole("button", { name: "Najem" }));
+    expect(screen.queryByRole("combobox", { name: "Vrste zemljišč" })).not.toBeInTheDocument();
+    expect(window.location.search).not.toContain("landScope");
+  });
+
+  it.each(["agricultural", "forest", "mixed", "unverified", "other", "broad"])("restores the %s land population from a shared URL", async (scope) => {
+    window.history.replaceState(null, "", `/?mode=sale&propertyGroup=land&landScope=${scope}&from=2024&to=2025&context=country`);
+    render(<MarketDashboard/>);
+    expect(screen.getByRole("combobox", { name: "Vrste zemljišč" })).toHaveValue(scope);
+    await waitFor(() => expect(loadDashboardMock.mock.calls.at(-1)?.[5]).toMatchObject({ landScope: scope }));
+    expect(window.location.search).toContain(`landScope=${scope}`);
   });
 
   it("filters the market by an inclusive area range", async () => {

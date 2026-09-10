@@ -3,6 +3,12 @@ import { APIError, loadDashboard, loadGeographyComparisons, loadMapFeatures, map
 
 afterEach(() => vi.unstubAllGlobals());
 
+it("only applies the selected land scope to land queries", () => {
+  expect(marketQuery("land", { from: 2025, to: 2025 }, 77, { landScope: "all" }).get("landScope")).toBe("all");
+  expect(marketQuery("apartment", { from: 2025, to: 2025 }, 77, { landScope: "all" }).has("landScope")).toBe(false);
+  expect(marketQuery("land", { from: 2025, to: 2025 }).has("landScope")).toBe(false);
+});
+
 it("adds inclusive area bounds to every market query", () => {
   const query = marketQuery("apartment", { from: 2025, to: 2025 }, 12, { min: 60, max: 90 });
   expect(query.get("minArea")).toBe("60");

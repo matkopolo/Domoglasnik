@@ -8,6 +8,8 @@ export type PropertyGroup = Exclude<ApiSchemas["PropertyGroup"], "mixed" | "unkn
 export type GeographyLevel = ApiSchemas["GeographyLevel"];
 export interface YearRange { from: number; to: number }
 export interface AreaRange { min?: number; max?: number }
+export type LandScope = components["parameters"]["LandScope"];
+export interface MarketConstraints extends AreaRange { landScope?: LandScope }
 
 export interface AnalyticalRelease {
   id: string;

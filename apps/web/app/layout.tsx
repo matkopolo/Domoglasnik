@@ -3,9 +3,10 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import "./globals.css";
 import "./redesign.css";
 import "./atlas.css";
+import "./domoglasnik.css";
 
 export const metadata: Metadata = {
-  title: "Analitika nepremičnin | Pregled trga",
+  title: "DOMOGLASNIK | Dejansko sklenjeni nepremičninski posli",
   description: "Analitični pregled prodajnega in najemnega trga nepremičnin v Sloveniji.",
 };
 

@@ -15,15 +15,20 @@ import type {
 import { ProvenanceBadge } from "@/components/ui/provenance-badge";
 import { SuppressedStatistic } from "@/components/ui/suppressed-statistic";
 import { TransactionInspector } from "./inspector/transaction-inspector";
+import { RecentTransactions } from "./inspector/recent-transactions";
+import type { MarketConstraints, TransactionGeography } from "@/lib/types";
+
+const NO_CONSTRAINTS: MarketConstraints = {};
 
 type LoadedContext =
   | { kind: "geography"; geography: Geography; children: Geography[]; comparisons: GeographyComparison[] }
-  | { kind: "building"; building: BuildingStatistics }
+  | { kind: "building"; building: BuildingStatistics; municipality?: TransactionGeography }
   | { kind: "transaction"; detail: SaleTransactionDetail | RentalTransactionDetail; context: TransactionContextResponse; model?: FullValuationPrediction };
 
 interface ContextPanelProps {
   context: MarketContext; mode: MarketMode; propertyGroup: PropertyGroup; years: YearRange;
   overview: Overview; onChange: (context: MarketContext) => void;
+  area?: MarketConstraints;
 }
 
 function contextKey(context: MarketContext) {
@@ -74,7 +79,7 @@ function BuildingInspector({ building, mode, onChange }: { building: BuildingSta
   </div>;
 }
 
-export function ContextPanel({ context, mode, propertyGroup, years, overview, onChange }: ContextPanelProps) {
+export function ContextPanel({ context, mode, propertyGroup, years, overview, onChange, area = NO_CONSTRAINTS }: ContextPanelProps) {
   const [loaded, setLoaded] = useState<LoadedContext>();
   const [loadedKey, setLoadedKey] = useState("");
   const [loading, setLoading] = useState(false);
@@ -89,15 +94,19 @@ export function ContextPanel({ context, mode, propertyGroup, years, overview, on
     const currentGeneration = ++generation.current;
     queueMicrotask(() => { if (!controller.signal.aborted) { setLoading(true); setError(undefined); } });
     const request: Promise<LoadedContext> = context.kind === "geography"
-      ? Promise.all([loadGeography(context.id, controller.signal), loadGeographyChildren(context.id, controller.signal)]).then(async ([geography, children]) => ({ kind: "geography", geography, children: children.items, comparisons: await loadGeographyComparisons(mode, geography, children.items, propertyGroup, years, controller.signal) }))
+      ? Promise.all([loadGeography(context.id, controller.signal), loadGeographyChildren(context.id, controller.signal)]).then(async ([geography, children]) => ({ kind: "geography", geography, children: children.items, comparisons: await loadGeographyComparisons(mode, geography, children.items, propertyGroup, years, controller.signal, area) }))
       : context.kind === "building"
-        ? loadBuildingStatistics(context.cadastralCode, context.buildingNumber, propertyGroup, years, controller.signal).then((building) => ({ kind: "building", building }))
+        ? loadBuildingStatistics(context.cadastralCode, context.buildingNumber, propertyGroup, years, controller.signal).then(async (building) => {
+          const first = (mode === "sale" ? building.saleTransactions : building.rentalTransactions)[0];
+          const detail = first ? await loadTransaction(mode, first.transactionId, controller.signal).catch(() => undefined) : undefined;
+          return { kind: "building", building, municipality: detail?.geographies.find((item) => item.level === "municipality") };
+        })
         : Promise.all([loadTransaction(context.mode, context.id, controller.signal), loadTransactionContext(context.mode, context.id, controller.signal), loadFullValuation(context.mode, context.id, controller.signal).catch(() => undefined)]).then(([detail, transactionContext, model]) => ({ kind: "transaction", detail, context: transactionContext, model }));
     request.then((result) => { if (generation.current === currentGeneration) { setLoaded(result); setLoadedKey(key); } }).catch((requestError: unknown) => {
       if (!controller.signal.aborted && generation.current === currentGeneration) setError(requestError instanceof Error ? requestError.message : "Podatkov ni bilo mogoče naložiti.");
     }).finally(() => { if (!controller.signal.aborted && generation.current === currentGeneration) setLoading(false); });
     return () => controller.abort();
-  }, [context, key, mode, propertyGroup, years]);
+  }, [area, context, key, mode, propertyGroup, years]);
 
   useEffect(() => {
     if (context.kind !== "country") return;
@@ -107,6 +116,10 @@ export function ContextPanel({ context, mode, propertyGroup, years, overview, on
   }, [context.kind, mode, propertyGroup]);
 
   const current = loadedKey === key ? loaded : undefined;
+  const local = current?.kind === "transaction" ? current.detail.geographies.find((item) => item.level === "municipality")
+    : current?.kind === "building" ? current.municipality : undefined;
+  const recentGeography = context.kind === "geography" ? context : local;
+  const showRecent = context.kind === "country" || context.kind === "geography" || Boolean(recentGeography);
   const latestIndices = (["hedonic", "matched_pair_median"] as const).map((method) => indices.filter((item) => item.method === method && item.isPublishable).at(-1)).filter((item): item is MarketIndex => item != null);
   const title = context.kind === "country" ? "Slovenija" : context.kind === "geography" ? context.name : context.kind === "building" ? context.label ?? `Stavba ${context.buildingNumber}` : `${context.mode === "sale" ? "Prodaja" : "Najem"} #${context.id}`;
   return <aside className="context-panel selection-inspector" aria-live="polite" aria-busy={loading}>
@@ -120,5 +133,7 @@ export function ContextPanel({ context, mode, propertyGroup, years, overview, on
     {current?.kind === "geography" && <GeographyInspector key={current.geography.id} loaded={current} mode={mode} propertyGroup={propertyGroup} years={years} onChange={onChange}/>}
     {current?.kind === "building" && <BuildingInspector building={current.building} mode={mode} onChange={onChange}/>}
     {current?.kind === "transaction" && <TransactionInspector detail={current.detail} context={current.context} model={current.model} onChange={onChange}/>}
+    {showRecent && <RecentTransactions mode={mode} propertyGroup={propertyGroup} geographyId={recentGeography?.id}
+      name={recentGeography?.name ?? "Slovenija"} years={years} area={area} onChange={onChange}/>}
   </aside>;
 }

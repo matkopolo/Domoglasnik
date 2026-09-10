@@ -32,6 +32,7 @@ import type {
   TimePoint,
   TransactionExtreme,
   YearRange,
+  MarketConstraints,
 } from "@/lib/types";
 
 type WorkspaceTab = "market" | "indices" | "geographies" | "outliers";
@@ -43,6 +44,7 @@ type WorkspacePayload = {
 };
 
 interface AnalyticsWorkspaceProps {
+  area?: MarketConstraints;
   mode: MarketMode;
   propertyGroup: PropertyGroup;
   years: YearRange;
@@ -370,6 +372,7 @@ export function AnalyticsWorkspace({
   context,
   overview,
   onContextChange,
+  area,
 }: AnalyticsWorkspaceProps) {
   const [tab, setTab] = useState<WorkspaceTab>("market");
   const [interval, setInterval] = useState<Interval>("quarter");
@@ -388,7 +391,7 @@ export function AnalyticsWorkspace({
   useEffect(() => {
     const controller = new AbortController();
     const requestGeneration = ++generation.current;
-    const cacheKey = JSON.stringify({ tab, mode, propertyGroup, geographyId, years, interval: tab === "market" ? interval : undefined, context: context.kind === "geography" ? context.id : "country" });
+    const cacheKey = JSON.stringify({ tab, mode, propertyGroup, geographyId, years, area, interval: tab === "market" ? interval : undefined, context: context.kind === "geography" ? context.id : "country" });
     const apply = (payload: WorkspacePayload) => {
       if (payload.points) setPoints(payload.points);
       if (payload.extremes) setExtremes(payload.extremes);
@@ -403,19 +406,19 @@ export function AnalyticsWorkspace({
     queueMicrotask(() => { if (!controller.signal.aborted) setLoading(true); });
     let request: Promise<WorkspacePayload>;
     if (tab === "market") request = Promise.all([
-      loadDetailedTimeSeries(mode, propertyGroup, geographyId, years, interval, controller.signal),
-      loadTransactionExtremes(mode, propertyGroup, geographyId, years, controller.signal),
+      loadDetailedTimeSeries(mode, propertyGroup, geographyId, years, interval, controller.signal, area),
+      loadTransactionExtremes(mode, propertyGroup, geographyId, years, controller.signal, area),
     ]).then(([series, result]) => ({ points: series.items, extremes: result.items }));
     else if (tab === "indices") request = loadMarketIndices(mode, propertyGroup, controller.signal).then((result) => ({ indices: result.items }));
     else if (tab === "outliers") request = Promise.all([
-      loadStatisticalOutliers(mode, propertyGroup, geographyId, years, controller.signal), loadAnomalySummary(mode, controller.signal),
+      loadStatisticalOutliers(mode, propertyGroup, geographyId, years, controller.signal, area), loadAnomalySummary(mode, controller.signal),
     ]).then(([result, summary]) => ({ outliers: result.items, outlierTotal: result.total, anomalySummary: summary }));
     else {
       const rankingRequest = context.kind === "country"
-        ? loadGeographyRankings(mode, "statistical_region", [13.3, 45.4, 16.7, 46.9], propertyGroup, years, controller.signal)
+        ? loadGeographyRankings(mode, "statistical_region", [13.3, 45.4, 16.7, 46.9], propertyGroup, years, controller.signal, undefined, area)
         : context.kind === "geography" ? Promise.all([loadGeography(context.id, controller.signal), loadGeographyChildren(context.id, controller.signal)]).then(([geography, children]) => {
           if (!geography.bounds || children.items.length === 0) return [];
-          return loadGeographyRankings(mode, children.items[0].level, geography.bounds, propertyGroup, years, controller.signal, geography.id);
+          return loadGeographyRankings(mode, children.items[0].level, geography.bounds, propertyGroup, years, controller.signal, geography.id, area);
         }) : Promise.resolve([]);
       request = rankingRequest.then((result) => ({ rankings: result }));
     }
@@ -427,7 +430,7 @@ export function AnalyticsWorkspace({
       if (!controller.signal.aborted && requestGeneration === generation.current) setLoading(false);
     });
     return () => controller.abort();
-  }, [context, geographyId, interval, mode, propertyGroup, tab, years]);
+  }, [area, context, geographyId, interval, mode, propertyGroup, tab, years]);
 
   const tabOptions: Array<{ id: WorkspaceTab; label: string; icon: typeof BarChart3 }> = [
     { id: "market", label: "Tržna slika", icon: BarChart3 },
@@ -454,7 +457,7 @@ export function AnalyticsWorkspace({
           <MarketDepth overview={overview} points={points} mode={mode}
             extremes={extremes} onContextChange={onContextChange} />
         </>}
-        {tab === "indices" && <IndexExplorer items={indices} />}
+        {tab === "indices" && <>{propertyGroup === "land" && <p className="land-scope-note">Indeksi zemljišč uporabljajo strogi zazidljivi vzorec, ne širšega ali celotnega zemljiškega trga.</p>}<IndexExplorer items={indices} /></>}
         {tab === "geographies" && <GeographyExplorer rankings={rankings} mode={mode} onContextChange={onContextChange} />}
         {tab === "outliers" && <OutlierExplorer items={outliers} total={outlierTotal}
           summary={anomalySummary} mode={mode} onContextChange={onContextChange} />}
