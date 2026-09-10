@@ -2,13 +2,71 @@
 
 ## Purpose
 
-`apps/web` is the Slovenian-language **Analitika nepremičnin** dashboard. It is
+`apps/web` is the Slovenian-language **DOMOGLASNIK** dashboard. It is
 a Next.js/React/TypeScript client for exploring sale and rental markets; it
 does not calculate authoritative statistics locally. Values, publication
 status, transaction composition, quality evidence, and geography come from
 `real-estate-api`.
 
 ## User workflow
+
+### Recent local price rankings and map navigation
+
+The selection inspector shows up to ten highest and ten lowest **total amounts**
+from representative transactions, including date, area and amount/m². Rent amounts
+are monthly. These are actual GURS agreements, not asking prices or a valuation.
+Area/geography selection uses that area. A selected transaction or building uses
+its source municipality, not the building-only cohort. Without a known municipality
+the property view does not silently substitute a national ranking.
+
+Start with the last three calendar months ending at the earlier of today and the
+selected end-year's December 31. If fewer than ten distinct transactions exist,
+expand to six, twelve, twenty-four months, then all selected years (at most five
+requests, duplicate windows removed). The exact range and expansion are visible.
+Keep geography, property group, min/max area and land scope unchanged. Fewer than
+ten is valid; the same transaction can occur in both lists. This is **price ranking
+within a recent window**, not ten records selected by date and then sorted.
+
+Opening a transaction centers its recorded coordinates at building zoom; opening
+a building from the inspector uses its recorded building coordinates. Selecting
+a municipality/district from any context control fits that area's actual bounds,
+including zooming back out from a property. Cancelled/stale lookups never move the
+camera. Missing coordinates/bounds produce an explicit notice, not a guessed point.
+
+### Land browsing versus model population
+
+Sale → Zemljišča exposes separate land categories: all, verified buildable (ETN
+1/2), unverified building land (ETN 3), agricultural (ETN 7/8), forest (ETN 9),
+mixed-category contracts, and other/unknown uses. The legacy broad (ETN 1/2/3)
+scope remains supported for saved URLs, but is not offered as a new category.
+The land selector occupies a dedicated full-width toolbar row, stacking inside
+the mobile filter panel. Short option labels keep the native control readable;
+its linked description retains the full ETN-code and population explanation.
+Agricultural and forest filters require all parcels to belong to that category.
+A contract with agricultural and forest parcels (or a known category plus an
+unknown parcel) belongs to mixed, not to either pure category. Entire package
+amounts remain intact and are never allocated proportionally between land uses.
+All includes every land-only agreement already stored by the pipeline. There is
+no land rental option. The scope persists in shareable URLs and is passed through
+market summaries, map features, trends/distribution, geography comparisons,
+outliers and recent/full-period price rankings. Area constraints now also flow
+through the detailed workspace instead of being lost there.
+
+Publication/quality rules still apply. Mixed-use all-land medians are descriptive,
+not a valuation of agricultural or buildable land. Existing valuation models and
+national land indices remain based on the strict buildable population; they are
+not retrained or broadened by the browsing filter. Anomaly summaries retain their
+existing transaction-kind-wide scope.
+
+### Product/repository naming
+
+The frontend title/wordmark and documentation use DOMOGLASNIK. Runtime service,
+database, volume, image and Go module names stay stable. GitHub repository renaming
+requires an account administrator's Settings → General action. Do not change the
+Git remote until that rename has succeeded; then verify SSH access, documentation
+links and GHCR workflow package access. Rebranding must not rename Compose volumes.
+
+## Available features
 
 The dashboard provides:
 

@@ -770,3 +770,32 @@ reproducible and diagnosable.
   `apps/data-pipeline/real_estate_etl/modeling.py`.
 - refresh dependency order: `apps/data-pipeline/real_estate_etl/operations.py`.
 - API query/publication behavior: `apps/real-estate-api/internal/analytics`.
+
+## Separate land-browsing categories
+
+Browsing categories use the imported GURS ETN codebook **3, Vrsta zemljišča**
+(verified against the local source codebook on 2026-09-10). Classification is at
+the **whole land-only contract**, not per parcel-price allocation:
+
+| Filter | Required source land types |
+| --- | --- |
+| Verified buildable (`strict`) | Every parcel ETN 1 or 2 |
+| Building land, unverified (`unverified`) | Every parcel ETN 3 |
+| Agricultural (`agricultural`) | Every parcel ETN 7 (fields/meadows/pastures) or 8 (permanent crops) |
+| Forest (`forest`) | Every parcel ETN 9 |
+| Other/unknown (`other`) | Only ETN 4/5/6/10, unrecognized/missing codes, or missing land classification |
+| Mixed (`mixed`) | More than one category above, including known category plus unknown use |
+| All (`all`) | Every land-only sale, including all categories |
+
+Codes 1 and 2 together are still verified buildable; codes 7 and 8 together are
+still agricultural. Codes 7 and 9 together are mixed. Codes 1 and 3 together are
+mixed in this mutually exclusive browsing taxonomy but remain included in the
+legacy `broad` 1–3 filter, which is preserved for saved links. Category totals
+(excluding the overlapping all/broad aggregates) partition the land-sale population.
+
+All prices and areas remain those of the complete contract. A mixed sale's total
+is not attributed to agriculture, forest or building land independently. Quality
+and publication thresholds still apply; raw counts may include transactions whose
+price statistics are unavailable. Source descriptions are not a certification of
+current planning permission. This change does **not** modify default land-model
+training: only verified-buildable ETN 1/2 remain eligible under the existing rules.

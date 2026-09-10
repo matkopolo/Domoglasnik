@@ -1,4 +1,12 @@
-# Analitika nepremičnin
+# DOMOGLASNIK
+
+The wordmark distinguishes **DOM** (forest green, heavier weight) from OGLASNIK
+(slate). The product continues to show actual transactions, not advertised listings.
+
+The selection inspector includes up to ten highest and ten lowest representative
+transactions in a recent period. Selecting a building/transaction uses its known
+municipality; selecting an area uses that area. See [frontend behavior](../../docs/frontend.md)
+for date expansion, land filters and map navigation.
 
 Next.js frontend for the Slovenian real-estate analytics platform. It consumes
 the Go API from `NEXT_PUBLIC_API_URL`. If that API is unavailable, the

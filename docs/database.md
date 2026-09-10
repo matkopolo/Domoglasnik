@@ -1,5 +1,20 @@
 # Database architecture
 
+## Land browsing categories
+
+Migration `037_land_browsing_categories.sql` adds an immutable classification
+function `analytics.land_market_category(integer[],integer)` and the read-only
+`analytics.land_market_categories` view over published `land_transaction_facts`.
+Five sale-fact views expose agricultural, forest, unverified building land, mixed
+and other/unknown populations. Existing strict/broad/all views are unchanged.
+All category views retain non-land rows for compatibility; `propertyGroup=land`
+selects the land population. A land sale lacking any land-fact classification
+belongs to the other/unknown view. API access is SELECT-only.
+
+No backfill, analytical refresh or model retraining is required: categories are
+derived from the existing distinct ETN codes and unknown-parcel count at query
+time. Published analytical releases therefore remain the source of truth.
+
 Production uses CloudNativePG on K3s, not the local Compose database lifecycle.
 See [deployment and privileged migration Jobs](k3s-deployment.md) and
 [backup/PITR](backup-and-recovery.md). Authoritative schema SQL remains here;

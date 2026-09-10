@@ -1,4 +1,9 @@
-# Slovenian real-estate analytics monorepo
+# DOMOGLASNIK — Slovenian real-estate analytics
+
+DOMOGLASNIK is the public product name. It presents actual GURS ETN transactions,
+not active property listings. Technical service names, database identities,
+Compose project/volumes and container names stay unchanged so rebranding does
+not create a new empty local database.
 
 This project downloads national yearly ZIP archives from GURS JGP, preserves the raw files, and imports their CSV contents into PostgreSQL. It loads both purchase transactions (BUY/KPP, 2007 onward) and rental transactions (RENT/NP, 2013 onward). Imports are idempotent: reimporting a dataset/year replaces that database snapshot instead of duplicating it.
 

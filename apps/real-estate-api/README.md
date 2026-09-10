@@ -165,10 +165,14 @@ Rental amounts are treated as monthly, and only homogeneous market-rent
 packages passing explicit quality and robust comparable-cohort rules are
 representative. Raw source observations are never removed.
 
-Sale endpoints accept `landScope=strict|broad|all`. The default `strict`
-population includes land-only contracts containing exclusively ETN land codes
-1 and 2. `broad` permits only codes 1–3; `all` is explicit audit access. The
-scope has no effect for other property groups.
+Sale endpoints accept `landScope=strict|unverified|agricultural|forest|mixed|other|all`
+and legacy `broad`. Default `strict` requires exclusively ETN 1/2;
+`unverified` only 3, `agricultural` only 7/8, and `forest` only 9.
+Contracts spanning categories belong to `mixed`; `other` covers solely other or
+unknown use (including missing classification). `all` includes every land sale.
+Legacy `broad` permits codes 1–3 and remains compatible with saved URLs.
+The scope has no effect for explicitly selected non-land property groups.
+The model population stays strict. See [methodology](../../docs/statistical-methodology.md).
 
 ## Design principles
 
