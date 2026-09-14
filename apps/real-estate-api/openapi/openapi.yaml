@@ -460,6 +460,70 @@ paths:
           $ref: "#/components/responses/Error"
         "404":
           $ref: "#/components/responses/Error"
+  /api/v1/sales/transactions/{id}/history:
+    get:
+      operationId: getPropertyHistory
+      tags: [Transactions]
+      parameters:
+        - $ref: "#/components/parameters/TransactionId"
+      responses:
+        "200":
+          description: Exact recorded component identities and explicitly weaker building geolocation references. Not an ownership register. At most 50 identities and 200 events per identity; truncation is explicit.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PropertyHistory"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /api/v1/sales/statistics/resales:
+    get:
+      operationId: getResaleSummary
+      tags: [Statistics]
+      parameters:
+        - $ref: "#/components/parameters/FromDate"
+        - $ref: "#/components/parameters/ToDate"
+        - $ref: "#/components/parameters/PropertyGroup"
+        - $ref: "#/components/parameters/GeographyId"
+        - $ref: "#/components/parameters/MinArea"
+        - $ref: "#/components/parameters/MaxArea"
+        - $ref: "#/components/parameters/LandScope"
+      responses:
+        "200":
+          description: Days between observed comparable resales. Filters apply to the later sale; predecessors can predate the filter. Percentiles suppressed below 30 pairs. Not an owner holding-period estimate.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResaleSummary"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /api/v1/economy/inflation-factor:
+    get:
+      operationId: getInflationFactor
+      tags: [Economy]
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          required: true
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Approximate CPI adjustment chained from SURS monthly ratios after the first month through the last month. No overlapping annual rates or daily interpolation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InflationFactor"
+        "400":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
   /api/v1/sales/transactions/{id}:
     get:
       operationId: getSaleTransaction
@@ -1416,6 +1480,85 @@ components:
         level:
           $ref: "#/components/schemas/GeographyLevel"
         name: {type: string}
+    InflationFactor:
+      type: object
+      required: [from, to, factor, months, source]
+      properties:
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        factor: { type: number }
+        months: { type: integer }
+        source: { type: string }
+    ResaleSummary:
+      type: object
+      required: [pairCount, assetCount, p25Days, medianDays, p75Days, isPublishable]
+      properties:
+        pairCount: { type: integer, format: int64 }
+        assetCount: { type: integer, format: int64 }
+        p25Days: { type: number, nullable: true }
+        medianDays: { type: number, nullable: true }
+        p75Days: { type: number, nullable: true }
+        isPublishable: { type: boolean }
+    PropertyHistory:
+      type: object
+      required: [transactionId, assets, truncated]
+      properties:
+        transactionId: { type: integer, format: int64 }
+        truncated: { type: boolean }
+        assets:
+          type: array
+          items:
+            $ref: "#/components/schemas/HistoryAsset"
+    HistoryAsset:
+      type: object
+      required: [kind, cadastralCode, number, partNumber, events, pairs, truncated]
+      properties:
+        kind: { type: string, enum: [building_part, parcel] }
+        cadastralCode: { type: integer }
+        number: { type: string }
+        partNumber: { type: string }
+        truncated: { type: boolean }
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/HistoryEvent"
+        pairs:
+          type: array
+          items:
+            $ref: "#/components/schemas/ResalePair"
+    HistoryEvent:
+      type: object
+      required: [transactionId, componentId, contractDate, evidence, propertyGroup, sourceType, share, area, agreementPrice, componentPrice, constructionYear, componentCount, representative, possibleDuplicate]
+      properties:
+        transactionId: { type: integer, format: int64 }
+        componentId: { type: integer, format: int64 }
+        contractDate: { type: string, nullable: true }
+        evidence: { type: string, enum: [exact_identity, building_geolocation_reference] }
+        propertyGroup: { type: string }
+        sourceType: { type: integer, nullable: true }
+        share: { type: string, nullable: true }
+        area: { type: number, nullable: true }
+        agreementPrice: { type: number, nullable: true }
+        componentPrice: { type: number, nullable: true }
+        constructionYear: { type: integer, nullable: true }
+        componentCount: { type: integer }
+        representative: { type: boolean }
+        possibleDuplicate: { type: boolean }
+    ResalePair:
+      type: object
+      required: [transactionId, previousId, from, to, days, comparable, previousPrice, price, nominalChange, changePercent, landTransition]
+      properties:
+        transactionId: { type: integer, format: int64 }
+        previousId: { type: integer, format: int64 }
+        from: { type: string, nullable: true }
+        to: { type: string, nullable: true }
+        days: { type: integer, nullable: true }
+        comparable: { type: boolean }
+        previousPrice: { type: number, nullable: true }
+        price: { type: number, nullable: true }
+        nominalChange: { type: number, nullable: true }
+        changePercent: { type: number, nullable: true }
+        landTransition: { type: boolean }
     SaleTransactionDetail:
       type: object
       required:

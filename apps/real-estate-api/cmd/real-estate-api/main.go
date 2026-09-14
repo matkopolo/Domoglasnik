@@ -54,6 +54,7 @@ func run() error {
 		Statistics:       statisticsRepository,
 		Rentals:          statisticsRepository,
 		Transactions:     statisticsRepository,
+		Histories:        statisticsRepository,
 		Distributions:    statisticsRepository,
 		Buildings:        statisticsRepository,
 		Anomalies:        statisticsRepository,

@@ -26,6 +26,7 @@ type Dependencies struct {
 	Statistics       analytics.StatisticsStore
 	Rentals          analytics.RentalStatisticsStore
 	Transactions     analytics.TransactionDetailStore
+	Histories        analytics.HistoryStore
 	Distributions    analytics.DistributionStore
 	Buildings        analytics.BuildingStore
 	Anomalies        analytics.AnomalyStore
@@ -47,6 +48,7 @@ type server struct {
 	statistics       analytics.StatisticsStore
 	rentals          analytics.RentalStatisticsStore
 	transactions     analytics.TransactionDetailStore
+	histories        analytics.HistoryStore
 	distributions    analytics.DistributionStore
 	buildings        analytics.BuildingStore
 	anomaliesStore   analytics.AnomalyStore
@@ -68,6 +70,7 @@ func New(dependencies Dependencies) http.Handler {
 		statistics:       dependencies.Statistics,
 		rentals:          dependencies.Rentals,
 		transactions:     dependencies.Transactions,
+		histories:        dependencies.Histories,
 		distributions:    dependencies.Distributions,
 		buildings:        dependencies.Buildings,
 		anomaliesStore:   dependencies.Anomalies,

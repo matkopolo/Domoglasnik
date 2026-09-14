@@ -29,6 +29,8 @@ type Client struct {
 	mu         sync.Mutex
 	cachedAt   time.Time
 	monthly    []Point
+	ratios     map[string]float64
+	ratiosAt   time.Time
 }
 
 func NewClient(httpClient *http.Client, url string) *Client {

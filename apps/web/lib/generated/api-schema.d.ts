@@ -325,6 +325,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/transactions/{id}/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getPropertyHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/statistics/resales": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getResaleSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/economy/inflation-factor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getInflationFactor"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/transactions/{id}": {
         parameters: {
             query?: never;
@@ -885,6 +933,75 @@ export interface components {
             id: number;
             level: components["schemas"]["GeographyLevel"];
             name: string;
+        };
+        InflationFactor: {
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            factor: number;
+            months: number;
+            source: string;
+        };
+        ResaleSummary: {
+            /** Format: int64 */
+            pairCount: number;
+            /** Format: int64 */
+            assetCount: number;
+            p25Days: number | null;
+            medianDays: number | null;
+            p75Days: number | null;
+            isPublishable: boolean;
+        };
+        PropertyHistory: {
+            /** Format: int64 */
+            transactionId: number;
+            truncated: boolean;
+            assets: components["schemas"]["HistoryAsset"][];
+        };
+        HistoryAsset: {
+            /** @enum {string} */
+            kind: "building_part" | "parcel";
+            cadastralCode: number;
+            number: string;
+            partNumber: string;
+            truncated: boolean;
+            events: components["schemas"]["HistoryEvent"][];
+            pairs: components["schemas"]["ResalePair"][];
+        };
+        HistoryEvent: {
+            /** Format: int64 */
+            transactionId: number;
+            /** Format: int64 */
+            componentId: number;
+            contractDate: string | null;
+            /** @enum {string} */
+            evidence: "exact_identity" | "building_geolocation_reference";
+            propertyGroup: string;
+            sourceType: number | null;
+            share: string | null;
+            area: number | null;
+            agreementPrice: number | null;
+            componentPrice: number | null;
+            constructionYear: number | null;
+            componentCount: number;
+            representative: boolean;
+            possibleDuplicate: boolean;
+        };
+        ResalePair: {
+            /** Format: int64 */
+            transactionId: number;
+            /** Format: int64 */
+            previousId: number;
+            from: string | null;
+            to: string | null;
+            days: number | null;
+            comparable: boolean;
+            previousPrice: number | null;
+            price: number | null;
+            nominalChange: number | null;
+            changePercent: number | null;
+            landTransition: boolean;
         };
         SaleTransactionDetail: {
             /** Format: int64 */
@@ -1964,6 +2081,92 @@ export interface operations {
             };
             400: components["responses"]["Error"];
             404: components["responses"]["Error"];
+        };
+    };
+    getPropertyHistory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["TransactionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Exact recorded component identities and explicitly weaker building geolocation references. Not an ownership register. At most 50 identities and 200 events per identity; truncation is explicit. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PropertyHistory"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    getResaleSummary: {
+        parameters: {
+            query?: {
+                /** @description Inclusive contract-date lower bound. */
+                from?: components["parameters"]["FromDate"];
+                /** @description Inclusive contract-date upper bound. */
+                to?: components["parameters"]["ToDate"];
+                propertyGroup?: components["parameters"]["PropertyGroup"];
+                /** @description Inclusive minimum analytical property area in square metres. */
+                minArea?: components["parameters"]["MinArea"];
+                /** @description Inclusive maximum analytical property area in square metres. */
+                maxArea?: components["parameters"]["MaxArea"];
+                /** @description Land browsing population. Defaults to verified-buildable ETN codes 1/2. agricultural requires only codes 7/8; forest only 9; unverified only 3. mixed contains contracts spanning these categories, including known plus unknown use. other contains only other/unknown uses (4/5/6/10, missing or unrecognized codes), or missing land facts. No package price is apportioned between land types. all includes every land sale; broad preserves the legacy 1-3 population. Model training remains strict regardless of browsing. It has no effect unless propertyGroup is land.
+                 *      */
+                landScope?: components["parameters"]["LandScope"];
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["GeographyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Days between observed comparable resales. Filters apply to the later sale; predecessors can predate the filter. Percentiles suppressed below 30 pairs. Not an owner holding-period estimate. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResaleSummary"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    getInflationFactor: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Approximate CPI adjustment chained from SURS monthly ratios after the first month through the last month. No overlapping annual rates or daily interpolation. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InflationFactor"];
+                };
+            };
+            400: components["responses"]["Error"];
+            503: components["responses"]["Error"];
         };
     };
     getSaleTransaction: {
