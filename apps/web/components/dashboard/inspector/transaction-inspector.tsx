@@ -15,9 +15,11 @@ import type {
   SaleTransactionDetail, TransactionContextResponse,
 } from "@/lib/types";
 import { MarketEstimateRange } from "./market-estimate-range";
+import { LocationLink } from "./location-link";
+import { PropertyHistory } from "./property-history";
 
 type Detail = SaleTransactionDetail | RentalTransactionDetail;
-type InspectorTab = "overview" | "comparables" | "details" | "quality";
+type InspectorTab = "overview" | "comparables" | "details" | "quality" | "history";
 
 function FieldList({ fields }: { fields: Array<{ label: string; value: string | number | null | undefined }> }) {
   const visible = visibleFields(fields);
@@ -102,10 +104,13 @@ export function TransactionInspector({ detail, context, model, onChange }: {
   return <div className="transaction-inspector">
     <nav className="context-breadcrumbs" aria-label="Lokacija"><button type="button" onClick={() => onChange({ kind: "country" })}>Slovenija</button>
       {detail.geographies.map((geography) => <span key={geography.id}><ChevronRight aria-hidden="true" /><button type="button" onClick={() => onChange({ kind: "geography", ...geography })}>{geography.name}</button></span>)}</nav>
+    <LocationLink latitude={detail.latitude} longitude={detail.longitude}/>
     <Tabs label="transaction-inspector" active={tab} onChange={setTab} tabs={[
       { id: "overview", label: "Pregled" }, { id: "comparables", label: "Primerljivi posli" },
       { id: "details", label: "Podrobnosti" }, { id: "quality", label: "Kakovost in model" },
+      ...(sale ? [{ id: "history" as const, label: "Zgodovina" }] : []),
     ]}>
+      {tab === "history" && sale && <PropertyHistory key={sale.transactionId} transactionId={sale.transactionId} onChange={onChange}/>}
       {tab === "overview" && <div className="inspector-tab-content">
         <section className="transaction-identity"><ProvenanceBadge kind="source" /><span>{sale ? "Prodaja" : "Najem"} #{detail.transactionId}</span>
           <div className="transaction-amount"><strong>{amount == null ? "Cena ni objavljena" : euro.format(amount)}</strong>{amountPerSqm != null && <b>{decimal.format(amountPerSqm)} €/m²</b>}</div>

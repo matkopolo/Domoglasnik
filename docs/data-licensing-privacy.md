@@ -22,6 +22,13 @@ application or its derived results. The official GURS terms remain controlling:
 
 ## Provenance shown to users
 
+The optional Google Maps link sends a selected ETN coordinate to Google only
+when clicked and warns about approximate/package locations. The property-history
+cost/tax scenario runs entirely in the browser: entered prices, dates, expenses
+and tax assumptions are neither submitted to the API nor stored. Observed
+resale intervals do not identify owners or prove uninterrupted ownership.
+See [property history](property-history.md) for evidence and tax limitations.
+
 The interface distinguishes three categories:
 
 1. **Podatek GURS ETN** — a field reported in the public source transaction;

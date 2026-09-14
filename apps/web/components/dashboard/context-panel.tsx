@@ -16,6 +16,8 @@ import { ProvenanceBadge } from "@/components/ui/provenance-badge";
 import { SuppressedStatistic } from "@/components/ui/suppressed-statistic";
 import { TransactionInspector } from "./inspector/transaction-inspector";
 import { RecentTransactions } from "./inspector/recent-transactions";
+import { ResaleSummary } from "./inspector/resale-summary";
+import { LocationLink } from "./inspector/location-link";
 import type { MarketConstraints, TransactionGeography } from "@/lib/types";
 
 const NO_CONSTRAINTS: MarketConstraints = {};
@@ -131,8 +133,9 @@ export function ContextPanel({ context, mode, propertyGroup, years, overview, on
     </div>}
     {context.kind !== "country" && !loading && !error && !current && <SuppressedStatistic/>}
     {current?.kind === "geography" && <GeographyInspector key={current.geography.id} loaded={current} mode={mode} propertyGroup={propertyGroup} years={years} onChange={onChange}/>}
-    {current?.kind === "building" && <BuildingInspector building={current.building} mode={mode} onChange={onChange}/>}
-    {current?.kind === "transaction" && <TransactionInspector detail={current.detail} context={current.context} model={current.model} onChange={onChange}/>}
+    {current?.kind === "building" && <><LocationLink latitude={current.building.latitude} longitude={current.building.longitude}/><BuildingInspector building={current.building} mode={mode} onChange={onChange}/></>}
+    {current?.kind === "transaction" && <TransactionInspector key={`${current.context.transactionKind}:${current.detail.transactionId}`} detail={current.detail} context={current.context} model={current.model} onChange={onChange}/>}
+    {showRecent && mode === "sale" && <ResaleSummary propertyGroup={propertyGroup} years={years} area={area} geographyId={recentGeography?.id} name={recentGeography?.name ?? "Slovenija"}/>}
     {showRecent && <RecentTransactions mode={mode} propertyGroup={propertyGroup} geographyId={recentGeography?.id}
       name={recentGeography?.name ?? "Slovenija"} years={years} area={area} onChange={onChange}/>}
   </aside>;

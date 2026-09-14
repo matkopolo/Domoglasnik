@@ -149,6 +149,14 @@ also use wall-clock start timestamps.
 
 ## Access and integrity
 
+Migrations 038/039 add `analytics.property_history_events` and
+`analytics.property_resale_pairs` views plus three source identity/reference
+indexes. They reuse published sale facts and current source components; no
+ETN records, valuations, outlier flags or index populations are modified.
+History totals come from reported `transactions.contract_price`, not derived
+fact prices. See [property-history definitions](property-history.md) for exact
+identity matching, share/package safeguards and publication rules.
+
 Foreign keys connect agreements, source files, and components. Check
 constraints encode enumerations and valid review states. B-tree indexes serve
 dates, property groups, geographic identifiers, and cadastral building keys;

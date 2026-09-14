@@ -58,6 +58,16 @@ timeouts, graceful shutdown, and readiness checks.
 The authoritative operation and schema definitions are in
 `apps/real-estate-api/openapi/openapi.yaml`.
 
+Property history adds three read-only endpoints:
+
+- `GET /api/v1/sales/transactions/{id}/history`
+- `GET /api/v1/sales/statistics/resales` (normal sale population filters)
+- `GET /api/v1/economy/inflation-factor?from=YYYY-MM-DD&to=YYYY-MM-DD`
+
+No analytics refresh or model training is performed by these endpoints.
+See [property history](property-history.md) for exact identity matching,
+pair eligibility, truncation, publication thresholds and monthly CPI semantics.
+
 ## Statistical contract
 
 The API distinguishes raw/quality-eligible/representative samples and returns

@@ -1,5 +1,10 @@
 # Statistical and analytical methodology
 
+The separate [property-history methodology](property-history.md) documents
+observed resale intervals, source-code transitions, reported price changes,
+monthly inflation adjustment and explicit-assumption cost/tax scenarios.
+It does not change the repeat-sales index or valuation methods below.
+
 ## Scope and governing principles
 
 The system analyzes Slovenian GURS ETN purchase data from 2007 onward and

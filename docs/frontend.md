@@ -165,6 +165,14 @@ entrances and are omitted if coordinates are unavailable.
 
 ## Development and verification
 
+Sales include a **Zgodovina** inspector tab: recorded component/parcel events,
+conservative resale comparisons, land-type changes, on-demand monthly inflation
+adjustment and a separately entered cost/tax scenario. Area resale interval
+summaries load only when opened. Valid building and transaction coordinates
+provide an external Google Maps link. See [property history](property-history.md)
+for navigation, matching safeguards and limitations. Existing filters, model
+output and repeat-sale index definitions are unchanged.
+
 ```bash
 make web-up
 make web-lint
