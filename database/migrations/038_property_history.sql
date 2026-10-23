@@ -6,7 +6,7 @@ CREATE INDEX IF NOT EXISTS building_parts_history_identity_idx
 CREATE INDEX IF NOT EXISTS building_parts_history_parcel_idx
     ON building_parts(cadastral_municipality_code,parcel_number_for_geolocation,transaction_id);
 
-CREATE VIEW analytics.property_history_events AS
+CREATE OR REPLACE VIEW analytics.property_history_events AS
 WITH components AS (
     SELECT 'building_part'::text AS identity_kind,bp.cadastral_municipality_code,
            bp.building_number AS identity_number,bp.building_part_number AS part_number,
@@ -42,7 +42,7 @@ LEFT JOIN analytics.anomaly_signals s ON s.transaction_kind='sale' AND s.transac
 
 -- Collapse repeated source component rows within a contract before sequencing. Ambiguous
 -- events remain visible, but cannot contribute a price/holding-period statistic.
-CREATE VIEW analytics.property_resale_pairs AS
+CREATE OR REPLACE VIEW analytics.property_resale_pairs AS
 WITH events AS (
     SELECT identity_kind,cadastral_municipality_code,identity_number,part_number,
            transaction_id,min(contract_date) AS contract_date,min(property_group) AS property_group,
