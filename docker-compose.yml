@@ -4,6 +4,7 @@ services:
       context: .
       dockerfile: infrastructure/docker/database/Dockerfile
     image: real-estate-postgis:16
+    pull_policy: build
     command:
       - postgres
       - -c
@@ -52,6 +53,7 @@ services:
       context: ./apps/real-estate-api
       dockerfile: Dockerfile
     image: real-estate-api:development
+    pull_policy: build
     environment:
       API_ENV: development
       API_BUILD: local
@@ -82,6 +84,7 @@ services:
       context: ./apps/data-pipeline
       dockerfile: Dockerfile
     image: real-estate-data-pipeline:development
+    pull_policy: build
     command:
       - schedule
       - --interval-days
@@ -126,6 +129,7 @@ services:
       args:
         NEXT_PUBLIC_API_URL: http://localhost:8080
     image: real-estate-web:development
+    pull_policy: build
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:8080
     ports:
