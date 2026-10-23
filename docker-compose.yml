@@ -35,7 +35,9 @@ services:
       retries: 10
 
   database-migrations:
-    image: real-estate-postgis:16
+    # This one-shot client only needs psql and bash. Using the official image
+    # avoids pulling the locally built PostGIS image on a fresh checkout.
+    image: postgres:16-bookworm
     entrypoint: ["/bin/bash", "/run-migrations.sh"]
     volumes:
       - ./database/migrations:/migrations:ro
