@@ -1,6 +1,6 @@
-# DOMOGLASNIK — Slovenian real-estate analytics
+# Domoglasnik — Slovenian real-estate analytics
 
-DOMOGLASNIK is the public product name. It presents actual GURS ETN transactions,
+Domoglasnik is the public product name. It presents actual GURS ETN transactions,
 not active property listings. Technical service names, database identities,
 Compose project/volumes and container names stay unchanged so rebranding does
 not create a new empty local database.
